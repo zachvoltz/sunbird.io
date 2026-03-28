@@ -33,7 +33,7 @@ export function Home() {
     <>
       {/* ── Hero ── */}
       <section className="min-h-[85vh] flex flex-col justify-end pb-20 px-6 md:px-10 relative">
-        <div className="mx-auto max-w-[1200px] w-full">
+        <div className="mx-auto max-w-[1200px] w-full border-l-[3px] border-gold pl-6 md:pl-10">
           <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
             Voice &middot; Music &middot; Songwriting &middot; Nashville, TN
           </p>
@@ -223,27 +223,27 @@ export function Home() {
       </section>
 
       {/* ── Community ── */}
-      <section className="py-24 px-6 md:px-10 bg-charcoal text-cream">
+      <section className="py-24 px-6 md:px-10 bg-blush">
         <div className="mx-auto max-w-[1200px]">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-12 items-center">
             <div className="md:col-span-5">
-              <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
+              <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-charcoal/50 mb-6">
                 The community
               </p>
-              <h2 className="font-display text-3xl md:text-4xl font-bold mb-6 leading-tight">
+              <h2 className="font-display text-3xl md:text-4xl font-bold mb-6 leading-tight text-charcoal">
                 A room full of first drafts
                 <span className="font-handwritten text-gold text-[0.7em] ml-2">
                   (the brave kind)
                 </span>
               </h2>
-              <p className="text-warm-gray leading-relaxed mb-8 max-w-sm">
+              <p className="text-charcoal/70 leading-relaxed mb-8 max-w-sm">
                 Students share original songs, offer gentle feedback, and occasionally
                 surprise themselves. It's part open mic, part group chat, part proof
                 that you actually did the thing.
               </p>
               <Link
                 to="/community"
-                className="text-[13px] font-medium text-cream border border-cream/40 px-6 py-2.5 hover:bg-cream hover:text-charcoal transition-all duration-300 tracking-wide inline-block"
+                className="text-[13px] font-medium text-charcoal border border-charcoal/40 px-6 py-2.5 hover:bg-charcoal hover:text-blush transition-all duration-300 tracking-wide inline-block"
               >
                 Join the community
               </Link>
@@ -257,16 +257,16 @@ export function Home() {
                 ].map((song) => (
                   <div
                     key={song.title}
-                    className="flex items-center gap-5 p-5 bg-cream/5 border border-cream/10"
+                    className="flex items-center gap-5 p-5 bg-surface/20 border border-surface/30"
                   >
-                    <div className="w-10 h-10 rounded-full bg-cream/10 flex items-center justify-center text-[11px] font-medium text-cream/60 shrink-0">
+                    <div className="w-10 h-10 rounded-full bg-surface/30 flex items-center justify-center text-[11px] font-medium text-charcoal/60 shrink-0">
                       {song.name.charAt(0)}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{song.title}</p>
-                      <p className="text-[12px] text-cream/50">{song.name}</p>
+                      <p className="text-sm font-medium text-charcoal truncate">{song.title}</p>
+                      <p className="text-[12px] text-charcoal/50">{song.name}</p>
                     </div>
-                    <span className="text-[10px] uppercase tracking-[0.1em] text-cream/30 border border-cream/10 px-2 py-0.5 shrink-0">
+                    <span className="text-[10px] uppercase tracking-[0.1em] text-charcoal/40 border border-charcoal/15 px-2 py-0.5 shrink-0">
                       {song.tag}
                     </span>
                   </div>
