@@ -48,18 +48,26 @@ export function Home() {
               Rooted in soul, neo-soul, and folk — shaped by whoever
               walks through the door.
             </p>
-            <div className="flex gap-4">
+            <div className="flex items-center gap-3 text-[13px] font-medium tracking-wide">
               <Link
                 to="/lessons"
-                className="text-[13px] font-medium text-charcoal border border-charcoal px-6 py-2.5 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
+                className="text-charcoal hover:text-gold transition-colors"
               >
-                See what I teach
+                lessons
               </Link>
+              <span className="text-charcoal/20">|</span>
+              <Link
+                to="/workshops"
+                className="text-charcoal hover:text-gold transition-colors"
+              >
+                workshops
+              </Link>
+              <span className="text-charcoal/20">|</span>
               <Link
                 to="/events"
-                className="text-[13px] font-medium text-text-secondary px-6 py-2.5 hover:text-charcoal transition-colors tracking-wide"
+                className="text-charcoal hover:text-gold transition-colors"
               >
-                Free events
+                events
               </Link>
             </div>
           </div>
@@ -75,8 +83,8 @@ export function Home() {
       <section className="py-20 px-6 md:px-10">
         <div className="mx-auto max-w-[700px] text-center">
           <p className="font-handwritten text-2xl md:text-3xl text-charcoal leading-snug">
-            &ldquo;Music is the shortest distance between two people
-            who haven't met yet.&rdquo;
+            &ldquo;A song is a question you sing until
+            the answer changes you.&rdquo;
           </p>
         </div>
       </section>
