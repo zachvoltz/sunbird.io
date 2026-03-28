@@ -119,8 +119,6 @@ export function Home() {
           </p>
           <p className="text-lg text-text-secondary leading-relaxed mb-10 max-w-lg">
             Lessons in voice, songwriting, and the art of meaning it.
-            Rooted in soul, neo-soul, and folk — shaped by whoever
-            walks through the door.
           </p>
           <div ref={sentinelRef}>
             <NavBar size="lg" />

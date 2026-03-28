@@ -24,7 +24,7 @@ export function Header() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
-        scrolled ? "bg-cream/95 backdrop-blur-sm shadow-header" : "bg-transparent"
+        scrolled ? "bg-surface shadow-header" : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-[1200px] px-6 md:px-10 flex items-center justify-between h-14">
