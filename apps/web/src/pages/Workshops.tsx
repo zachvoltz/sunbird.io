@@ -1,9 +1,24 @@
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { PenLine, Compass, Heart } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const workshops = [
+const workshops: Array<{
+  slug: string;
+  title: string;
+  tagline: string;
+  duration: string;
+  format: string;
+  endsIn: string;
+  description: string;
+  icon: LucideIcon;
+  weeks: Array<{ label: string; title: string; detail: string }>;
+  note: string;
+}> = [
   {
     slug: "expressive-songwriting",
     title: "Expressive Songwriting",
+    icon: PenLine,
     tagline: "Write every day. See what shows up.",
     duration: "4 weeks",
     format: "In person or online",
@@ -41,6 +56,7 @@ const workshops = [
   {
     slug: "exploration",
     title: "Exploration",
+    icon: Compass,
     tagline: "Take a daytrip. Write a song about it.",
     duration: "4 weeks",
     format: "In person or online",
@@ -78,6 +94,7 @@ const workshops = [
   {
     slug: "healing",
     title: "Healing",
+    icon: Heart,
     tagline: "Songwriting and yoga. Body and voice together.",
     duration: "4 weeks",
     format: "In person",
@@ -114,6 +131,118 @@ const workshops = [
   },
 ];
 
+function WorkshopNav() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [activeSlug, setActiveSlug] = useState<string | null>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  // Collapse when the sentinel scrolls out of view
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setCollapsed(!entry.isIntersecting),
+      { threshold: 0, rootMargin: "-56px 0px 0px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
+  // Track which workshop section is in view
+  useEffect(() => {
+    const sections = workshops.map((w) => document.getElementById(w.slug));
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setActiveSlug(entry.target.id);
+          }
+        }
+      },
+      { threshold: 0.1, rootMargin: "-100px 0px -60% 0px" },
+    );
+    sections.forEach((el) => el && observer.observe(el));
+    return () => observer.disconnect();
+  }, []);
+
+  return (
+    <>
+      {/* Sentinel — marks where the nav starts in the document flow */}
+      <div ref={sentinelRef} />
+
+      <div
+        className={`sticky top-14 z-40 transition-all duration-500 ${
+          collapsed
+            ? "bg-cream/95 backdrop-blur-sm shadow-header -mx-6 md:-mx-10 px-6 md:px-10"
+            : ""
+        }`}
+      >
+        {/* Expanded view */}
+        <div
+          className={`border-t border-charcoal/10 overflow-hidden transition-all duration-500 ${
+            collapsed ? "max-h-0 opacity-0" : "max-h-[500px] opacity-100"
+          }`}
+        >
+          {workshops.map((workshop) => {
+            const Icon = workshop.icon;
+            return (
+            <a
+              key={workshop.slug}
+              href={`#${workshop.slug}`}
+              className="group flex items-center justify-between py-5 border-b border-charcoal/10 hover:border-charcoal/25 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <Icon className="w-5 h-5 text-text-secondary group-hover:text-gold transition-colors" strokeWidth={1.5} />
+                <h3 className="font-display text-xl md:text-2xl font-semibold group-hover:text-gold transition-colors">
+                  {workshop.title}
+                </h3>
+              </div>
+              <div className="hidden sm:flex items-center gap-4">
+                <span className="text-sm text-text-secondary italic">
+                  {workshop.tagline}
+                </span>
+                <span className="text-text-secondary group-hover:text-charcoal group-hover:translate-y-0.5 transition-all">
+                  &darr;
+                </span>
+              </div>
+            </a>
+            );
+          })}
+        </div>
+
+        {/* Collapsed one-line view */}
+        <div
+          className={`flex items-center gap-6 overflow-hidden transition-all duration-500 ${
+            collapsed ? "max-h-16 opacity-100 py-4" : "max-h-0 opacity-0"
+          }`}
+        >
+          {workshops.map((workshop) => {
+            const Icon = workshop.icon;
+            return (
+            <a
+              key={workshop.slug}
+              href={`#${workshop.slug}`}
+              className={`flex items-center gap-2 whitespace-nowrap text-[13px] font-medium tracking-wide transition-colors ${
+                activeSlug === workshop.slug
+                  ? "text-charcoal"
+                  : "text-text-secondary hover:text-charcoal"
+              }`}
+            >
+              <Icon className="w-4 h-4" strokeWidth={1.5} />
+              {workshop.title}
+              {activeSlug === workshop.slug && (
+                <span className="block w-1 h-1 rounded-full bg-gold" />
+              )}
+            </a>
+            );
+          })}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export function Workshops() {
   return (
     <div className="py-16 px-6 md:px-10">
@@ -133,9 +262,16 @@ export function Workshops() {
           </p>
         </div>
 
+        {/* Workshop nav */}
+        <WorkshopNav />
+
+        <div className="h-20" />
+
         {/* Workshop list */}
         <div className="space-y-32">
-          {workshops.map((workshop, wi) => (
+          {workshops.map((workshop, wi) => {
+            const Icon = workshop.icon;
+            return (
             <section key={workshop.slug} id={workshop.slug}>
               {wi > 0 && (
                 <div className="mb-20">
@@ -146,10 +282,8 @@ export function Workshops() {
               <div className="grid grid-cols-1 md:grid-cols-12 gap-12 md:gap-16">
                 {/* Left column — overview */}
                 <div className="md:col-span-4">
-                  <span className="text-[12px] font-mono text-text-secondary tabular-nums">
-                    {String(wi + 1).padStart(2, "0")}
-                  </span>
-                  <h2 className="font-display text-3xl md:text-4xl font-bold mt-2 mb-3 leading-tight">
+                  <Icon className="w-6 h-6 text-gold mb-3" strokeWidth={1.5} />
+                  <h2 className="font-display text-3xl md:text-4xl font-bold mb-3 leading-tight">
                     {workshop.title}
                   </h2>
                   <p className="font-handwritten text-xl text-gold mb-6">
@@ -222,7 +356,8 @@ export function Workshops() {
                 </div>
               </div>
             </section>
-          ))}
+            );
+          })}
         </div>
 
         {/* Bottom CTA */}
