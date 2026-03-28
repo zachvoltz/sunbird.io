@@ -12,9 +12,9 @@ const navLinks = [
 ];
 
 const heroNavLinks = [
-  { to: "/lessons", label: "lessons", primary: true },
-  { to: "/workshops", label: "workshops", primary: false },
-  { to: "/events", label: "events", primary: false },
+  { to: "/lessons", label: "lessons" },
+  { to: "/workshops", label: "workshops" },
+  { to: "/events", label: "events" },
 ];
 
 export function Header() {
@@ -79,16 +79,18 @@ export function Header() {
         >
           {heroNavLinks.map((link) => (
             <span key={link.to} className="contents">
-              <Link
+              <NavLink
                 to={link.to}
-                className={`text-[13px] tracking-[0.08em] uppercase transition-colors ${
-                  link.primary
-                    ? "font-semibold text-iris hover:text-iris-hover"
-                    : "font-medium text-text-secondary hover:text-charcoal"
-                }`}
+                className={({ isActive }) =>
+                  `text-[13px] tracking-[0.08em] uppercase transition-colors ${
+                    isActive
+                      ? "font-semibold text-iris"
+                      : "font-medium text-text-secondary hover:text-charcoal"
+                  }`
+                }
               >
                 {link.label}
-              </Link>
+              </NavLink>
             </span>
           ))}
         </nav>
