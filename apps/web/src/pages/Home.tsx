@@ -35,7 +35,7 @@ export function Home() {
       <section className="min-h-[85vh] flex flex-col justify-end pb-20 px-6 md:px-10 relative">
         <div className="mx-auto max-w-[1200px] w-full">
           <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
-            Singer-songwriter &middot; Music teacher &middot; Brooklyn, NY
+            Voice &middot; Music &middot; Songwriting &middot; Nashville, TN
           </p>
           <h1 className="font-display text-[clamp(3rem,8vw,6.5rem)] font-bold leading-[0.95] tracking-tight mb-8">
             Ellisa
@@ -48,10 +48,10 @@ export function Home() {
               Rooted in soul, neo-soul, and folk — shaped by whoever
               walks through the door.
             </p>
-            <div className="flex items-center gap-3 text-[13px] font-medium tracking-wide">
+            <div className="flex items-center gap-5 text-2xl font-medium tracking-wide">
               <Link
                 to="/lessons"
-                className="text-charcoal hover:text-gold transition-colors"
+                className="text-charcoal border-b border-charcoal hover:text-gold hover:border-gold transition-colors"
               >
                 lessons
               </Link>
