@@ -51,16 +51,16 @@ const navLinks = [
 function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
   const isSmall = size === "sm";
   return (
-    <div className={`flex items-center ${isSmall ? "gap-3 text-[14px]" : "gap-5 text-2xl"} font-medium tracking-wide`}>
+    <div className={`flex items-center ${isSmall ? "gap-2 text-[13px]" : "gap-3 text-[15px]"} tracking-[0.05em]`}>
       {navLinks.map((link, i) => (
         <span key={link.to} className="contents">
-          {i > 0 && <span className="text-charcoal/20">|</span>}
+          {i > 0 && <span className={`text-charcoal/15 ${isSmall ? "" : "mx-1"}`}>/</span>}
           <Link
             to={link.to}
             className={
               link.primary
-                ? `text-cream bg-iris ${isSmall ? "px-4 py-1" : "px-6 py-1.5"} rounded-full hover:bg-iris-hover transition-colors`
-                : `text-charcoal ${isSmall ? "px-3 py-0.5" : "px-4 py-1"} rounded-full hover:bg-warm-gray/50 transition-colors`
+                ? `font-semibold text-cream bg-iris ${isSmall ? "px-3 py-1" : "px-5 py-2"} rounded-full hover:bg-iris-hover transition-all duration-300 shadow-sm hover:shadow-md`
+                : `font-medium text-charcoal ${isSmall ? "px-3 py-1" : "px-5 py-2"} rounded-full border border-charcoal/15 hover:border-charcoal/40 hover:bg-charcoal hover:text-cream transition-all duration-300`
             }
           >
             {link.label}
@@ -103,23 +103,27 @@ export function Home() {
       </div>
 
       {/* ── Hero ── */}
-      <section className="min-h-[85vh] flex flex-col justify-end pb-20 px-6 md:px-10 relative">
-        <div className="mx-auto max-w-[1200px] w-full border-l-[3px] border-gold pl-6 md:pl-10">
-          <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
-            Voice &middot; Music &middot; Songwriting &middot; Nashville, TN or Online
-          </p>
-          <h1 className="font-display text-[clamp(3rem,8vw,6.5rem)] font-bold leading-[0.95] tracking-tight mb-8">
+      <section className="min-h-[85vh] flex flex-col pb-0 px-6 md:px-10">
+        <div className="mx-auto max-w-[1200px] w-full flex flex-col items-center text-center">
+          <img
+            src="/sunbird-icon.png"
+            alt="Sunbird logo"
+            className="w-40 md:w-56 h-auto object-contain mb-8"
+          />
+          <h1 className="font-display text-[clamp(3rem,8vw,6.5rem)] font-bold leading-[0.95] tracking-tight mb-2">
             <Wordmark />
           </h1>
-          <div className="flex flex-col sm:flex-row items-start gap-8">
-            <p className="text-lg text-text-secondary max-w-md leading-relaxed">
-              Lessons in voice, songwriting, and the art of meaning it.
-              Rooted in soul, neo-soul, and folk — shaped by whoever
-              walks through the door.
-            </p>
-            <div ref={sentinelRef}>
-              <NavBar size="lg" />
-            </div>
+          <p className="text-[11px] font-medium uppercase tracking-[0.15em] mb-8">
+            <span className="text-iris">Voice &middot; Music &middot; Songwriting</span>
+            <span className="text-text-secondary"> &middot; Nashville, TN or Online</span>
+          </p>
+          <p className="text-lg text-text-secondary leading-relaxed mb-10 max-w-lg">
+            Lessons in voice, songwriting, and the art of meaning it.
+            Rooted in soul, neo-soul, and folk — shaped by whoever
+            walks through the door.
+          </p>
+          <div ref={sentinelRef}>
+            <NavBar size="lg" />
           </div>
         </div>
       </section>

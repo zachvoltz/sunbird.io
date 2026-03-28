@@ -2,8 +2,8 @@ export function Wordmark({ className = "" }: { className?: string }) {
   return (
     <span className={className}>
       sunb
-      <span className="relative">
-        <span className="opacity-0">i</span>
+      <span className="relative inline-block">
+        <span className="invisible">i</span>
         <span className="absolute inset-0" aria-hidden="true">
           ı
         </span>

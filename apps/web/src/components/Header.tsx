@@ -32,25 +32,6 @@ export function Header() {
           <Wordmark />
         </Link>
 
-        {/* Desktop nav */}
-        <nav className="hidden lg:flex items-center gap-7">
-          {navLinks.map((link) => (
-            <NavLink
-              key={link.to}
-              to={link.to}
-              className={({ isActive }) =>
-                `text-[13px] font-medium tracking-[0.08em] uppercase transition-colors ${
-                  isActive
-                    ? "text-charcoal"
-                    : "text-text-secondary hover:text-charcoal"
-                }`
-              }
-            >
-              {link.label}
-            </NavLink>
-          ))}
-        </nav>
-
         <div className="hidden lg:flex items-center gap-5">
           <Link
             to="/login"
