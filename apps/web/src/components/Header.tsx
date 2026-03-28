@@ -61,7 +61,7 @@ export function Header() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
-        scrolled ? "bg-surface shadow-header" : "bg-transparent"
+        scrolled || !isHome ? "bg-surface shadow-header" : "bg-transparent"
       }`}
     >
       <div className="mx-auto max-w-[1200px] px-6 md:px-10 flex items-center justify-between h-14 relative">
@@ -69,10 +69,10 @@ export function Header() {
           <Wordmark />
         </Link>
 
-        {/* Hero nav links — appear when scrolled past hero on home page */}
+        {/* Nav links — always visible on non-home pages, fade in on scroll for home */}
         <nav
           className={`hidden lg:flex items-center gap-6 absolute left-1/2 -translate-x-1/2 transition-all duration-300 ${
-            showHeroNav
+            !isHome || showHeroNav
               ? "opacity-100 translate-y-0"
               : "opacity-0 -translate-y-1 pointer-events-none"
           }`}
