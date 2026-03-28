@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { Wordmark } from "./Wordmark";
 
 export function Footer() {
   return (
@@ -7,7 +8,7 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
           {/* Brand */}
           <div className="md:col-span-5">
-            <p className="font-display text-xl font-bold mb-3">Ellisa Sun</p>
+            <p className="font-display text-xl font-bold mb-3"><Wordmark /></p>
             <p className="text-sm text-text-secondary leading-relaxed max-w-xs">
               Singer-songwriter, music teacher, and firm believer
               that everyone has a song worth hearing.
@@ -84,7 +85,7 @@ export function Footer() {
       <div className="border-t border-charcoal/10">
         <div className="mx-auto max-w-[1200px] px-6 md:px-10 py-5 flex flex-col sm:flex-row items-center justify-between gap-2">
           <p className="text-[12px] text-text-secondary tracking-wide">
-            &copy; {new Date().getFullYear()} Ellisa Sun
+            &copy; {new Date().getFullYear()} <Wordmark />
           </p>
           <p className="font-handwritten text-text-secondary text-base">
             made with good intentions

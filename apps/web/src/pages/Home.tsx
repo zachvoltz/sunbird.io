@@ -1,46 +1,115 @@
+import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
+import { Wordmark } from "@/components/Wordmark";
+import { Mic, PenLine, Music, Theater, BookOpen } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
-const lessonTypes = [
+const lessonTypes: Array<{
+  slug: string;
+  title: string;
+  aside: string;
+  icon: LucideIcon;
+}> = [
   {
     slug: "voice",
     title: "Voice",
     aside: "The instrument you already own.",
+    icon: Mic,
   },
   {
     slug: "songwriting",
     title: "Songwriting",
     aside: "From first line to finished thing.",
+    icon: PenLine,
   },
   {
     slug: "theory",
     title: "Theory",
     aside: "The why behind the sound.",
+    icon: Music,
   },
   {
     slug: "performance",
     title: "Performance",
     aside: "Stage fright sold separately.",
+    icon: Theater,
   },
   {
     slug: "poetry-in-song",
     title: "Poetry in Song",
     aside: "Where lyrics earn their keep.",
+    icon: BookOpen,
   },
 ];
 
+const navLinks = [
+  { to: "/lessons", label: "lessons", primary: true },
+  { to: "/workshops", label: "workshops", primary: false },
+  { to: "/events", label: "events", primary: false },
+];
+
+function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
+  const isSmall = size === "sm";
+  return (
+    <div className={`flex items-center ${isSmall ? "gap-3 text-[14px]" : "gap-5 text-2xl"} font-medium tracking-wide`}>
+      {navLinks.map((link, i) => (
+        <span key={link.to} className="contents">
+          {i > 0 && <span className="text-charcoal/20">|</span>}
+          <Link
+            to={link.to}
+            className={
+              link.primary
+                ? `text-cream bg-iris ${isSmall ? "px-4 py-1" : "px-6 py-1.5"} rounded-full hover:bg-iris-hover transition-colors`
+                : `text-charcoal ${isSmall ? "px-3 py-0.5" : "px-4 py-1"} rounded-full hover:bg-warm-gray/50 transition-colors`
+            }
+          >
+            {link.label}
+          </Link>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function Home() {
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const [showStickyNav, setShowStickyNav] = useState(false);
+
+  useEffect(() => {
+    const sentinel = sentinelRef.current;
+    if (!sentinel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => setShowStickyNav(!entry.isIntersecting),
+      { threshold: 0, rootMargin: "-56px 0px 0px 0px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <>
+      {/* ── Sticky nav ── */}
+      <div
+        className={`sticky top-14 z-40 transition-all duration-300 ${
+          showStickyNav
+            ? "bg-cream/95 backdrop-blur-sm shadow-header opacity-100 translate-y-0"
+            : "opacity-0 -translate-y-2 pointer-events-none"
+        }`}
+      >
+        <div className="mx-auto max-w-[1200px] px-6 md:px-10 py-3 flex justify-center">
+          <NavBar size="sm" />
+        </div>
+      </div>
+
       {/* ── Hero ── */}
       <section className="min-h-[85vh] flex flex-col justify-end pb-20 px-6 md:px-10 relative">
         <div className="mx-auto max-w-[1200px] w-full border-l-[3px] border-gold pl-6 md:pl-10">
           <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
-            Voice &middot; Music &middot; Songwriting &middot; Nashville, TN
+            Voice &middot; Music &middot; Songwriting &middot; Nashville, TN or Online
           </p>
           <h1 className="font-display text-[clamp(3rem,8vw,6.5rem)] font-bold leading-[0.95] tracking-tight mb-8">
-            Ellisa
-            <br />
-            Sun
+            <Wordmark />
           </h1>
           <div className="flex flex-col sm:flex-row items-start gap-8">
             <p className="text-lg text-text-secondary max-w-md leading-relaxed">
@@ -48,27 +117,8 @@ export function Home() {
               Rooted in soul, neo-soul, and folk — shaped by whoever
               walks through the door.
             </p>
-            <div className="flex items-center gap-5 text-2xl font-medium tracking-wide">
-              <Link
-                to="/lessons"
-                className="text-charcoal border-b border-charcoal hover:text-gold hover:border-gold transition-colors"
-              >
-                lessons
-              </Link>
-              <span className="text-charcoal/20">|</span>
-              <Link
-                to="/workshops"
-                className="text-charcoal hover:text-gold transition-colors"
-              >
-                workshops
-              </Link>
-              <span className="text-charcoal/20">|</span>
-              <Link
-                to="/events"
-                className="text-charcoal hover:text-gold transition-colors"
-              >
-                events
-              </Link>
+            <div ref={sentinelRef}>
+              <NavBar size="lg" />
             </div>
           </div>
         </div>
@@ -109,26 +159,25 @@ export function Home() {
             </Link>
           </div>
 
-          <div className="space-y-0 border-t border-charcoal/10">
-            {lessonTypes.map((lesson, i) => (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            {lessonTypes.map((lesson) => {
+              const Icon = lesson.icon;
+              return (
               <Link
                 key={lesson.slug}
                 to={`/lessons/${lesson.slug}`}
-                className="group flex items-baseline justify-between py-6 border-b border-charcoal/10 hover:border-charcoal/30 transition-colors"
+                className="group text-center px-4 py-8 bg-surface rounded-card shadow-card hover:shadow-elevated transition-all duration-300"
               >
-                <div className="flex items-baseline gap-4">
-                  <span className="text-[12px] text-text-secondary font-mono tabular-nums">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
-                  <h3 className="font-display text-xl md:text-2xl font-semibold group-hover:text-gold transition-colors">
-                    {lesson.title}
-                  </h3>
-                </div>
-                <span className="text-sm text-text-secondary italic hidden sm:block group-hover:text-charcoal transition-colors">
+                <Icon className="w-6 h-6 text-text-secondary group-hover:text-gold transition-colors mx-auto mb-4" strokeWidth={1.5} />
+                <h3 className="font-display text-lg font-semibold group-hover:text-gold transition-colors mb-2">
+                  {lesson.title}
+                </h3>
+                <p className="text-sm text-text-secondary italic">
                   {lesson.aside}
-                </span>
+                </p>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </div>
       </section>
@@ -153,7 +202,7 @@ export function Home() {
               listens first.
             </h2>
             <p className="text-text-secondary leading-relaxed mb-4 max-w-lg">
-              Ellisa Sun has spent the last decade teaching people to sing the way
+              Ellisa has spent the last decade teaching people to sing the way
               they talk — honestly. Her studio is part classroom, part living room,
               part gentle dare. Students come for technique and stay for the
               songwriting prompts they didn't know they needed.

@@ -17,10 +17,10 @@ importers:
 
   apps/api:
     dependencies:
-      '@ellisa/db':
+      '@sunbird/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@ellisa/shared':
+      '@sunbird/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       hono:
@@ -42,7 +42,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@ellisa/shared':
+      '@sunbird/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       lucide-react:

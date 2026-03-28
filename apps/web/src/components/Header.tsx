@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, NavLink } from "react-router-dom";
+import { Wordmark } from "./Wordmark";
 
 const navLinks = [
   { to: "/lessons", label: "Lessons" },
@@ -28,7 +29,7 @@ export function Header() {
     >
       <div className="mx-auto max-w-[1200px] px-6 md:px-10 flex items-center justify-between h-14">
         <Link to="/" className="font-display text-lg font-bold tracking-tight text-charcoal">
-          Ellisa Sun
+          <Wordmark />
         </Link>
 
         {/* Desktop nav */}

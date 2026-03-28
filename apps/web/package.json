@@ -1,5 +1,5 @@
 {
-  "name": "@ellisa/web",
+  "name": "@sunbird/web",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ellisa/shared": "workspace:*",
+    "@sunbird/shared": "workspace:*",
     "lucide-react": "^1.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

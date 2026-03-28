@@ -1,5 +1,5 @@
 {
-  "name": "@ellisa/api",
+  "name": "@sunbird/api",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,8 +12,8 @@
   },
   "dependencies": {
     "hono": "^4.6.0",
-    "@ellisa/db": "workspace:*",
-    "@ellisa/shared": "workspace:*"
+    "@sunbird/db": "workspace:*",
+    "@sunbird/shared": "workspace:*"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",

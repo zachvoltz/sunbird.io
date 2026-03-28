@@ -20,7 +20,7 @@ app.use(
 );
 
 app.get("/", (c) => {
-  return c.json({ name: "Ellisa Sun API", status: "ok" });
+  return c.json({ name: "Sunbird API", status: "ok" });
 });
 
 app.get("/api/health", (c) => {

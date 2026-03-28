@@ -1,4 +1,4 @@
-name = "ellisa-api"
+name = "sunbird-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
 
@@ -11,10 +11,10 @@ ENVIRONMENT = "development"
 # Uncomment when D1 database is created:
 # [[d1_databases]]
 # binding = "DB"
-# database_name = "ellisa-db"
+# database_name = "sunbird-db"
 # database_id = ""
 
 # Uncomment when R2 bucket is created:
 # [[r2_buckets]]
 # binding = "SONGS_BUCKET"
-# bucket_name = "ellisa-songs"
+# bucket_name = "sunbird-songs"

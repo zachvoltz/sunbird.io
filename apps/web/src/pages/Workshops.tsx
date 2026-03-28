@@ -180,35 +180,30 @@ function WorkshopNav() {
       >
         {/* Expanded view */}
         <div
-          className={`border-t border-charcoal/10 overflow-hidden transition-all duration-500 ${
+          className={`overflow-hidden transition-all duration-500 ${
             collapsed ? "max-h-0 opacity-0" : "max-h-[500px] opacity-100"
           }`}
         >
-          {workshops.map((workshop) => {
-            const Icon = workshop.icon;
-            return (
-            <a
-              key={workshop.slug}
-              href={`#${workshop.slug}`}
-              className="group flex items-center justify-between py-5 border-b border-charcoal/10 hover:border-charcoal/25 transition-colors"
-            >
-              <div className="flex items-center gap-4">
-                <Icon className="w-5 h-5 text-text-secondary group-hover:text-gold transition-colors" strokeWidth={1.5} />
-                <h3 className="font-display text-xl md:text-2xl font-semibold group-hover:text-gold transition-colors">
+          <div className="flex flex-col sm:flex-row justify-center gap-6 py-6">
+            {workshops.map((workshop) => {
+              const Icon = workshop.icon;
+              return (
+              <a
+                key={workshop.slug}
+                href={`#${workshop.slug}`}
+                className="group flex-1 text-center px-6 py-8 hover:bg-warm-gray/30 transition-colors rounded-card"
+              >
+                <Icon className="w-6 h-6 text-text-secondary group-hover:text-gold transition-colors mx-auto mb-4" strokeWidth={1.5} />
+                <h3 className="font-display text-lg md:text-xl font-semibold group-hover:text-gold transition-colors mb-2">
                   {workshop.title}
                 </h3>
-              </div>
-              <div className="hidden sm:flex items-center gap-4">
-                <span className="text-sm text-text-secondary italic">
+                <p className="text-sm text-text-secondary italic">
                   {workshop.tagline}
-                </span>
-                <span className="text-text-secondary group-hover:text-charcoal group-hover:translate-y-0.5 transition-all">
-                  &darr;
-                </span>
-              </div>
-            </a>
-            );
-          })}
+                </p>
+              </a>
+              );
+            })}
+          </div>
         </div>
 
         {/* Collapsed one-line view */}
@@ -245,25 +240,29 @@ function WorkshopNav() {
 
 export function Workshops() {
   return (
-    <div className="py-16 px-6 md:px-10">
+    <div className="px-6 md:px-10">
       <div className="mx-auto max-w-[1200px]">
-        {/* Header */}
-        <div className="mb-20">
-          <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
-            Workshops
-          </p>
-          <h1 className="font-display text-4xl md:text-6xl font-bold mb-6 leading-tight">
-            A month at a time
-          </h1>
-          <p className="text-lg text-text-secondary max-w-xl leading-relaxed">
-            Each workshop is a four-week arc — a daily practice, weekly sessions,
-            and a songshare at the end. You come in with nothing prepared.
-            You leave with a song.
-          </p>
-        </div>
+        {/* Header + nav fill the first screen */}
+        <div className="min-h-[calc(100vh-3.5rem)] flex flex-col pt-16">
+          <div className="mb-auto flex flex-col items-center text-center">
+            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
+              Workshops
+            </p>
+            <h1 className="font-display text-4xl md:text-6xl font-bold mb-6 leading-tight">
+              A month at a time
+            </h1>
+            <p className="text-lg text-text-secondary max-w-xl leading-relaxed">
+              Each workshop is a four-week arc — a daily practice, weekly sessions,
+              and a songshare at the end. You come in with nothing prepared.
+              You leave with a song.
+            </p>
+          </div>
 
-        {/* Workshop nav */}
-        <WorkshopNav />
+          {/* Workshop nav — pushed to bottom of viewport */}
+          <div className="pb-10">
+            <WorkshopNav />
+          </div>
+        </div>
 
         <div className="h-20" />
 
