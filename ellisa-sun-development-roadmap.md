@@ -1,6 +1,16 @@
-# Ellisa Sun Website — Software Development Roadmap
+# Sunbird — Music Lessons Platform Development Roadmap
 
-This document translates the [Website Design Plan](./ellisa-sun-website-design-plan.md) into an actionable development roadmap with concrete tasks, technical decisions, dependencies, and acceptance criteria for each phase.
+Sunbird is a webapp/PWA that connects students with music teachers for lessons, workshops, and community engagement. The platform supports three roles — **admin**, **teacher**, and **student** — and launches with a single teacher (Ellisa Sun), with the architecture designed to scale to many teachers over time.
+
+---
+
+## Roles & Permissions
+
+| Role | Description |
+|------|-------------|
+| **Admin** | Full platform control. Manages teachers, lesson types, workshops, events, and moderation. Can do everything a teacher can. |
+| **Teacher** | Sets their own availability calendar, views/manages their bookings, communicates with students via lesson comment feeds, marks lesson progress. |
+| **Student** | Signs up (Google OAuth or email/password), browses teachers and lesson types, requests one-off or recurring lesson schedules, views upcoming/past lessons on a calendar, participates in the community song feed, gives feedback on songs. |
 
 ---
 
@@ -23,7 +33,7 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
   _AC: `wrangler dev` responds to `GET /api/health` with `200 OK`._
 
 - [x] **0.4 — Set up Prisma (`packages/db`)**
-  Initialize Prisma with the full schema from the design plan. Configure for SQLite (D1) initially. Export typed client from `packages/db/index.ts`.
+  Initialize Prisma with the full schema. Configure for SQLite (D1) initially. Export typed client from `packages/db/index.ts`.
   _AC: `prisma generate` succeeds; types importable from `@ellisa/db`._
 
 - [x] **0.5 — Set up shared package (`packages/shared`)**
@@ -54,9 +64,9 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
 
 ---
 
-## Phase 1 — Design System & Static Pages (Weeks 1–4)
+## Phase 1 — Design System & Public Pages (Weeks 1–4)
 
-**Goal:** Deliver the entire public-facing read-only site: Home, About, Lessons, Pricing, Contact. Nail the visual design so it can be reused in every subsequent phase.
+**Goal:** Deliver the public-facing pages: Home (platform landing), About, Lessons, Pricing, Contact. Nail the visual design and establish the PWA shell so it can be reused in every subsequent phase.
 
 ### 1A — Design System Foundation (Week 1)
 
@@ -84,6 +94,10 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
   Add subtle paper-grain background texture as a CSS utility class. Set up responsive image component with `loading="lazy"` and Cloudflare Image Resizing URL helper.
   _AC: Texture visible at low opacity on section backgrounds._
 
+- [ ] **1A.7 — PWA shell**
+  Add `manifest.json` with app name, icons, theme color, and `display: standalone`. Register a basic service worker for offline shell and asset caching.
+  _AC: App is installable on mobile/desktop. Offline shows branded "you're offline" page._
+
 ### 1B — Client-Side Routing & Page Shells (Week 1–2)
 
 - [x] **1B.1 — Install React Router (or TanStack Router)**
@@ -98,26 +112,26 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
   Scroll to top on route change. Smooth scroll for anchor links.
   _AC: Navigating to a new page starts at the top._
 
-### 1C — Static Pages (Weeks 2–4)
+### 1C — Public Pages (Weeks 2–4)
 
 - [x] **1C.1 — Home page**
-  Build all 8 sections per design plan 4.1. Use placeholder images and copy. Wire up CTAs to route to appropriate pages. Community teaser and testimonials can be placeholder sections.
+  Platform landing page: hero section, value proposition, lesson type cards, featured teacher spotlight (Ellisa), community teaser, testimonials placeholder, CTA to sign up.
   _AC: Page matches design plan layout. All CTAs navigate correctly. Responsive at all breakpoints._
 
 - [ ] **1C.2 — About page**
-  Hero image, long-form bio with pull quote in Caveat, "My Approach" section, credentials, CTA to booking.
+  Platform mission, teacher spotlight section (initially Ellisa: hero image, bio, pull quote, credentials). Designed to accommodate multiple teacher profiles in the future.
   _AC: Content renders with correct typography hierarchy._
 
 - [x] **1C.3 — Lessons index page**
-  Intro paragraph + 5 lesson type cards in staggered grid. Cards link to individual lesson pages. Hover animation on golden underline.
+  Intro paragraph + lesson type cards (Voice, Songwriting, Performance, Theory, Poetry in Song). Cards link to individual lesson pages.
   _AC: Cards display correctly in staggered layout. Hover states work._
 
 - [ ] **1C.4 — Individual lesson pages**
-  Template component for `/lessons/[slug]`. Sections: hero banner, "What You'll Explore", "Who This Is For", "What a Session Looks Like", pricing summary, "Book a Session" CTA.
+  Template component for `/lessons/[slug]`. Sections: hero banner, "What You'll Explore", "Who This Is For", "What a Session Looks Like", pricing summary, "Book a Lesson" CTA.
   _AC: All 5 lesson pages render from the same template with different content._
 
 - [ ] **1C.5 — Pricing page**
-  Two-tier pricing cards (per-session and subscription), workshop pricing section, FAQ accordion.
+  Per-session and subscription pricing cards, workshop pricing section, FAQ accordion. Pricing shown per lesson type.
   _AC: Pricing displays clearly. FAQ items expand/collapse._
 
 - [ ] **1C.6 — Contact page**
@@ -139,8 +153,8 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
   _AC: Invalid submissions return 400 with field errors. Valid submissions persist to DB._
 
 - [ ] **1D.2 — Contact email notification**
-  On submission, send email to Ellisa via Resend with the message details.
-  _AC: Ellisa receives an email for each contact form submission._
+  On submission, send email to admin via Resend with the message details.
+  _AC: Admin receives an email for each contact form submission._
 
 - [ ] **1D.3 — Wire frontend to API**
   Connect contact form `onSubmit` to the API. Show success/error feedback with appropriate UI states.
@@ -153,7 +167,7 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
 ### 1E — Deployment & QA (Week 4)
 
 - [ ] **1E.1 — Content pass**
-  Replace all placeholder text with real copy from Ellisa. Replace placeholder images with real photography.
+  Replace all placeholder text with real copy. Replace placeholder images with real photography.
   _AC: No lorem ipsum or stock photos remain._
 
 - [ ] **1E.2 — Responsive QA**
@@ -173,17 +187,17 @@ This document translates the [Website Design Plan](./ellisa-sun-website-design-p
   _AC: Files served at `/sitemap.xml` and `/robots.txt`._
 
 - [ ] **1E.6 — Structured data**
-  Add JSON-LD for `MusicTeacher` on About page and `Course` on each lesson page.
+  Add JSON-LD for `MusicSchool` / `Organization` on home, `Course` on each lesson page.
   _AC: Google Rich Results Test validates the structured data._
 
 ### Phase 1 Deliverable
-A fully deployed, beautiful, responsive marketing site at `ellisasun.com` with working contact form. Everything a visitor needs to understand Ellisa's offerings — but no accounts, payments, or community features yet.
+A fully deployed, responsive public-facing PWA shell with landing pages, lesson listings, and contact form. Everything a visitor needs to understand the platform — but no accounts, payments, or community features yet.
 
 ---
 
-## Phase 2 — Authentication & Booking (Weeks 5–8)
+## Phase 2 — Authentication, Roles & Booking (Weeks 5–8)
 
-**Goal:** Users can create accounts, log in, book individual lessons via Stripe Checkout, and manage their bookings.
+**Goal:** Students can create accounts, browse teachers, request one-off or recurring lesson schedules, and manage bookings. Teachers can set their availability calendar. Role-based access (admin/teacher/student) enforced throughout.
 
 ### 2A — Authentication (Week 5–6)
 
@@ -192,8 +206,8 @@ A fully deployed, beautiful, responsive marketing site at `ellisasun.com` with w
   _AC: Auth middleware runs on every request; session cookie set/validated correctly._
 
 - [ ] **2A.2 — Registration endpoint**
-  `POST /api/auth/register` — validate input (Zod), hash password (Argon2 via `@node-rs/argon2`), create `User` + `Session`, return session cookie.
-  _AC: Duplicate email returns 409. Weak password returns 400. Valid registration sets cookie and returns user._
+  `POST /api/auth/register` — validate input (Zod), hash password (Argon2 via `@node-rs/argon2`), create `User` with `STUDENT` role + `Session`, return session cookie.
+  _AC: Duplicate email returns 409. Weak password returns 400. Valid registration sets cookie and returns user with role._
 
 - [ ] **2A.3 — Login endpoint**
   `POST /api/auth/login` — validate credentials, create session.
@@ -204,119 +218,153 @@ A fully deployed, beautiful, responsive marketing site at `ellisasun.com` with w
   _AC: Cookie cleared; subsequent requests are unauthenticated._
 
 - [ ] **2A.5 — Google OAuth**
-  `GET /api/auth/oauth/google` (redirect) + `GET /api/auth/oauth/google/cb` (callback). Upsert `OAuthAccount` + `User`.
+  `GET /api/auth/oauth/google` (redirect) + `GET /api/auth/oauth/google/cb` (callback). Upsert `OAuthAccount` + `User`. New OAuth users default to `STUDENT` role.
   _AC: Full OAuth flow works end-to-end. Returning Google users log in without creating duplicate accounts._
 
 - [ ] **2A.6 — Password reset flow**
   `POST /api/auth/forgot-password` sends reset email with tokenized link. `POST /api/auth/reset-password` validates token, updates password.
   _AC: Reset email sent. Token expires after 1 hour. Password successfully changed._
 
-- [ ] **2A.7 — Auth middleware**
-  Hono middleware that reads session cookie, loads user, attaches to context (`c.var.user`). Export `requireAuth` middleware that returns 401 if not authenticated.
-  _AC: Protected routes return 401 without valid session. User object available in route handlers._
+- [ ] **2A.7 — Auth & role middleware**
+  Hono middleware that reads session cookie, loads user + role, attaches to context (`c.var.user`). Export `requireAuth`, `requireRole('TEACHER')`, `requireRole('ADMIN')` middleware.
+  _AC: Protected routes return 401 without valid session. Role-restricted routes return 403 for wrong role. User object with role available in route handlers._
 
 - [ ] **2A.8 — Login/Register UI**
-  `/login` page with tab toggle (Sign In / Create Account). Form validation. OAuth buttons. Redirect to `?redirect` param after login.
+  `/login` page with tab toggle (Sign In / Create Account). Form validation. Google OAuth button. Redirect to `?redirect` param after login.
   _AC: Forms validate. Auth works end-to-end. Redirect works._
 
 - [ ] **2A.9 — Auth state in frontend**
-  React context/hook (`useAuth`) that fetches `GET /api/me` on mount. Provides `user`, `isAuthenticated`, `login`, `logout`, `register` methods.
-  _AC: Components can conditionally render based on auth state. Header shows avatar when logged in._
+  React context/hook (`useAuth`) that fetches `GET /api/me` on mount. Provides `user`, `role`, `isAuthenticated`, `login`, `logout`, `register` methods.
+  _AC: Components can conditionally render based on auth state and role. Header shows avatar when logged in._
 
 - [ ] **2A.10 — Auth gate component**
-  `<AuthGate>` wrapper that redirects to `/login?redirect=current-path` if not authenticated. Wrap protected routes.
-  _AC: Unauthenticated users hitting `/book`, `/community`, `/account` get redirected to login and back._
+  `<AuthGate>` wrapper that redirects to `/login?redirect=current-path` if not authenticated. `<RoleGate role="TEACHER">` for role-restricted sections.
+  _AC: Unauthenticated users get redirected to login and back. Wrong-role users see an appropriate message._
 
 - [ ] **2A.11 — Welcome email**
   Trigger welcome email via Resend on registration.
   _AC: New users receive a welcome email._
 
-### 2B — Booking System (Week 6–8)
+### 2B — Teacher Availability (Week 6–7)
 
-- [ ] **2B.1 — Availability model & admin API**
-  `POST /api/admin/availability` — CRUD for `AvailabilitySlot`. Admin-only.
-  _AC: Admin can set recurring weekly availability. Non-admin gets 403._
+- [ ] **2B.1 — Teacher profile & onboarding**
+  Admin can invite/create teacher accounts (`POST /api/admin/teachers`). Teacher profile includes name, bio, avatar, specialties, and lesson types they teach.
+  _AC: Admin can create teacher accounts. Teachers appear on the platform with their profile._
 
-- [ ] **2B.2 — Available slots endpoint**
-  `GET /api/availability?date=YYYY-MM-DD&lessonType=voice` — returns available time slots for a given date by cross-referencing `AvailabilitySlot` with existing `Booking` records.
-  _AC: Only genuinely open slots returned. Booked slots excluded._
+- [ ] **2B.2 — Teacher availability calendar**
+  `/teacher/availability` — teachers set their bookable time slots on a weekly calendar. CRUD API at `POST /api/teacher/availability`. Supports recurring weekly slots and one-off overrides (blocked dates).
+  _AC: Teacher can set recurring weekly availability. Can block specific dates. Non-teacher gets 403._
 
-- [ ] **2B.3 — Stripe integration setup**
+- [ ] **2B.3 — Available slots endpoint**
+  `GET /api/availability?date=YYYY-MM-DD&lessonType=voice&teacherId=X` — returns available time slots for a given date by cross-referencing teacher's `AvailabilitySlot` with existing `Booking` records.
+  _AC: Only genuinely open slots returned. Booked slots excluded. Filters by teacher and lesson type._
+
+### 2C — Booking System (Week 6–8)
+
+- [ ] **2C.1 — Stripe integration setup**
   Install `stripe` SDK. Configure webhook endpoint `POST /api/webhooks/stripe` with signature verification. Set up Stripe products/prices for each lesson type.
   _AC: Webhook endpoint verifies Stripe signatures. Test events processed correctly._
 
-- [ ] **2B.4 — Create booking endpoint**
-  `POST /api/bookings` — validates slot availability, creates Stripe Checkout Session, returns checkout URL. On `checkout.session.completed` webhook, creates `Booking` record with `CONFIRMED` status.
+- [ ] **2C.2 — Request a lesson (one-off)**
+  `POST /api/bookings` — student selects a teacher, lesson type, date/time. Creates Stripe Checkout Session, returns checkout URL. On `checkout.session.completed` webhook, creates `Booking` record with `CONFIRMED` status.
   _AC: Double-booking prevented (race condition handled with DB constraint). Booking created only after payment succeeds._
 
-- [ ] **2B.5 — Booking confirmation email**
-  On booking creation, send confirmation email with date, time, lesson type, and calendar invite (`.ics` attachment).
+- [ ] **2C.3 — Request a recurring schedule**
+  `POST /api/bookings/recurring` — student requests a recurring lesson schedule (e.g., weekly on Tuesdays at 4pm with Teacher X). Creates a `RecurringSchedule` record. Generates upcoming `Booking` records for the next N weeks. Payment handled per-session or via subscription.
+  _AC: Recurring bookings generated correctly. Teacher can see the recurring pattern. Student can cancel the series or individual sessions._
+
+- [ ] **2C.4 — Booking confirmation email**
+  On booking creation, send confirmation email with date, time, lesson type, teacher name, and calendar invite (`.ics` attachment).
   _AC: User receives email with correct details and downloadable calendar event._
 
-- [ ] **2B.6 — Cancel booking endpoint**
+- [ ] **2C.5 — Cancel booking endpoint**
   `PATCH /api/bookings/:id/cancel` — sets status to `CANCELLED`. Implement cancellation policy (e.g., free cancellation 24h+ before; no refund within 24h).
   _AC: Cancellation within policy gets refund via Stripe. Late cancellation marked but no refund._
 
-- [ ] **2B.7 — List bookings endpoint**
-  `GET /api/bookings` — returns current user's upcoming and past bookings.
-  _AC: Bookings returned in chronological order with status._
+- [ ] **2C.6 — Booking flow UI**
+  `/book` page with multi-step flow: (1) select lesson type, (2) select teacher (initially just Ellisa), (3) pick date/time from teacher's availability calendar, (4) choose one-off or recurring, (5) confirm & pay (redirects to Stripe Checkout).
+  _AC: Full flow works end-to-end. Calendar shows only available dates for selected teacher. Time slots update based on selected date._
 
-- [ ] **2B.8 — Booking flow UI**
-  `/book` page with 3-step flow: (1) select lesson type (visual cards), (2) pick date/time (calendar + slots), (3) confirm & pay (redirects to Stripe Checkout).
-  _AC: Full flow works end-to-end. Calendar shows only available dates. Time slots update based on selected date._
-
-- [ ] **2B.9 — Booking confirmation page**
-  Success page after Stripe redirect with booking summary and "Add to Calendar" button.
+- [ ] **2C.7 — Booking confirmation page**
+  Success page after Stripe redirect with booking summary, teacher info, and "Add to Calendar" button.
   _AC: Shows correct booking details. Calendar download works._
 
-- [ ] **2B.10 — Calendar component**
-  Date picker that highlights available days. Fetches availability on month change. Disabled past dates.
-  _AC: Available days visually distinct. Selecting a day loads time slots. Mobile-friendly (day view)._
+- [ ] **2C.8 — Calendar component**
+  Date picker that highlights available days for the selected teacher. Fetches availability on month change. Disabled past dates.
+  _AC: Available days visually distinct. Selecting a day loads time slots. Mobile-friendly._
 
-### 2C — Account Dashboard (Week 7–8)
+### 2D — Lesson Communication (Week 7)
 
-- [ ] **2C.1 — Profile page**
+- [ ] **2D.1 — Lesson comment feed API**
+  `GET /api/bookings/:id/comments` and `POST /api/bookings/:id/comments` — threaded comment feed attached to each booking. Only the student and assigned teacher can read/write.
+  _AC: Comments persist and display in chronological order. Unauthorized users get 403._
+
+- [ ] **2D.2 — Lesson comment feed UI**
+  On the booking detail page, show a comment thread between student and teacher. Supports text messages. Teacher and student can post before/after the lesson.
+  _AC: Messages appear in real-time-ish (polling or optimistic updates). Clean, chat-like UI._
+
+- [ ] **2D.3 — Comment notification emails**
+  When a new comment is posted on a booking, email the other party (student or teacher).
+  _AC: Notification sent. Respects notification preferences._
+
+### 2E — Student Dashboard (Week 7–8)
+
+- [ ] **2E.1 — Student calendar / upcoming lessons**
+  `/dashboard` — calendar view showing the student's upcoming booked lessons. Each entry shows lesson type, teacher, date/time, and status. Click to open booking detail with comment feed.
+  _AC: Calendar displays all upcoming bookings. Supports month/week/day views. Mobile-friendly._
+
+- [ ] **2E.2 — Lesson history**
+  `/dashboard/history` — list of past lessons with date, teacher, lesson type, and status (completed, cancelled, no-show). Filterable by lesson type and teacher.
+  _AC: Past bookings shown in reverse chronological order. Filters work._
+
+- [ ] **2E.3 — Student profile page**
   `/account/profile` — view and edit name, bio, avatar. `PATCH /api/me` endpoint. Avatar upload to R2.
   _AC: Profile updates persist. Avatar displays in header and community._
 
-- [ ] **2C.2 — Bookings page**
-  `/account/bookings` — list upcoming bookings with reschedule/cancel actions. Past bookings in a separate section.
-  _AC: Upcoming bookings show cancel button (respecting policy). Past bookings show status._
-
-- [ ] **2C.3 — Account layout**
-  Sidebar (desktop) / tab bar (mobile) navigation between Profile, Subscription (placeholder), Bookings, My Songs (placeholder).
+- [ ] **2E.4 — Account layout**
+  Sidebar (desktop) / tab bar (mobile) navigation between Dashboard, History, Profile, Subscription (placeholder), My Songs (placeholder).
   _AC: Navigation works. Active state shown. Layout responsive._
 
-### 2D — Admin Booking Management (Week 8)
+### 2F — Teacher Dashboard (Week 7–8)
 
-- [ ] **2D.1 — Admin bookings view**
-  `GET /api/admin/bookings` — filterable by date, status, lesson type. Admin UI page listing all bookings.
+- [ ] **2F.1 — Teacher calendar view**
+  `/teacher/calendar` — calendar showing all of the teacher's upcoming bookings. Color-coded by lesson type. Click to open booking detail with student info and comment feed.
+  _AC: Teacher sees all their bookings. Day/week/month views. Can distinguish lesson types at a glance._
+
+- [ ] **2F.2 — Teacher booking management**
+  `/teacher/bookings` — list view of upcoming and past bookings. Can mark lessons as completed or no-show. Can view student profiles.
+  _AC: Status updates reflect in student's booking list. Teacher can filter by status, lesson type, student._
+
+### 2G — Admin Management (Week 8)
+
+- [ ] **2G.1 — Admin teacher management**
+  `POST /api/admin/teachers` — invite/create teacher accounts, assign lesson types, activate/deactivate. Admin UI at `/admin/teachers`.
+  _AC: Admin can create and manage teacher accounts. Deactivated teachers don't appear in booking flow._
+
+- [ ] **2G.2 — Admin bookings view**
+  `GET /api/admin/bookings` — all bookings across all teachers. Filterable by date, status, lesson type, teacher. Admin UI at `/admin/bookings`.
   _AC: Admin sees all bookings. Can filter. Non-admin gets 403._
 
-- [ ] **2D.2 — Admin booking actions**
-  `PATCH /api/admin/bookings/:id` — update status (mark completed, no-show).
-  _AC: Status updates reflect in student's booking list._
-
-- [ ] **2D.3 — Admin contact messages**
+- [ ] **2G.3 — Admin contact messages**
   `GET /api/admin/contacts` + `PATCH /api/admin/contacts/:id` — view and mark as read.
   _AC: Admin sees all contact submissions. Unread count shown._
 
-- [ ] **2D.4 — Admin lesson management**
-  `POST /api/admin/lessons` — create/update lesson types (title, description, pricing, images).
-  _AC: Changes reflect on public lesson pages immediately._
+- [ ] **2G.4 — Admin lesson type management**
+  `POST /api/admin/lessons` — create/update lesson types (title, description, pricing, images). Assign which teachers can teach each type.
+  _AC: Changes reflect on public lesson pages immediately. Teacher-lesson associations enforced in booking flow._
 
-### 2E — E2E Testing Setup (Week 8)
+### 2H — E2E Testing Setup (Week 8)
 
-- [ ] **2E.1 — Playwright setup**
-  Install Playwright. Configure test environment with seeded DB.
+- [ ] **2H.1 — Playwright setup**
+  Install Playwright. Configure test environment with seeded DB (admin, teacher, student accounts).
   _AC: `pnpm test:e2e` runs against local dev server._
 
-- [ ] **2E.2 — Critical path tests**
-  E2E tests for: registration, login, booking flow (with Stripe test mode), profile editing.
+- [ ] **2H.2 — Critical path tests**
+  E2E tests for: registration, login, booking flow (with Stripe test mode), teacher availability setup, lesson comment feed.
   _AC: Tests pass in CI._
 
 ### Phase 2 Deliverable
-Users can register, log in (email or Google), book individual lessons, pay via Stripe, and manage their account. Ellisa can manage availability and view bookings through admin pages.
+Students can register (email or Google), browse lesson types, book one-off or recurring lessons with a teacher, and communicate through lesson comment feeds. Students have a calendar dashboard and lesson history. Teachers manage their availability and bookings. Admin controls teachers, lesson types, and platform settings.
 
 ---
 
@@ -356,13 +404,13 @@ Users can register, log in (email or Google), book individual lessons, pay via S
 
 ### 3B — Workshops (Week 10–11)
 
-- [ ] **3B.1 — Admin workshop CRUD**
-  `POST /api/admin/workshops` — create/edit workshops (title, description, date, duration, capacity, price, image).
-  _AC: Admin can create workshops. Validation enforces required fields._
+- [ ] **3B.1 — Admin/teacher workshop CRUD**
+  `POST /api/admin/workshops` — create/edit workshops (title, description, date, duration, capacity, price, image, teacher). Teachers can also create workshops for themselves.
+  _AC: Admin/teacher can create workshops. Validation enforces required fields._
 
 - [ ] **3B.2 — Public workshop listing**
-  `GET /api/workshops` — returns upcoming workshops sorted by date. Include registration count for capacity display.
-  _AC: Endpoint returns workshops with `spotsRemaining` count._
+  `GET /api/workshops` — returns upcoming workshops sorted by date. Include registration count for capacity display and teacher info.
+  _AC: Endpoint returns workshops with `spotsRemaining` count and teacher name._
 
 - [ ] **3B.3 — Workshop registration**
   `POST /api/workshops/:id/register` — auth required. Creates Stripe Checkout Session for workshop price. On payment success (webhook), creates `WorkshopRegistration`. Checks capacity.
@@ -395,18 +443,18 @@ Users can register, log in (email or Google), book individual lessons, pay via S
   _AC: Reminders sent ~24h before event. No duplicate reminders._
 
 ### Phase 3 Deliverable
-Full monetization in place: subscriptions, per-session payments, workshop purchases. Free events with lightweight RSVP. Automated reminders. Ellisa's business model is fully operational.
+Full monetization in place: subscriptions, per-session payments, workshop purchases. Free events with lightweight RSVP. Automated reminders. The platform's business model is fully operational.
 
 ---
 
-## Phase 4 — Community (Weeks 12–14)
+## Phase 4 — Community Song Feed (Weeks 12–14)
 
-**Goal:** Build the song-sharing hub where students upload original work, listen, like, and comment.
+**Goal:** Build the song-sharing hub where students upload original work, listen, like, and give feedback.
 
 ### 4A — File Storage (Week 12)
 
 - [ ] **4A.1 — R2 bucket setup**
-  Create `ellisa-songs` R2 bucket. Configure CORS for direct upload from browser.
+  Create `sunbird-songs` R2 bucket. Configure CORS for direct upload from browser.
   _AC: Bucket exists and accepts uploads from the web app origin._
 
 - [ ] **4A.2 — Presigned upload URL endpoint**
@@ -420,7 +468,7 @@ Full monetization in place: subscriptions, per-session payments, workshop purcha
 ### 4B — Song CRUD (Week 12–13)
 
 - [ ] **4B.1 — Create song endpoint**
-  `POST /api/community/songs` — title, description, audio key (R2) or external URL, tags. Auth required.
+  `POST /api/community/songs` — title, description, audio key (R2) or external URL, tags. Auth required (students and teachers).
   _AC: Song created with correct user association. Either `audioUrl` or `externalUrl` required._
 
 - [ ] **4B.2 — List songs endpoint**
@@ -435,14 +483,14 @@ Full monetization in place: subscriptions, per-session payments, workshop purcha
   `POST /api/community/songs/:id/like` — toggles like on/off.
   _AC: Liking twice removes the like. Like count updates._
 
-- [ ] **4B.5 — Comments CRUD**
-  `GET /api/community/songs/:id/comments` and `POST /api/community/songs/:id/comments`.
+- [ ] **4B.5 — Song feedback / comments CRUD**
+  `GET /api/community/songs/:id/comments` and `POST /api/community/songs/:id/comments`. Students and teachers can leave feedback on songs.
   _AC: Comments paginated. Only comment author can delete their own._
 
 ### 4C — Community UI (Week 13–14)
 
 - [ ] **4C.1 — Community feed page**
-  `/community/feed` — vertical stream of song cards with audio player, like button (heart icon + count), comment thread toggle, student name + avatar, timestamp. Filter/sort controls.
+  `/community` — vertical stream of song cards with audio player, like button (heart icon + count), comment/feedback thread toggle, student name + avatar, timestamp. Filter/sort controls.
   _AC: Feed loads with infinite scroll or pagination. Sort and filter work._
 
 - [ ] **4C.2 — Audio player component**
@@ -457,22 +505,22 @@ Full monetization in place: subscriptions, per-session payments, workshop purcha
   `/community/my-songs` — user's own submissions with edit/delete actions.
   _AC: Edit opens pre-filled form. Delete confirms before removing._
 
-- [ ] **4C.5 — Comment notification emails**
-  When someone comments on your song, receive an email notification (configurable in account settings).
+- [ ] **4C.5 — Feedback notification emails**
+  When someone comments/gives feedback on your song, receive an email notification (configurable in account settings).
   _AC: Notification sent. Users can opt out._
 
 ### 4D — Moderation (Week 14)
 
-- [ ] **4D.1 — Admin moderation tools**
-  Admin can view all songs and comments. Hide/delete inappropriate content.
-  _AC: Hidden songs don't appear in feed. Admin sees "hidden" indicator._
+- [ ] **4D.1 — Admin/teacher moderation tools**
+  Admin and teachers can view all songs and comments. Hide/delete inappropriate content.
+  _AC: Hidden songs don't appear in feed. Admin/teacher sees "hidden" indicator._
 
 - [ ] **4D.2 — Report button**
   Users can report songs or comments for review (simple flag, no reason required for MVP).
   _AC: Report stored. Admin notified of new reports._
 
 ### Phase 4 Deliverable
-A functioning community where students share songs, listen to each other's work, interact through likes and comments, and Ellisa can moderate content. The heart of the student community is live.
+A functioning community where students share songs, listen to each other's work, give feedback through likes and comments, and teachers can moderate content. The heart of the student community is live.
 
 ---
 
@@ -483,7 +531,7 @@ A functioning community where students share songs, listen to each other's work,
 ### 5A — Testimonials & Social Proof (Week 15)
 
 - [ ] **5A.1 — Testimonials data model**
-  Add `Testimonial` model (name, photo, quote, featured flag). Admin CRUD.
+  Add `Testimonial` model (name, photo, quote, teacher, featured flag). Admin CRUD.
   _AC: Admin can create/edit/feature testimonials._
 
 - [ ] **5A.2 — Testimonials carousel**
@@ -526,30 +574,26 @@ A functioning community where students share songs, listen to each other's work,
   Account settings for email notification toggles (booking reminders, community activity, newsletter).
   _AC: Preferences persist. Email sending respects preferences._
 
-- [ ] **5C.4 — PWA support**
-  Add `manifest.json`, service worker for offline shell, app icons.
-  _AC: Site installable on mobile. Offline shows branded "you're offline" page._
-
-- [ ] **5C.5 — Loading & error states**
+- [ ] **5C.4 — Loading & error states**
   Skeleton loaders for all async content. Error boundaries with friendly error pages.
   _AC: No blank screens during loading. Errors show actionable messages._
 
 ### 5D — Learning Path Roadmaps (Week 17)
 
 - [ ] **5D.1 — Learning path data model**
-  Add `LearningPath` model (lessonTypeId, nodes, edges, milestones). Each lesson type gets a structured curriculum tree with prerequisite relationships between topics.
-  _AC: Schema supports directed acyclic graph of learning nodes per lesson type. Admin can CRUD paths._
+  Add `LearningPath` model (lessonTypeId, nodes, edges, milestones). Each lesson type gets a structured curriculum tree with prerequisite relationships between topics. Teachers can customize paths for their students.
+  _AC: Schema supports directed acyclic graph of learning nodes per lesson type. Admin/teacher can CRUD paths._
 
-- [ ] **5D.2 — Admin learning path editor**
-  Visual tree/graph editor for Ellisa to define the curriculum progression for each lesson type (e.g., Voice: Breathing -> Pitch -> Range -> Style). Drag-and-drop node arrangement.
-  _AC: Admin can create, reorder, and connect nodes. Prerequisite chains enforced (no cycles)._
+- [ ] **5D.2 — Admin/teacher learning path editor**
+  Visual tree/graph editor for teachers to define the curriculum progression for each lesson type (e.g., Voice: Breathing -> Pitch -> Range -> Style). Drag-and-drop node arrangement.
+  _AC: Admin/teacher can create, reorder, and connect nodes. Prerequisite chains enforced (no cycles)._
 
 - [ ] **5D.3 — Learning path visualization UI**
   Khan Academy-style roadmap view on each lesson page (`/lessons/[slug]/roadmap`). Interactive node map showing topics, prerequisites, and progression paths. Nodes are color-coded by category/difficulty.
   _AC: Roadmap renders as a visual tree/graph. Nodes show title, description, and connections. Responsive at all breakpoints._
 
 - [ ] **5D.4 — Student progress tracking**
-  Track which learning nodes a student has completed (marked by Ellisa after sessions). Show progress on the roadmap visualization (completed = filled, in-progress = outlined, locked = grayed).
+  Track which learning nodes a student has completed (marked by their teacher after sessions). Show progress on the roadmap visualization (completed = filled, in-progress = outlined, locked = grayed).
   _AC: Progress persists per student per lesson type. Roadmap reflects current progress state._
 
 - [ ] **5D.5 — Roadmap links from lesson pages**
@@ -569,8 +613,8 @@ A functioning community where students share songs, listen to each other's work,
 ### 5F — Final QA & Hardening (Week 19)
 
 - [ ] **5F.1 — Security audit**
-  Review all endpoints for auth bypass, injection, CSRF. Verify Stripe webhook signatures. Check R2 presigned URL scoping. Rate limit all public write endpoints.
-  _AC: No critical vulnerabilities. All write endpoints rate-limited._
+  Review all endpoints for auth bypass, role escalation, injection, CSRF. Verify Stripe webhook signatures. Check R2 presigned URL scoping. Rate limit all public write endpoints.
+  _AC: No critical vulnerabilities. All write endpoints rate-limited. Role boundaries tested._
 
 - [ ] **5F.2 — Performance audit (final)**
   Lighthouse on all key pages. Bundle analysis. Image optimization pass.
@@ -593,7 +637,7 @@ A functioning community where students share songs, listen to each other's work,
   _AC: Backups running daily. Recovery tested at least once._
 
 ### Phase 5 Deliverable
-A polished, production-hardened website with strong SEO, analytics, social proof, and engagement features. Ready for sustained growth.
+A polished, production-hardened platform with strong SEO, analytics, social proof, and engagement features. Ready for sustained growth and onboarding additional teachers.
 
 ---
 
@@ -603,11 +647,12 @@ A polished, production-hardened website with strong SEO, analytics, social proof
 Phase 0 (Scaffolding)
   |
   v
-Phase 1 (Design System + Static Pages)
+Phase 1 (Design System + Public Pages + PWA Shell)
   |
   +----------------------+
   v                      v
-Phase 2 (Auth + Booking) |
+Phase 2 (Auth, Roles,    |
+  Booking, Dashboards)   |
   |                      |
   v                      |
 Phase 3 (Subscriptions   |
@@ -620,7 +665,7 @@ Phase 4 (Community) <----+  (R2 setup can start during Phase 2 if needed)
 Phase 5 (Polish + Growth)
 ```
 
-Phases are sequential because each depends on the prior phase's infrastructure (especially auth from Phase 2). However, within each phase, front-end and back-end tasks can be parallelized between developers.
+Phases are sequential because each depends on the prior phase's infrastructure (especially auth + roles from Phase 2). However, within each phase, front-end and back-end tasks can be parallelized between developers.
 
 ---
 
@@ -632,7 +677,8 @@ Phases are sequential because each depends on the prior phase's infrastructure (
 | Stripe webhook delivery failures | Low | High | Implement idempotent webhook handlers. Store raw events. Add retry logic. Monitor for unprocessed events. |
 | Audio file storage costs grow unexpectedly | Low | Medium | 50MB limit per file. Monitor R2 usage. Add admin ability to archive old community songs. |
 | Scope creep in community features | High | Medium | Strict MVP scope per phase. Defer features like real-time chat, playlists, collaborative songwriting to post-launch. |
-| Single admin (Ellisa) bottleneck for content | Medium | Low | Admin UI must be intuitive and fast. Consider inviting a trusted student as co-moderator (add `MODERATOR` role later). |
+| Multi-teacher scheduling conflicts | Medium | Medium | Teacher availability is per-teacher. DB constraints prevent double-booking. Clear UI shows only available slots. |
+| Role escalation vulnerabilities | Low | High | Role checks in middleware (not just UI). E2E tests cover role boundaries. Security audit in Phase 5. |
 
 ---
 
@@ -640,10 +686,10 @@ Phases are sequential because each depends on the prior phase's infrastructure (
 
 | Layer | Tool | Coverage Target |
 |-------|------|----------------|
-| Unit tests | Vitest | Business logic in `services/`, validators, utility functions |
-| API integration tests | Vitest + Hono test client | All API endpoints with seeded DB |
-| Component tests | Vitest + Testing Library | Interactive components (booking calendar, audio player, forms) |
-| E2E tests | Playwright | Critical user paths: register -> book -> pay, upload song -> view in feed |
+| Unit tests | Vitest | Business logic in `services/`, validators, utility functions, role checks |
+| API integration tests | Vitest + Hono test client | All API endpoints with seeded DB (test all 3 roles) |
+| Component tests | Vitest + Testing Library | Interactive components (booking calendar, audio player, forms, comment feed) |
+| E2E tests | Playwright | Critical user paths: register -> book -> communicate -> pay; teacher availability setup; admin teacher management |
 | Visual regression | Playwright screenshots (optional) | Key pages at 3 breakpoints |
 
 Tests run in CI on every PR. E2E tests run against a preview deployment.
@@ -656,6 +702,7 @@ Tests run in CI on every PR. E2E tests run against a preview deployment.
 - [ ] Relevant tests pass
 - [ ] Responsive at all 3 breakpoints
 - [ ] Accessible (no axe violations)
+- [ ] Role-based access enforced (if applicable)
 - [ ] PR reviewed and merged
 - [ ] Deployed to preview environment
 - [ ] Acceptance criteria met
