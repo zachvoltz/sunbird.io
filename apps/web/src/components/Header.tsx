@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import { Wordmark } from "./Wordmark";
 
 const navLinks = [
@@ -11,9 +11,18 @@ const navLinks = [
   { to: "/contact", label: "Contact" },
 ];
 
+const heroNavLinks = [
+  { to: "/lessons", label: "lessons", primary: true },
+  { to: "/workshops", label: "workshops", primary: false },
+  { to: "/events", label: "events", primary: false },
+];
+
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [showHeroNav, setShowHeroNav] = useState(false);
+  const location = useLocation();
+  const isHome = location.pathname === "/";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -21,16 +30,68 @@ export function Header() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  // Watch for the hero nav sentinel on the home page
+  useEffect(() => {
+    if (!isHome) {
+      setShowHeroNav(false);
+      return;
+    }
+
+    const check = () => {
+      const sentinel = document.getElementById("hero-nav-sentinel");
+      if (!sentinel) return;
+
+      const observer = new IntersectionObserver(
+        ([entry]) => setShowHeroNav(!entry.isIntersecting),
+        { threshold: 0, rootMargin: "-56px 0px 0px 0px" },
+      );
+      observer.observe(sentinel);
+      return observer;
+    };
+
+    // Small delay to ensure the DOM is ready
+    const timer = setTimeout(() => {
+      const observer = check();
+      return () => observer?.disconnect();
+    }, 50);
+
+    return () => clearTimeout(timer);
+  }, [isHome, location.pathname]);
+
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
         scrolled ? "bg-surface shadow-header" : "bg-transparent"
       }`}
     >
-      <div className="mx-auto max-w-[1200px] px-6 md:px-10 flex items-center justify-between h-14">
+      <div className="mx-auto max-w-[1200px] px-6 md:px-10 flex items-center justify-between h-14 relative">
         <Link to="/" className="font-display text-lg font-bold tracking-tight text-charcoal">
           <Wordmark />
         </Link>
+
+        {/* Hero nav links — appear when scrolled past hero on home page */}
+        <nav
+          className={`hidden lg:flex items-center gap-6 absolute left-1/2 -translate-x-1/2 transition-all duration-300 ${
+            showHeroNav
+              ? "opacity-100 translate-y-0"
+              : "opacity-0 -translate-y-1 pointer-events-none"
+          }`}
+        >
+          {heroNavLinks.map((link) => (
+            <span key={link.to} className="contents">
+              <Link
+                to={link.to}
+                className={`text-[13px] tracking-[0.08em] uppercase transition-colors ${
+                  link.primary
+                    ? "font-semibold text-iris hover:text-iris-hover"
+                    : "font-medium text-text-secondary hover:text-charcoal"
+                }`}
+              >
+                {link.label}
+              </Link>
+            </span>
+          ))}
+        </nav>
 
         <div className="hidden lg:flex items-center gap-5">
           <Link

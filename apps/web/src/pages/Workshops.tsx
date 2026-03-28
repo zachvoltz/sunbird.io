@@ -242,27 +242,23 @@ export function Workshops() {
   return (
     <div className="px-6 md:px-10">
       <div className="mx-auto max-w-[1200px]">
-        {/* Header + nav fill the first screen */}
-        <div className="min-h-[calc(100vh-3.5rem)] flex flex-col pt-16">
-          <div className="mb-auto flex flex-col items-center text-center">
-            <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
-              Workshops
-            </p>
-            <h1 className="font-display text-4xl md:text-6xl font-bold mb-6 leading-tight">
-              A month at a time
-            </h1>
-            <p className="text-lg text-text-secondary max-w-xl leading-relaxed">
-              Each workshop is a four-week arc — a daily practice, weekly sessions,
-              and a songshare at the end. You come in with nothing prepared.
-              You leave with a song.
-            </p>
-          </div>
-
-          {/* Workshop nav — pushed to bottom of viewport */}
-          <div className="pb-10">
-            <WorkshopNav />
-          </div>
+        {/* Header */}
+        <div className="pt-16 pb-12 flex flex-col items-center text-center">
+          <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
+            Workshops
+          </p>
+          <h1 className="font-display text-4xl md:text-6xl font-bold mb-6 leading-tight">
+            A month at a time
+          </h1>
+          <p className="text-lg text-text-secondary max-w-xl leading-relaxed">
+            Each workshop is a four-week arc — a daily practice, weekly sessions,
+            and a songshare at the end. You come in with nothing prepared.
+            You leave with a song.
+          </p>
         </div>
+
+        {/* Workshop nav */}
+        <WorkshopNav />
 
         <div className="h-20" />
 

@@ -1,4 +1,3 @@
-import { useState, useEffect, useRef } from "react";
 import { Link } from "react-router-dom";
 import { Wordmark } from "@/components/Wordmark";
 import { Mic, PenLine, Music, Theater, BookOpen } from "lucide-react";
@@ -72,36 +71,8 @@ function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 }
 
 export function Home() {
-  const sentinelRef = useRef<HTMLDivElement>(null);
-  const [showStickyNav, setShowStickyNav] = useState(false);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => setShowStickyNav(!entry.isIntersecting),
-      { threshold: 0, rootMargin: "-56px 0px 0px 0px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <>
-      {/* ── Sticky nav ── */}
-      <div
-        className={`sticky top-14 z-40 transition-all duration-300 ${
-          showStickyNav
-            ? "bg-cream/95 backdrop-blur-sm shadow-header opacity-100 translate-y-0"
-            : "opacity-0 -translate-y-2 pointer-events-none"
-        }`}
-      >
-        <div className="mx-auto max-w-[1200px] px-6 md:px-10 py-3 flex justify-center">
-          <NavBar size="sm" />
-        </div>
-      </div>
-
       {/* ── Hero ── */}
       <section className="min-h-[85vh] flex flex-col pb-0 px-6 md:px-10">
         <div className="mx-auto max-w-[1200px] w-full flex flex-col items-center text-center">
@@ -120,7 +91,7 @@ export function Home() {
           <p className="text-lg text-text-secondary leading-relaxed mb-10 max-w-lg">
             Lessons in voice, songwriting, and the art of meaning it.
           </p>
-          <div ref={sentinelRef}>
+          <div id="hero-nav-sentinel">
             <NavBar size="lg" />
           </div>
         </div>
