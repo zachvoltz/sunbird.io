@@ -1,0 +1,231 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Auth ───
+
+model User {
+  id             String   @id @default(cuid())
+  email          String   @unique
+  name           String
+  passwordHash   String?
+  avatarUrl      String?
+  bio            String?
+  role           String   @default("STUDENT")
+  referralSource String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  sessions        Session[]
+  oauthAccounts   OAuthAccount[]
+  subscription    Subscription?
+  bookings        Booking[]
+  songs           Song[]
+  songLikes       SongLike[]
+  songComments    SongComment[]
+  eventRsvps      EventRsvp[]
+  contactMessages ContactMessage[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model OAuthAccount {
+  id         String @id @default(cuid())
+  provider   String
+  providerId String
+  userId     String
+  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+}
+
+// ─── Lessons & Scheduling ───
+
+model LessonType {
+  id              String   @id @default(cuid())
+  slug            String   @unique
+  title           String
+  subtitle        String?
+  description     String
+  imageUrl        String?
+  pricePerSession Int
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  bookings  Booking[]
+  workshops Workshop[]
+}
+
+model AvailabilitySlot {
+  id        String  @id @default(cuid())
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  isActive  Boolean @default(true)
+}
+
+model Booking {
+  id               String   @id @default(cuid())
+  userId           String
+  lessonTypeId     String
+  startsAt         DateTime
+  endsAt           DateTime
+  status           String   @default("CONFIRMED")
+  stripePaymentId  String?
+  usedSubscription Boolean  @default(false)
+  createdAt        DateTime @default(now())
+
+  user       User       @relation(fields: [userId], references: [id])
+  lessonType LessonType @relation(fields: [lessonTypeId], references: [id])
+}
+
+// ─── Subscriptions ───
+
+model SubscriptionPlan {
+  id              String   @id @default(cuid())
+  name            String
+  lessonsPerMonth Int
+  priceMonthly    Int
+  stripePriceId   String   @unique
+  isActive        Boolean  @default(true)
+  sortOrder       Int      @default(0)
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  planId                String
+  stripeSubscriptionId  String   @unique
+  status                String   @default("ACTIVE")
+  currentPeriodStart    DateTime
+  currentPeriodEnd      DateTime
+  lessonsUsedThisPeriod Int      @default(0)
+  createdAt             DateTime @default(now())
+
+  user User             @relation(fields: [userId], references: [id])
+  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+}
+
+// ─── Workshops & Events ───
+
+model Workshop {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  lessonTypeId  String?
+  dateTime      DateTime
+  durationMins  Int
+  maxCapacity   Int
+  price         Int
+  stripePriceId String?
+  imageUrl      String?
+  createdAt     DateTime @default(now())
+
+  lessonType    LessonType?            @relation(fields: [lessonTypeId], references: [id])
+  registrations WorkshopRegistration[]
+}
+
+model WorkshopRegistration {
+  id              String   @id @default(cuid())
+  workshopId      String
+  userId          String
+  stripePaymentId String?
+  createdAt       DateTime @default(now())
+
+  workshop Workshop @relation(fields: [workshopId], references: [id])
+
+  @@unique([workshopId, userId])
+}
+
+model Event {
+  id           String   @id @default(cuid())
+  title        String
+  description  String
+  dateTime     DateTime
+  durationMins Int
+  imageUrl     String?
+  createdAt    DateTime @default(now())
+
+  rsvps EventRsvp[]
+}
+
+model EventRsvp {
+  id        String   @id @default(cuid())
+  eventId   String
+  userId    String?
+  name      String
+  email     String
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id])
+  user  User? @relation(fields: [userId], references: [id])
+
+  @@unique([eventId, email])
+}
+
+// ─── Community ───
+
+model Song {
+  id          String   @id @default(cuid())
+  userId      String
+  title       String
+  description String?
+  audioUrl    String?
+  externalUrl String?
+  tags        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user     User          @relation(fields: [userId], references: [id])
+  likes    SongLike[]
+  comments SongComment[]
+}
+
+model SongLike {
+  id     String @id @default(cuid())
+  songId String
+  userId String
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([songId, userId])
+}
+
+model SongComment {
+  id        String   @id @default(cuid())
+  songId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+
+  song Song @relation(fields: [songId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+}
+
+// ─── Contact ───
+
+model ContactMessage {
+  id        String   @id @default(cuid())
+  userId    String?
+  name      String
+  email     String
+  subject   String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id])
+}

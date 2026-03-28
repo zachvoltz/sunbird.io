@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  /* Colors — pulled slightly cooler, more editorial */
+  --color-cream: #F8F6F1;
+  --color-surface: #FFFFFF;
+  --color-warm-gray: #E5E2DC;
+  --color-charcoal: #1A1816;
+  --color-text-secondary: #6E6A64;
+  --color-gold: #D4A72C;
+  --color-gold-hover: #B8912A;
+  --color-gold-soft: #D4A72C15;
+  --color-sage: #5A7F60;
+  --color-coral: #C45050;
+  --color-ink: #2C2926;
+
+  /* Fonts */
+  --font-display: "Playfair Display", "Georgia", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-handwritten: "Caveat", cursive;
+  --font-mono: "JetBrains Mono", "SF Mono", monospace;
+
+  /* Border radius */
+  --radius-card: 8px;
+  --radius-pill: 999px;
+
+  /* Shadows — barely there */
+  --shadow-card: 0 1px 3px rgba(26, 24, 22, 0.04);
+  --shadow-elevated: 0 4px 20px rgba(26, 24, 22, 0.08);
+  --shadow-header: 0 1px 0px rgba(26, 24, 22, 0.06);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  color: var(--color-charcoal);
+  background-color: var(--color-cream);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
+  line-height: 1.65;
+  letter-spacing: -0.01em;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  letter-spacing: -0.025em;
+  line-height: 1.1;
+}
+
+/* Editorial horizontal rule */
+.editorial-rule {
+  border: none;
+  height: 1px;
+  background: var(--color-charcoal);
+  opacity: 0.15;
+}
+
+/* Subtle animation for links */
+a {
+  transition: color 0.2s ease;
+}
+
+/* Selection color */
+::selection {
+  background-color: var(--color-gold-soft);
+  color: var(--color-charcoal);
+}
+
+/* Smooth image rendering */
+img {
+  image-rendering: auto;
+}

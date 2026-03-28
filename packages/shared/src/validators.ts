@@ -1,0 +1,88 @@
+import { z } from "zod";
+
+// ─── Auth ───
+
+export const registerSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  email: z.string().email("Invalid email address"),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128),
+  referralSource: z.string().max(200).optional(),
+});
+
+export const loginSchema = z.object({
+  email: z.string().email("Invalid email address"),
+  password: z.string().min(1, "Password is required"),
+});
+
+export const forgotPasswordSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+export const resetPasswordSchema = z.object({
+  token: z.string().min(1),
+  password: z
+    .string()
+    .min(8, "Password must be at least 8 characters")
+    .max(128),
+});
+
+// ─── Profile ───
+
+export const updateProfileSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  bio: z.string().max(500).optional(),
+  avatarUrl: z.string().url().optional(),
+});
+
+// ─── Contact ───
+
+export const contactSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  email: z.string().email("Invalid email address"),
+  subject: z.enum([
+    "lessons",
+    "workshops",
+    "collaboration",
+    "general",
+    "other",
+  ]),
+  message: z
+    .string()
+    .min(10, "Message must be at least 10 characters")
+    .max(5000),
+});
+
+// ─── Booking ───
+
+export const createBookingSchema = z.object({
+  lessonTypeId: z.string().min(1),
+  startsAt: z.string().datetime(),
+});
+
+export const cancelBookingSchema = z.object({
+  reason: z.string().max(500).optional(),
+});
+
+// ─── Community ───
+
+export const createSongSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  description: z.string().max(2000).optional(),
+  audioUrl: z.string().url().optional(),
+  externalUrl: z.string().url().optional(),
+  tags: z.string().max(500).optional(),
+});
+
+export const createCommentSchema = z.object({
+  content: z.string().min(1, "Comment cannot be empty").max(2000),
+});
+
+// ─── Events ───
+
+export const eventRsvpSchema = z.object({
+  name: z.string().min(1, "Name is required").max(100),
+  email: z.string().email("Invalid email address"),
+});
