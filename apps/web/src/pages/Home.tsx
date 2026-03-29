@@ -79,7 +79,7 @@ export function Home() {
           <img
             src="/sunbird-icon.png"
             alt="Sunbird logo"
-            className="w-40 md:w-56 h-auto object-contain mb-8"
+            className="w-40 md:w-56 h-auto object-contain mt-16 md:mt-24 mb-8"
           />
           <h1 className="font-display text-[clamp(3rem,8vw,6.5rem)] font-bold leading-[0.95] tracking-tight mb-2">
             <Wordmark />
