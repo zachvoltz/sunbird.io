@@ -4,11 +4,13 @@ dist/
 .wrangler/
 .env
 .env.local
+.dev.vars
 *.db
 *.db-journal
 .DS_Store
 
 # Prisma
+packages/db/dist/
 packages/db/prisma/migrations/
 packages/db/prisma/*.db
 

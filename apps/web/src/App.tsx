@@ -6,6 +6,8 @@ import { Voice } from "@/pages/lessons/Voice";
 import { Songwriting } from "@/pages/lessons/Songwriting";
 import { Performance } from "@/pages/lessons/Performance";
 import { Workshops } from "@/pages/Workshops";
+import { Login } from "@/pages/Login";
+import { ResetPassword } from "@/pages/ResetPassword";
 import { NotFound } from "@/pages/NotFound";
 
 export function App() {
@@ -18,6 +20,8 @@ export function App() {
         <Route path="lessons/songwriting" element={<Songwriting />} />
         <Route path="lessons/performance" element={<Performance />} />
         <Route path="workshops" element={<Workshops />} />
+        <Route path="login" element={<Login />} />
+        <Route path="reset-password" element={<ResetPassword />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Routes>

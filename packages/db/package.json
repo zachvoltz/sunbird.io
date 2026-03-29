@@ -8,7 +8,7 @@
     "generate": "prisma generate",
     "migrate": "prisma migrate dev",
     "studio": "prisma studio",
-    "build": "prisma generate",
+    "build": "prisma generate && tsc",
     "lint": "echo 'no lint'",
     "typecheck": "tsc --noEmit"
   },

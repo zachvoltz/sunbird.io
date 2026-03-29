@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Wordmark } from "./Wordmark";
+import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
   { to: "/lessons", label: "Lessons" },
@@ -22,7 +23,9 @@ export function Header() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showHeroNav, setShowHeroNav] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   const isHome = location.pathname === "/";
+  const { user, isAuthenticated, logout } = useAuth();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -57,6 +60,11 @@ export function Header() {
 
     return () => clearTimeout(timer);
   }, [isHome, location.pathname]);
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/");
+  };
 
   return (
     <header
@@ -96,12 +104,26 @@ export function Header() {
         </nav>
 
         <div className="hidden lg:flex items-center gap-5">
-          <Link
-            to="/login"
-            className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
-          >
-            Log in
-          </Link>
+          {isAuthenticated && user ? (
+            <>
+              <span className="text-[13px] font-medium text-text-secondary">
+                {user.name}
+              </span>
+              <button
+                onClick={handleLogout}
+                className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
+            >
+              Log in
+            </Link>
+          )}
           <Link
             to="/book"
             className="text-[13px] font-medium text-charcoal border border-charcoal px-5 py-1.5 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
@@ -154,6 +176,25 @@ export function Header() {
             </NavLink>
           ))}
           <hr className="editorial-rule !my-4" />
+          {isAuthenticated && user ? (
+            <>
+              <div className="text-[13px] text-text-secondary mb-2">{user.name}</div>
+              <button
+                onClick={() => { handleLogout(); setMenuOpen(false); }}
+                className="block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <Link
+              to="/login"
+              onClick={() => setMenuOpen(false)}
+              className="block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+            >
+              Log in
+            </Link>
+          )}
           <Link
             to="/book"
             onClick={() => setMenuOpen(false)}

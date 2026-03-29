@@ -29,7 +29,8 @@ model User {
   songLikes       SongLike[]
   songComments    SongComment[]
   eventRsvps      EventRsvp[]
-  contactMessages ContactMessage[]
+  contactMessages    ContactMessage[]
+  passwordResetTokens PasswordResetToken[]
 }
 
 model Session {
@@ -47,6 +48,16 @@ model OAuthAccount {
   user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerId])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 // ─── Lessons & Scheduling ───

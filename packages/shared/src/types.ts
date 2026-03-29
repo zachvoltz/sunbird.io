@@ -23,7 +23,16 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 
 // ─── Shared enums (mirroring DB values) ───
 
-export type Role = "STUDENT" | "ADMIN";
+export type Role = "STUDENT" | "TEACHER" | "ADMIN";
+
+export interface AuthUser {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  role: Role;
+}
 
 export type BookingStatus = "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 
