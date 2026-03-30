@@ -6,6 +6,11 @@ import { Voice } from "@/pages/lessons/Voice";
 import { Songwriting } from "@/pages/lessons/Songwriting";
 import { Performance } from "@/pages/lessons/Performance";
 import { Workshops } from "@/pages/Workshops";
+import { BookPage } from "@/pages/book/BookPage";
+import { MyBookings } from "@/pages/MyBookings";
+import { TeacherDashboard } from "@/pages/teacher/Dashboard";
+import { AuthGate } from "@/components/AuthGate";
+import { RoleGate } from "@/components/RoleGate";
 import { Login } from "@/pages/Login";
 import { ResetPassword } from "@/pages/ResetPassword";
 import { NotFound } from "@/pages/NotFound";
@@ -20,6 +25,9 @@ export function App() {
         <Route path="lessons/songwriting" element={<Songwriting />} />
         <Route path="lessons/performance" element={<Performance />} />
         <Route path="workshops" element={<Workshops />} />
+        <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
+        <Route path="my-bookings" element={<AuthGate><MyBookings /></AuthGate>} />
+        <Route path="teacher" element={<AuthGate><RoleGate roles={["TEACHER", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
         <Route path="login" element={<Login />} />
         <Route path="reset-password" element={<ResetPassword />} />
         <Route path="*" element={<NotFound />} />

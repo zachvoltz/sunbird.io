@@ -73,8 +73,23 @@ model LessonType {
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
 
-  bookings  Booking[]
-  workshops Workshop[]
+  categories LessonCategory[]
+  bookings   Booking[]
+  workshops  Workshop[]
+}
+
+model LessonCategory {
+  id           String  @id @default(cuid())
+  lessonTypeId String
+  slug         String
+  title        String
+  description  String?
+  sortOrder    Int     @default(0)
+
+  lessonType LessonType @relation(fields: [lessonTypeId], references: [id])
+  bookings   Booking[]
+
+  @@unique([lessonTypeId, slug])
 }
 
 model AvailabilitySlot {
@@ -86,18 +101,24 @@ model AvailabilitySlot {
 }
 
 model Booking {
-  id               String   @id @default(cuid())
-  userId           String
-  lessonTypeId     String
-  startsAt         DateTime
-  endsAt           DateTime
-  status           String   @default("CONFIRMED")
-  stripePaymentId  String?
-  usedSubscription Boolean  @default(false)
-  createdAt        DateTime @default(now())
+  id                  String    @id @default(cuid())
+  userId              String
+  lessonTypeId        String
+  lessonCategoryId    String?
+  startsAt            DateTime
+  endsAt              DateTime
+  status              String    @default("CONFIRMED")
+  studentNote         String?
+  practiceNotes       String?
+  practiceNotesSentAt DateTime?
+  completedAt         DateTime?
+  stripePaymentId     String?
+  usedSubscription    Boolean   @default(false)
+  createdAt           DateTime  @default(now())
 
-  user       User       @relation(fields: [userId], references: [id])
-  lessonType LessonType @relation(fields: [lessonTypeId], references: [id])
+  user           User            @relation(fields: [userId], references: [id])
+  lessonType     LessonType      @relation(fields: [lessonTypeId], references: [id])
+  lessonCategory LessonCategory? @relation(fields: [lessonCategoryId], references: [id])
 }
 
 // ─── Subscriptions ───

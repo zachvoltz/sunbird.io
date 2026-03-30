@@ -4,6 +4,8 @@ import type {
   loginSchema,
   contactSchema,
   createBookingSchema,
+  practiceNotesSchema,
+  createAvailabilitySchema,
   createSongSchema,
   createCommentSchema,
   eventRsvpSchema,
@@ -16,6 +18,8 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export type PracticeNotesInput = z.infer<typeof practiceNotesSchema>;
+export type CreateAvailabilityInput = z.infer<typeof createAvailabilitySchema>;
 export type CreateSongInput = z.infer<typeof createSongSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 export type EventRsvpInput = z.infer<typeof eventRsvpSchema>;
@@ -118,12 +122,33 @@ export interface SongPublic {
   isLikedByMe: boolean;
 }
 
+export interface LessonCategoryPublic {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+}
+
+export interface LessonTypeWithCategories extends LessonTypePublic {
+  categories: LessonCategoryPublic[];
+}
+
+export interface AvailableSlot {
+  startsAt: string;
+  endsAt: string;
+}
+
 export interface BookingPublic {
   id: string;
   lessonType: LessonTypePublic;
+  lessonCategory: LessonCategoryPublic | null;
   startsAt: string;
   endsAt: string;
   status: BookingStatus;
+  studentNote: string | null;
+  practiceNotes: string | null;
+  completedAt: string | null;
   usedSubscription: boolean;
   createdAt: string;
+  user?: UserPublic;
 }
