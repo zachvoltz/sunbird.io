@@ -30,8 +30,8 @@ export function createTestDb() {
 }
 
 /** Make a JSON request to the Hono app */
-export function jsonRequest(
-  app: { request: (req: Request) => Promise<Response> },
+export async function jsonRequest(
+  app: { request: (req: Request) => Response | Promise<Response> },
   path: string,
   options: { method?: string; body?: Record<string, unknown>; cookie?: string } = {},
 ) {

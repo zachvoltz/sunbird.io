@@ -24,7 +24,7 @@ describe("POST /api/auth/register", () => {
     });
 
     expect(res.status).toBe(201);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.data.email).toBe("test@example.com");
     expect(body.data.name).toBe("Test User");
     expect(body.data.role).toBe("STUDENT");
@@ -58,7 +58,7 @@ describe("POST /api/auth/login", () => {
     });
 
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.data.email).toBe("test@example.com");
     expect(getSessionCookie(res)).toBeTruthy();
   });
@@ -93,7 +93,7 @@ describe("GET /api/me", () => {
 
     const res = await jsonRequest(app, "/api/me", { cookie });
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.data.email).toBe("test@example.com");
   });
 
