@@ -60,6 +60,7 @@ export const contactSchema = z.object({
 export const createBookingSchema = z.object({
   lessonTypeId: z.string().min(1),
   lessonCategoryId: z.string().nullish(),
+  coachId: z.string().optional(),
   startsAt: z.string().datetime(),
   studentNote: z.string().max(500).optional(),
 });

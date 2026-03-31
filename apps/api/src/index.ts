@@ -7,6 +7,7 @@ import { meRoutes } from "./routes/me";
 import { lessonRoutes } from "./routes/lessons";
 import { availabilityRoutes } from "./routes/availability";
 import { bookingRoutes } from "./routes/bookings";
+import { coachRoutes } from "./routes/coaches";
 import { initDb } from "./lib/db";
 
 type Bindings = {
@@ -57,6 +58,7 @@ app.route("/api/me", meRoutes);
 app.route("/api/lessons", lessonRoutes);
 app.route("/api/availability", availabilityRoutes);
 app.route("/api/bookings", bookingRoutes);
+app.route("/api/coaches", coachRoutes);
 
 // Route modules will be mounted here as they're built:
 // app.route("/api/community", communityRoutes);

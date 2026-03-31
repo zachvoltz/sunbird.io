@@ -38,6 +38,7 @@ export function StepConfirm({ state, update }: Props) {
       : state.selectedType?.categories.find(
           (c) => c.id === state.selectedCategoryId,
         )?.title ?? "Open";
+  const coachName = state.coaches.find((c) => c.id === state.selectedCoachId)?.name;
   const slot = state.selectedSlot!;
 
   const handleSubmit = async () => {
@@ -50,6 +51,7 @@ export function StepConfirm({ state, update }: Props) {
         body: JSON.stringify({
           lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
           lessonCategoryId: state.selectedCategoryId,
+          coachId: state.selectedCoachId || undefined,
           startsAt: slot.startsAt,
           studentNote: note || undefined,
         }),
@@ -95,6 +97,17 @@ export function StepConfirm({ state, update }: Props) {
             </span>
             <span className="font-medium">{categoryName}</span>
           </div>
+          {coachName && (
+            <>
+              <hr className="editorial-rule" />
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary">
+                  Coach
+                </span>
+                <span className="font-medium">{coachName}</span>
+              </div>
+            </>
+          )}
           <hr className="editorial-rule" />
           <div className="flex justify-between items-baseline">
             <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary">

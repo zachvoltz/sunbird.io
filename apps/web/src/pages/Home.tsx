@@ -1,45 +1,20 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Wordmark } from "@/components/Wordmark";
-import { Mic, PenLine, Music, Theater, BookOpen } from "lucide-react";
+import { Mic, PenLine, Music, Theater, BookOpen, Flower2, Guitar } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { apiFetch } from "@/lib/api";
+import type { LessonTypePublic } from "@sunbird/shared";
 
-const lessonTypes: Array<{
-  slug: string;
-  title: string;
-  aside: string;
-  icon: LucideIcon;
-}> = [
-  {
-    slug: "voice",
-    title: "Voice",
-    aside: "The instrument you already own.",
-    icon: Mic,
-  },
-  {
-    slug: "songwriting",
-    title: "Songwriting",
-    aside: "From first line to finished thing.",
-    icon: PenLine,
-  },
-  {
-    slug: "theory",
-    title: "Theory",
-    aside: "The why behind the sound.",
-    icon: Music,
-  },
-  {
-    slug: "performance",
-    title: "Performance",
-    aside: "Stage fright sold separately.",
-    icon: Theater,
-  },
-  {
-    slug: "poetry-in-song",
-    title: "Poetry in Song",
-    aside: "Where lyrics earn their keep.",
-    icon: BookOpen,
-  },
-];
+const lessonIcons: Record<string, LucideIcon> = {
+  voice: Mic,
+  songwriting: PenLine,
+  theory: Music,
+  performance: Theater,
+  "poetry-in-song": BookOpen,
+  "yoga-for-singers": Flower2,
+  "guitar-for-singers": Guitar,
+};
 
 const navLinks = [
   { to: "/lessons", label: "lessons", primary: true },
@@ -71,6 +46,14 @@ function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 }
 
 export function Home() {
+  const [lessonTypes, setLessonTypes] = useState<LessonTypePublic[]>([]);
+
+  useEffect(() => {
+    apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
+      .then((res) => setLessonTypes(res.data))
+      .catch(() => {});
+  }, []);
+
   return (
     <>
       {/* ── Hero ── */}
@@ -134,7 +117,7 @@ export function Home() {
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {lessonTypes.map((lesson) => {
-              const Icon = lesson.icon;
+              const Icon = lessonIcons[lesson.slug] || Music;
               return (
               <Link
                 key={lesson.slug}
@@ -146,7 +129,7 @@ export function Home() {
                   {lesson.title}
                 </h3>
                 <p className="text-sm text-text-secondary italic">
-                  {lesson.aside}
+                  {lesson.subtitle}
                 </p>
               </Link>
               );

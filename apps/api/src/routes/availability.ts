@@ -76,7 +76,7 @@ availabilityRoutes.get("/", async (c) => {
 });
 
 // POST /api/availability — create availability slot (teacher/admin)
-availabilityRoutes.post("/", requireAuth, requireRole("TEACHER", "ADMIN"), async (c) => {
+availabilityRoutes.post("/", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const body = await c.req.json();
   const parsed = createAvailabilitySchema.safeParse(body);
   if (!parsed.success) {
@@ -92,7 +92,7 @@ availabilityRoutes.post("/", requireAuth, requireRole("TEACHER", "ADMIN"), async
 });
 
 // GET /api/availability/slots — list all availability slots (teacher/admin)
-availabilityRoutes.get("/slots", requireAuth, requireRole("TEACHER", "ADMIN"), async (c) => {
+availabilityRoutes.get("/slots", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const db = getDb();
   const slots = await db.availabilitySlot.findMany({
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
@@ -101,7 +101,7 @@ availabilityRoutes.get("/slots", requireAuth, requireRole("TEACHER", "ADMIN"), a
 });
 
 // DELETE /api/availability/:id — remove a slot (teacher/admin)
-availabilityRoutes.delete("/:id", requireAuth, requireRole("TEACHER", "ADMIN"), async (c) => {
+availabilityRoutes.delete("/:id", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const { id } = c.req.param();
   const db = getDb();
   await db.availabilitySlot.delete({ where: { id } });

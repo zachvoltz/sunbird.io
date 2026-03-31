@@ -1,44 +1,19 @@
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-
-const lessons = [
-  {
-    slug: "voice",
-    title: "Voice",
-    tagline: "The instrument you already own.",
-    description:
-      "Learn to sing the way you speak — honestly, with your whole body behind it. We'll work on breath, tone, range, and the thing no one teaches: trusting the sound that's already yours.",
-  },
-  {
-    slug: "songwriting",
-    title: "Songwriting",
-    tagline: "From first line to finished thing.",
-    description:
-      "Melody, lyrics, structure — but also the harder stuff: starting, staying with an idea, knowing when it's done. We write in the room together. You leave with songs, not just notes about songs.",
-  },
-  {
-    slug: "performance",
-    title: "Performance",
-    tagline: "Stage fright sold separately.",
-    description:
-      "Presence, phrasing, how to hold a room without holding your breath. We work on what happens between songs, too — the talking, the silence, the part where you decide to stay instead of run.",
-  },
-  {
-    slug: "theory",
-    title: "Theory",
-    tagline: "The why behind the sound.",
-    description:
-      "Chords, scales, rhythm, form — taught as tools for making, not rules for following. You'll understand why your favorite songs work, and how to steal from them gracefully.",
-  },
-  {
-    slug: "poetry-in-song",
-    title: "Poetry in Song",
-    tagline: "Where lyrics earn their keep.",
-    description:
-      "The line between a poem and a lyric is thinner than people think. We read, we write, we blur the edges. For students who want their words to carry weight even without the melody.",
-  },
-];
+import { apiFetch } from "@/lib/api";
+import type { LessonTypePublic } from "@sunbird/shared";
 
 export function Lessons() {
+  const [lessons, setLessons] = useState<LessonTypePublic[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
+      .then((res) => setLessons(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
   return (
     <div className="py-16 px-6 md:px-10">
       <div className="mx-auto max-w-[1200px]">
@@ -59,39 +34,59 @@ export function Lessons() {
 
         {/* Lesson cards */}
         <div className="space-y-0 border-t border-charcoal/10">
-          {lessons.map((lesson, i) => (
-            <Link
-              key={lesson.slug}
-              to={`/lessons/${lesson.slug}`}
-              className="group block py-10 border-b border-charcoal/10 hover:border-charcoal/25 transition-colors"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10">
-                <div className="md:col-span-1">
-                  <span className="text-[12px] font-mono text-text-secondary tabular-nums">
-                    {String(i + 1).padStart(2, "0")}
-                  </span>
+          {loading
+            ? Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="py-10 border-b border-charcoal/10 animate-pulse">
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10">
+                    <div className="md:col-span-1">
+                      <div className="h-4 w-6 bg-warm-gray rounded" />
+                    </div>
+                    <div className="md:col-span-4">
+                      <div className="h-8 w-40 bg-warm-gray rounded mb-2" />
+                      <div className="h-5 w-52 bg-warm-gray/60 rounded" />
+                    </div>
+                    <div className="md:col-span-6">
+                      <div className="h-4 w-full bg-warm-gray/50 rounded mb-2" />
+                      <div className="h-4 w-3/4 bg-warm-gray/50 rounded" />
+                    </div>
+                  </div>
                 </div>
-                <div className="md:col-span-4">
-                  <h2 className="font-display text-2xl md:text-3xl font-bold group-hover:text-gold transition-colors">
-                    {lesson.title}
-                  </h2>
-                  <p className="font-handwritten text-lg text-gold mt-1">
-                    {lesson.tagline}
-                  </p>
-                </div>
-                <div className="md:col-span-6">
-                  <p className="text-text-secondary leading-relaxed">
-                    {lesson.description}
-                  </p>
-                </div>
-                <div className="md:col-span-1 flex items-center justify-end">
-                  <span className="text-text-secondary group-hover:text-charcoal group-hover:translate-x-1 transition-all">
-                    &rarr;
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))}
+              ))
+            : lessons.map((lesson, i) => (
+                <Link
+                  key={lesson.slug}
+                  to={`/lessons/${lesson.slug}`}
+                  className="group block py-10 border-b border-charcoal/10 hover:border-charcoal/25 transition-colors"
+                >
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10">
+                    <div className="md:col-span-1">
+                      <span className="text-[12px] font-mono text-text-secondary tabular-nums">
+                        {String(i + 1).padStart(2, "0")}
+                      </span>
+                    </div>
+                    <div className="md:col-span-4">
+                      <h2 className="font-display text-2xl md:text-3xl font-bold group-hover:text-gold transition-colors">
+                        {lesson.title}
+                      </h2>
+                      {lesson.subtitle && (
+                        <p className="font-handwritten text-lg text-gold mt-1">
+                          {lesson.subtitle}
+                        </p>
+                      )}
+                    </div>
+                    <div className="md:col-span-6">
+                      <p className="text-text-secondary leading-relaxed">
+                        {lesson.description}
+                      </p>
+                    </div>
+                    <div className="md:col-span-1 flex items-center justify-end">
+                      <span className="text-text-secondary group-hover:text-charcoal group-hover:translate-x-1 transition-all">
+                        &rarr;
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
         </div>
 
         {/* Bottom CTA */}

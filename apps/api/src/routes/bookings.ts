@@ -51,6 +51,9 @@ function serializeBooking(b: any) {
     user: b.user
       ? { id: b.user.id, name: b.user.name, avatarUrl: b.user.avatarUrl, bio: b.user.bio }
       : undefined,
+    coach: b.coach
+      ? { id: b.coach.id, name: b.coach.name, avatarUrl: b.coach.avatarUrl, bio: b.coach.bio }
+      : undefined,
   };
 }
 
@@ -58,6 +61,7 @@ const bookingInclude = {
   lessonType: true,
   lessonCategory: true,
   user: { select: { id: true, name: true, avatarUrl: true, bio: true } },
+  coach: { select: { id: true, name: true, avatarUrl: true, bio: true } },
 };
 
 // POST /api/bookings — create a booking
@@ -69,7 +73,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
   }
 
-  const { lessonTypeId, lessonCategoryId, startsAt: startsAtStr, studentNote } = parsed.data;
+  const { lessonTypeId, lessonCategoryId, coachId: providedCoachId, startsAt: startsAtStr, studentNote } = parsed.data;
   const db = getDb();
 
   // Verify lesson type exists
@@ -88,6 +92,23 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     }
   }
 
+  // Resolve coach — use provided, or auto-assign if only one coach exists
+  let coachId = providedCoachId ?? null;
+  if (!coachId) {
+    const coaches = await db.user.findMany({ where: { role: "COACH" } });
+    if (coaches.length === 1) {
+      coachId = coaches[0].id;
+    }
+  }
+
+  // Verify coach exists and is actually a coach
+  if (coachId) {
+    const coach = await db.user.findFirst({ where: { id: coachId, role: "COACH" } });
+    if (!coach) {
+      return c.json({ error: "Coach not found" }, 404);
+    }
+  }
+
   const startsAt = new Date(startsAtStr);
   const endsAt = new Date(startsAt.getTime() + LESSON_DURATION_MINS * 60 * 1000);
 
@@ -96,15 +117,17 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "Cannot book a time in the past" }, 400);
   }
 
-  // Check for conflicting bookings
-  const conflict = await db.booking.findFirst({
-    where: {
-      startsAt: { lt: endsAt },
-      endsAt: { gt: startsAt },
-      status: { not: "CANCELLED" },
-    },
-  });
+  // Check for conflicting bookings (scoped to this coach if assigned)
+  const conflictWhere: any = {
+    startsAt: { lt: endsAt },
+    endsAt: { gt: startsAt },
+    status: { not: "CANCELLED" },
+  };
+  if (coachId) {
+    conflictWhere.coachId = coachId;
+  }
 
+  const conflict = await db.booking.findFirst({ where: conflictWhere });
   if (conflict) {
     return c.json({ error: "This time slot is no longer available" }, 409);
   }
@@ -127,6 +150,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
   const booking = await db.booking.create({
     data: {
       userId: user.id,
+      coachId,
       lessonTypeId,
       lessonCategoryId: lessonCategoryId ?? null,
       startsAt,
@@ -157,7 +181,10 @@ bookingRoutes.get("/", requireAuth, async (c) => {
   const where: any = {};
   if (user.role === "STUDENT") {
     where.userId = user.id;
+  } else if (user.role === "COACH") {
+    where.coachId = user.id;
   }
+  // ADMIN sees all
   if (status) {
     where.status = status;
   }
@@ -189,6 +216,9 @@ bookingRoutes.get("/:id", requireAuth, async (c) => {
   if (user.role === "STUDENT" && booking.userId !== user.id) {
     return c.json({ error: "Forbidden" }, 403);
   }
+  if (user.role === "COACH" && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
 
   return c.json({ data: serializeBooking(booking) });
 });
@@ -208,6 +238,9 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     return c.json({ error: "Booking not found" }, 404);
   }
   if (user.role === "STUDENT" && booking.userId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (user.role === "COACH" && booking.coachId !== user.id) {
     return c.json({ error: "Forbidden" }, 403);
   }
   if (booking.status !== "CONFIRMED") {
@@ -231,14 +264,18 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
   return c.json({ data: serializeBooking(updated) });
 });
 
-// PATCH /api/bookings/:id/complete — mark lesson as completed (teacher/admin)
-bookingRoutes.patch("/:id/complete", requireAuth, requireRole("TEACHER", "ADMIN"), async (c) => {
+// PATCH /api/bookings/:id/complete — mark lesson as completed (coach/admin)
+bookingRoutes.patch("/:id/complete", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const { id } = c.req.param();
+  const user = c.get("user")!;
   const db = getDb();
 
   const booking = await db.booking.findUnique({ where: { id } });
   if (!booking) {
     return c.json({ error: "Booking not found" }, 404);
+  }
+  if (user.role === "COACH" && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
   }
   if (booking.status !== "CONFIRMED") {
     return c.json({ error: "Only confirmed bookings can be completed" }, 400);
@@ -253,9 +290,10 @@ bookingRoutes.patch("/:id/complete", requireAuth, requireRole("TEACHER", "ADMIN"
   return c.json({ data: serializeBooking(updated) });
 });
 
-// PATCH /api/bookings/:id/notes — add practice notes and email student (teacher/admin)
-bookingRoutes.patch("/:id/notes", requireAuth, requireRole("TEACHER", "ADMIN"), async (c) => {
+// PATCH /api/bookings/:id/notes — add practice notes and email student (coach/admin)
+bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const { id } = c.req.param();
+  const user = c.get("user")!;
   const body = await c.req.json();
   const parsed = practiceNotesSchema.safeParse(body);
   if (!parsed.success) {
@@ -274,6 +312,9 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("TEACHER", "ADMIN"), 
 
   if (!booking) {
     return c.json({ error: "Booking not found" }, 404);
+  }
+  if (user.role === "COACH" && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
   }
 
   const updated = await db.booking.update({

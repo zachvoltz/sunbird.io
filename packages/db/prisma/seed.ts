@@ -3,7 +3,8 @@ import { PrismaClient } from "@prisma/client";
 const db = new PrismaClient();
 
 async function main() {
-  // Clear existing lesson data
+  // Clear existing data (order matters for foreign keys)
+  await db.booking.deleteMany();
   await db.lessonCategory.deleteMany();
   await db.lessonType.deleteMany();
   await db.availabilitySlot.deleteMany();
@@ -34,6 +35,42 @@ async function main() {
     },
   });
 
+  const performance = await db.lessonType.create({
+    data: {
+      slug: "performance",
+      title: "Performance",
+      subtitle: "Stage fright sold separately.",
+      description:
+        "Presence, phrasing, how to hold a room without holding your breath. We work on what happens between songs, too — the talking, the silence, the part where you decide to stay instead of run.",
+      pricePerSession: 8000,
+      sortOrder: 2,
+    },
+  });
+
+  const theory = await db.lessonType.create({
+    data: {
+      slug: "theory",
+      title: "Theory",
+      subtitle: "The why behind the sound.",
+      description:
+        "Chords, scales, rhythm, form — taught as tools for making, not rules for following. You'll understand why your favorite songs work, and how to steal from them gracefully.",
+      pricePerSession: 8000,
+      sortOrder: 3,
+    },
+  });
+
+  const poetryInSong = await db.lessonType.create({
+    data: {
+      slug: "poetry-in-song",
+      title: "Poetry in Song",
+      subtitle: "Where lyrics earn their keep.",
+      description:
+        "The line between a poem and a lyric is thinner than people think. We read, we write, we blur the edges. For students who want their words to carry weight even without the melody.",
+      pricePerSession: 8000,
+      sortOrder: 4,
+    },
+  });
+
   const yoga = await db.lessonType.create({
     data: {
       slug: "yoga-for-singers",
@@ -42,7 +79,7 @@ async function main() {
       description:
         "Breath, alignment, and release — specifically for people who use their voice. Each session blends yoga with vocal warm-ups to help you sing from a more open, grounded place.",
       pricePerSession: 8000,
-      sortOrder: 2,
+      sortOrder: 5,
     },
   });
 
@@ -54,7 +91,7 @@ async function main() {
       description:
         "You don't need to be a guitarist. You need to be a singer who can play guitar. We'll focus on chords, strumming, and accompaniment patterns that serve the song.",
       pricePerSession: 8000,
-      sortOrder: 3,
+      sortOrder: 6,
     },
   });
 
@@ -88,6 +125,39 @@ async function main() {
       data: { ...songwritingCategories[i], lessonTypeId: songwriting.id, sortOrder: i },
     });
   }
+
+  // Performance — single open category
+  await db.lessonCategory.create({
+    data: {
+      slug: "open",
+      title: "Open",
+      description: "We'll tailor the session to where you are and what you're working toward.",
+      lessonTypeId: performance.id,
+      sortOrder: 0,
+    },
+  });
+
+  // Theory — single open category
+  await db.lessonCategory.create({
+    data: {
+      slug: "open",
+      title: "Open",
+      description: "We'll start with what you're curious about and build from there.",
+      lessonTypeId: theory.id,
+      sortOrder: 0,
+    },
+  });
+
+  // Poetry in Song — single open category
+  await db.lessonCategory.create({
+    data: {
+      slug: "open",
+      title: "Open",
+      description: "Bring a lyric, a poem, or just an idea. We'll find the song in it.",
+      lessonTypeId: poetryInSong.id,
+      sortOrder: 0,
+    },
+  });
 
   // Yoga for Singers — single open category
   await db.lessonCategory.create({
@@ -123,7 +193,19 @@ async function main() {
     }
   }
 
-  console.log("Seeded: 4 lesson types, 11 categories, 40 availability slots");
+  // ─── Admin User ───
+
+  await db.user.upsert({
+    where: { email: "zachvoltz@gmail.com" },
+    update: { role: "ADMIN" },
+    create: {
+      email: "zachvoltz@gmail.com",
+      name: "Zach Voltz",
+      role: "ADMIN",
+    },
+  });
+
+  console.log("Seeded: 7 lesson types, 14 categories, 40 availability slots, 1 admin user");
 }
 
 main()

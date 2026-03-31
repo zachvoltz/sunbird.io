@@ -6,6 +6,7 @@ import type { BookingState } from "./BookPage";
 type Props = {
   state: BookingState;
   update: (partial: Partial<BookingState>) => void;
+  nextStep: BookingState["step"];
 };
 
 function generateDates(count: number): string[] {
@@ -37,7 +38,7 @@ function formatTime(isoStr: string): string {
   });
 }
 
-export function StepDateTime({ state, update }: Props) {
+export function StepDateTime({ state, update, nextStep }: Props) {
   const [dates] = useState(() => generateDates(30));
   const [selectedDate, setSelectedDate] = useState<string | null>(state.selectedDate);
   const [slots, setSlots] = useState<AvailableSlot[]>([]);
@@ -61,7 +62,7 @@ export function StepDateTime({ state, update }: Props) {
     update({
       selectedDate,
       selectedSlot: slot,
-      step: 4,
+      step: nextStep,
     });
   };
 

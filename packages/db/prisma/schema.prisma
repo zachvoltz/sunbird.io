@@ -31,6 +31,7 @@ model User {
   eventRsvps      EventRsvp[]
   contactMessages    ContactMessage[]
   passwordResetTokens PasswordResetToken[]
+  coachBookings      Booking[]           @relation("coachBookings")
 }
 
 model Session {
@@ -103,6 +104,7 @@ model AvailabilitySlot {
 model Booking {
   id                  String    @id @default(cuid())
   userId              String
+  coachId             String?
   lessonTypeId        String
   lessonCategoryId    String?
   startsAt            DateTime
@@ -117,6 +119,7 @@ model Booking {
   createdAt           DateTime  @default(now())
 
   user           User            @relation(fields: [userId], references: [id])
+  coach          User?           @relation("coachBookings", fields: [coachId], references: [id])
   lessonType     LessonType      @relation(fields: [lessonTypeId], references: [id])
   lessonCategory LessonCategory? @relation(fields: [lessonCategoryId], references: [id])
 }
