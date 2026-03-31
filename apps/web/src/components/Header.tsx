@@ -115,7 +115,7 @@ export function Header() {
                     }`
                   }
                 >
-                  {user.name}
+                  My Stuff
                 </NavLink>
               ) : (
                 <NavLink
@@ -206,7 +206,7 @@ export function Header() {
                     `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`
                   }
                 >
-                  {user.name}
+                  My Stuff
                 </NavLink>
               ) : (
                 <NavLink
