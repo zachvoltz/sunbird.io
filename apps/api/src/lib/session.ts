@@ -54,23 +54,28 @@ export async function invalidateSession(db: PrismaClient, sessionId: string) {
   await db.session.delete({ where: { id: sessionId } }).catch(() => {});
 }
 
+// Cross-origin deployment needs SameSite=None; Secure for cookies to work
+const isSecureContext = typeof process === "undefined" || process.env.NODE_ENV !== "development";
+
 export function serializeSessionCookie(sessionId: string, expiresAt: Date): string {
   const maxAge = Math.floor((expiresAt.getTime() - Date.now()) / 1000);
   const parts = [
     `session=${sessionId}`,
     `HttpOnly`,
-    `SameSite=Lax`,
     `Path=/`,
     `Max-Age=${maxAge}`,
   ];
-  if (typeof globalThis !== "undefined" && "location" in globalThis) {
-    // production check would go here
+  if (isSecureContext) {
+    parts.push("SameSite=None", "Secure");
+  } else {
+    parts.push("SameSite=Lax");
   }
   return parts.join("; ");
 }
 
 export function clearSessionCookie(): string {
-  return "session=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0";
+  const sameSite = isSecureContext ? "SameSite=None; Secure" : "SameSite=Lax";
+  return `session=; HttpOnly; Path=/; Max-Age=0; ${sameSite}`;
 }
 
 export function parseSessionCookie(cookieHeader: string | undefined): string | null {
