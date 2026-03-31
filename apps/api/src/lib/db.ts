@@ -1,4 +1,4 @@
-import { PrismaClient } from "@sunbird/db";
+import { PrismaClient } from "@prisma/client/edge";
 import { PrismaD1 } from "@prisma/adapter-d1";
 
 let prisma: PrismaClient | null = null;
@@ -14,7 +14,7 @@ export function initDb(datasourceUrl?: string): void {
   if (!prisma) {
     prisma = new PrismaClient({
       datasources: datasourceUrl ? { db: { url: datasourceUrl } } : undefined,
-    });
+    } as any);
   }
 }
 
