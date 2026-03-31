@@ -72,6 +72,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm --filter @sunbird/db exec prisma generate
+
       - name: Apply D1 migrations
         uses: cloudflare/wrangler-action@v3
         with:
