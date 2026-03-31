@@ -51,10 +51,6 @@ app.use("/api/*", async (c, next) => {
 });
 app.use("/api/*", sessionMiddleware);
 
-app.get("/", (c) => {
-  return c.json({ name: "Sunbird API", status: "ok" });
-});
-
 app.get("/api/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
