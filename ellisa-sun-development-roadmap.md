@@ -78,7 +78,7 @@ Sunbird is a webapp/PWA that connects students with music teachers for lessons, 
   Self-host Playfair Display, Inter, and Caveat via `@fontsource` packages or manual WOFF2 files. Preload critical fonts in `index.html`.
   _AC: Fonts render correctly; no FOUT on fast connections; LCP unaffected._
 
-- [ ] **1A.3 — Base component library**
+- [x] **1A.3 — Base component library**
   Build atomic components: `Button` (primary/ghost/outline variants), `Card`, `Badge`, `Input`, `Textarea`, `Select`, `Label`, `SectionHeading`, `Container`, `Divider`.
   _AC: Each component accepts standard props, renders per design spec._
 
