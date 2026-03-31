@@ -118,21 +118,16 @@ export function Header() {
                   {user.name}
                 </NavLink>
               ) : (
-                <>
-                  <NavLink
-                    to="/my-bookings"
-                    className={({ isActive }) =>
-                      `text-[13px] font-medium tracking-wide transition-colors ${
-                        isActive ? "text-iris" : "text-text-secondary hover:text-charcoal"
-                      }`
-                    }
-                  >
-                    My Bookings
-                  </NavLink>
-                  <span className="text-[13px] font-medium text-text-secondary">
-                    {user.name}
-                  </span>
-                </>
+                <NavLink
+                  to="/my-bookings"
+                  className={({ isActive }) =>
+                    `text-[13px] font-medium tracking-wide transition-colors ${
+                      isActive ? "text-iris" : "text-text-secondary hover:text-charcoal"
+                    }`
+                  }
+                >
+                  My Stuff
+                </NavLink>
               )}
               <button
                 onClick={handleLogout}
@@ -214,18 +209,15 @@ export function Header() {
                   {user.name}
                 </NavLink>
               ) : (
-                <>
-                  <NavLink
-                    to="/my-bookings"
-                    onClick={() => setMenuOpen(false)}
-                    className={({ isActive }) =>
-                      `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`
-                    }
-                  >
-                    My Bookings
-                  </NavLink>
-                  <div className="text-[13px] text-text-secondary mb-2">{user.name}</div>
-                </>
+                <NavLink
+                  to="/my-bookings"
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) =>
+                    `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`
+                  }
+                >
+                  My Stuff
+                </NavLink>
               )}
               <button
                 onClick={() => { handleLogout(); setMenuOpen(false); }}
