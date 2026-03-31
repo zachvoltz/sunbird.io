@@ -55,7 +55,7 @@ jobs:
         run: pnpm --filter @sunbird/web build
 
       - name: Copy frontend to Worker assets
-        run: cp -r apps/web/dist apps/api/public
+        run: rm -rf apps/api/public && cp -r apps/web/dist apps/api/public
 
       - name: Apply D1 migrations
         uses: cloudflare/wrangler-action@v3
