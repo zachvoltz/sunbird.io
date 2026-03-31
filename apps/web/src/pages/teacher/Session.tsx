@@ -102,9 +102,13 @@ export function CoachSession() {
     return () => clearInterval(interval);
   }, [bookingId, notFound]);
 
-  // Scroll chat to bottom on new messages
+  // Scroll chat to bottom only when the user sends a message
+  const shouldScrollChat = useRef(false);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (shouldScrollChat.current) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      shouldScrollChat.current = false;
+    }
   }, [messages]);
 
   const sendMessage = async () => {
@@ -115,6 +119,7 @@ export function CoachSession() {
         `/api/bookings/${bookingId}/messages`,
         { method: "POST", body: JSON.stringify({ content: chatInput.trim() }) },
       );
+      shouldScrollChat.current = true;
       setMessages((prev) => [...prev, res.data]);
       setChatInput("");
     } catch {
