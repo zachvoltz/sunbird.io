@@ -20,6 +20,7 @@ type Bindings = {
   EMAIL_FROM: string;
   DATABASE_URL: string;
   DB: D1Database;
+  ASSETS: { fetch: typeof fetch };
   // SONGS_BUCKET: R2Bucket;
 };
 
@@ -62,9 +63,12 @@ app.route("/api/availability", availabilityRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/coaches", coachRoutes);
 
-// Route modules will be mounted here as they're built:
-// app.route("/api/community", communityRoutes);
-// app.route("/api/contact", contactRoutes);
-// app.route("/api/webhooks", webhookRoutes);
+// Serve frontend assets for all non-API routes (SPA fallback)
+app.get("*", async (c) => {
+  if (c.env?.ASSETS) {
+    return c.env.ASSETS.fetch(c.req.raw);
+  }
+  return c.notFound();
+});
 
 export default app;
