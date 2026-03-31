@@ -307,6 +307,28 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   When a new comment is posted on a booking, email the other party (student or teacher).
   _AC: Notification sent. Respects notification preferences._
 
+### 2D+ — Post-Session Forms (Week 7–8)
+
+- [ ] **2D+.1 — Structured session notes schema**
+  Add `improvementNotes` and `nextGoalNotes` columns to Booking (alongside existing `practiceNotes`). Update validators and types.
+  _AC: Three separate note fields stored per booking. Existing practiceNotes data preserved._
+
+- [ ] **2D+.2 — Coach post-session form on Session page**
+  When a booking is completed, show a 3-field form on the Session page: Practice Notes (required), Improvement Notes (optional), Next Goal (optional). "Mark Complete" button for past CONFIRMED sessions. Notes display read-only after sending.
+  _AC: Coach can complete a session and send structured notes from the Session page. Notes emailed to student with 3 labeled sections._
+
+- [ ] **2D+.3 — Upgrade Dashboard notes form**
+  Update the Dashboard inline notes form from a single textarea to 3 fields matching the Session page.
+  _AC: Dashboard and Session page both use the same 3-field notes structure._
+
+- [ ] **2D+.4 — Student post-session notes display**
+  Show the 3 structured note sections on the Student Session page and MyBookings past section.
+  _AC: Students see labeled Practice Notes, Improvement Notes, and Next Goal on completed sessions._
+
+- [ ] **2D+.5 — Student "schedule next" prompt**
+  On completed sessions, prompt the student to book their next lesson with a CTA linking to `/book?lessonTypeId=xxx`. Pre-select lesson type in the booking flow.
+  _AC: Student sees "Ready for your next session?" on completed bookings. Link pre-fills lesson type._
+
 ### 2E — Student Dashboard (Week 7–8)
 
 - [x] **2E.1 — Student calendar / upcoming lessons**
