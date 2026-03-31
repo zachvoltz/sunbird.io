@@ -1,5 +1,6 @@
 import { PrismaClient as WorkerPrismaClient } from "../generated/prisma/client";
 import { PrismaD1 } from "@prisma/adapter-d1";
+import { PrismaClient as NodePrismaClient } from "@prisma/client";
 
 let prisma: WorkerPrismaClient | null = null;
 
@@ -12,15 +13,20 @@ export function initDbD1(d1: D1Database): void {
 /** Initialize with a datasource URL (local Node.js dev) */
 export function initDb(datasourceUrl?: string): void {
   if (!prisma) {
-    prisma = new WorkerPrismaClient({
+    prisma = new NodePrismaClient({
       datasources: datasourceUrl ? { db: { url: datasourceUrl } } : undefined,
-    } as any);
+    }) as unknown as WorkerPrismaClient;
   }
 }
 
 export function getDb(): WorkerPrismaClient {
   if (!prisma) {
-    prisma = new WorkerPrismaClient();
+    prisma = new NodePrismaClient() as unknown as WorkerPrismaClient;
   }
   return prisma;
+}
+
+/** Reset the singleton (for tests) */
+export function resetDb(): void {
+  prisma = null;
 }
