@@ -8,6 +8,7 @@ import { BookPage } from "@/pages/book/BookPage";
 import { MyBookings } from "@/pages/MyBookings";
 import { TeacherDashboard } from "@/pages/teacher/Dashboard";
 import { CoachSession } from "@/pages/teacher/Session";
+import { StudentSession } from "@/pages/StudentSession";
 import { AuthGate } from "@/components/AuthGate";
 import { RoleGate } from "@/components/RoleGate";
 import { Login } from "@/pages/Login";
@@ -24,6 +25,7 @@ export function App() {
         <Route path="workshops" element={<Workshops />} />
         <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
         <Route path="my-bookings" element={<AuthGate><MyBookings /></AuthGate>} />
+        <Route path="my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
         <Route path="coach" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
         <Route path="coach/session/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSession /></RoleGate></AuthGate>} />
         <Route path="login" element={<Login />} />

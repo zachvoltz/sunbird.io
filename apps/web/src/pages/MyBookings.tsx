@@ -98,13 +98,22 @@ export function MyBookings() {
                   className="bg-surface rounded-card shadow-card p-6 flex flex-col sm:flex-row sm:items-center gap-4"
                 >
                   <div className="flex-1">
-                    <h3 className="font-display text-lg font-semibold">
+                    <Link
+                      to={`/my-bookings/${b.id}`}
+                      className="font-display text-lg font-semibold hover:text-iris transition-colors"
+                    >
                       {b.lessonType.title}
-                    </h3>
+                    </Link>
                     <p className="text-sm text-text-secondary">
                       {b.lessonCategory?.title ?? "Open"} &middot;{" "}
                       {formatDate(b.startsAt)} at {formatTime(b.startsAt)}
                     </p>
+                    <Link
+                      to={`/my-bookings/${b.id}`}
+                      className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors mt-1 inline-block"
+                    >
+                      View session &rarr;
+                    </Link>
                   </div>
                   <button
                     onClick={() => cancelBooking(b.id)}
@@ -132,9 +141,12 @@ export function MyBookings() {
                   className="bg-surface/50 rounded-card p-6"
                 >
                   <div className="flex items-baseline justify-between mb-1">
-                    <h3 className="font-display text-lg font-semibold">
+                    <Link
+                      to={`/my-bookings/${b.id}`}
+                      className="font-display text-lg font-semibold hover:text-iris transition-colors"
+                    >
                       {b.lessonType.title}
-                    </h3>
+                    </Link>
                     <span
                       className={`text-[11px] uppercase tracking-wider ${
                         b.status === "COMPLETED"
@@ -147,10 +159,16 @@ export function MyBookings() {
                       {b.status}
                     </span>
                   </div>
-                  <p className="text-sm text-text-secondary mb-3">
+                  <p className="text-sm text-text-secondary mb-1">
                     {b.lessonCategory?.title ?? "Open"} &middot;{" "}
                     {formatDate(b.startsAt)} at {formatTime(b.startsAt)}
                   </p>
+                  <Link
+                    to={`/my-bookings/${b.id}`}
+                    className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors inline-block mb-3"
+                  >
+                    View session &rarr;
+                  </Link>
                   {b.practiceNotes && (
                     <div className="mt-4 border-l-2 border-gold/30 pl-4">
                       <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-2">
