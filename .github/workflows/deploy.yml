@@ -22,6 +22,9 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      - name: Generate Prisma Client
+        run: pnpm --filter @sunbird/db exec prisma generate
+
       - name: Typecheck
         run: pnpm turbo typecheck
 
