@@ -201,43 +201,43 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
 
 ### 2A — Authentication (Week 5–6)
 
-- [ ] **2A.1 — Auth library setup**
+- [x] **2A.1 — Auth library setup**
   Install and configure Lucia Auth (or Auth.js). Set up session table, cookie configuration (`HttpOnly`, `Secure`, `SameSite=Lax`), 30-day sliding expiry.
   _AC: Auth middleware runs on every request; session cookie set/validated correctly._
 
-- [ ] **2A.2 — Registration endpoint**
+- [x] **2A.2 — Registration endpoint**
   `POST /api/auth/register` — validate input (Zod), hash password (Argon2 via `@node-rs/argon2`), create `User` with `STUDENT` role + `Session`, return session cookie.
   _AC: Duplicate email returns 409. Weak password returns 400. Valid registration sets cookie and returns user with role._
 
-- [ ] **2A.3 — Login endpoint**
+- [x] **2A.3 — Login endpoint**
   `POST /api/auth/login` — validate credentials, create session.
   _AC: Wrong password returns 401. Successful login sets session cookie._
 
-- [ ] **2A.4 — Logout endpoint**
+- [x] **2A.4 — Logout endpoint**
   `POST /api/auth/logout` — invalidate session, clear cookie.
   _AC: Cookie cleared; subsequent requests are unauthenticated._
 
-- [ ] **2A.5 — Google OAuth**
+- [x] **2A.5 — Google OAuth**
   `GET /api/auth/oauth/google` (redirect) + `GET /api/auth/oauth/google/cb` (callback). Upsert `OAuthAccount` + `User`. New OAuth users default to `STUDENT` role.
   _AC: Full OAuth flow works end-to-end. Returning Google users log in without creating duplicate accounts._
 
-- [ ] **2A.6 — Password reset flow**
+- [x] **2A.6 — Password reset flow**
   `POST /api/auth/forgot-password` sends reset email with tokenized link. `POST /api/auth/reset-password` validates token, updates password.
   _AC: Reset email sent. Token expires after 1 hour. Password successfully changed._
 
-- [ ] **2A.7 — Auth & role middleware**
+- [x] **2A.7 — Auth & role middleware**
   Hono middleware that reads session cookie, loads user + role, attaches to context (`c.var.user`). Export `requireAuth`, `requireRole('TEACHER')`, `requireRole('ADMIN')` middleware.
   _AC: Protected routes return 401 without valid session. Role-restricted routes return 403 for wrong role. User object with role available in route handlers._
 
-- [ ] **2A.8 — Login/Register UI**
+- [x] **2A.8 — Login/Register UI**
   `/login` page with tab toggle (Sign In / Create Account). Form validation. Google OAuth button. Redirect to `?redirect` param after login.
   _AC: Forms validate. Auth works end-to-end. Redirect works._
 
-- [ ] **2A.9 — Auth state in frontend**
+- [x] **2A.9 — Auth state in frontend**
   React context/hook (`useAuth`) that fetches `GET /api/me` on mount. Provides `user`, `role`, `isAuthenticated`, `login`, `logout`, `register` methods.
   _AC: Components can conditionally render based on auth state and role. Header shows avatar when logged in._
 
-- [ ] **2A.10 — Auth gate component**
+- [x] **2A.10 — Auth gate component**
   `<AuthGate>` wrapper that redirects to `/login?redirect=current-path` if not authenticated. `<RoleGate role="TEACHER">` for role-restricted sections.
   _AC: Unauthenticated users get redirected to login and back. Wrong-role users see an appropriate message._
 
@@ -251,11 +251,11 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   Admin can invite/create teacher accounts (`POST /api/admin/teachers`). Teacher profile includes name, bio, avatar, specialties, and lesson types they teach.
   _AC: Admin can create teacher accounts. Teachers appear on the platform with their profile._
 
-- [ ] **2B.2 — Teacher availability calendar**
+- [x] **2B.2 — Teacher availability calendar**
   `/teacher/availability` — teachers set their bookable time slots on a weekly calendar. CRUD API at `POST /api/teacher/availability`. Supports recurring weekly slots and one-off overrides (blocked dates).
   _AC: Teacher can set recurring weekly availability. Can block specific dates. Non-teacher gets 403._
 
-- [ ] **2B.3 — Available slots endpoint**
+- [x] **2B.3 — Available slots endpoint**
   `GET /api/availability?date=YYYY-MM-DD&lessonType=voice&teacherId=X` — returns available time slots for a given date by cross-referencing teacher's `AvailabilitySlot` with existing `Booking` records.
   _AC: Only genuinely open slots returned. Booked slots excluded. Filters by teacher and lesson type._
 
@@ -265,7 +265,7 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   Install `stripe` SDK. Configure webhook endpoint `POST /api/webhooks/stripe` with signature verification. Set up Stripe products/prices for each lesson type.
   _AC: Webhook endpoint verifies Stripe signatures. Test events processed correctly._
 
-- [ ] **2C.2 — Request a lesson (one-off)**
+- [x] **2C.2 — Request a lesson (one-off)**
   `POST /api/bookings` — student selects a teacher, lesson type, date/time. Creates Stripe Checkout Session, returns checkout URL. On `checkout.session.completed` webhook, creates `Booking` record with `CONFIRMED` status.
   _AC: Double-booking prevented (race condition handled with DB constraint). Booking created only after payment succeeds._
 
@@ -277,29 +277,29 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   On booking creation, send confirmation email with date, time, lesson type, teacher name, and calendar invite (`.ics` attachment).
   _AC: User receives email with correct details and downloadable calendar event._
 
-- [ ] **2C.5 — Cancel booking endpoint**
+- [x] **2C.5 — Cancel booking endpoint**
   `PATCH /api/bookings/:id/cancel` — sets status to `CANCELLED`. Implement cancellation policy (e.g., free cancellation 24h+ before; no refund within 24h).
   _AC: Cancellation within policy gets refund via Stripe. Late cancellation marked but no refund._
 
-- [ ] **2C.6 — Booking flow UI**
+- [x] **2C.6 — Booking flow UI**
   `/book` page with multi-step flow: (1) select lesson type, (2) select teacher (initially just Ellisa), (3) pick date/time from teacher's availability calendar, (4) choose one-off or recurring, (5) confirm & pay (redirects to Stripe Checkout).
   _AC: Full flow works end-to-end. Calendar shows only available dates for selected teacher. Time slots update based on selected date._
 
-- [ ] **2C.7 — Booking confirmation page**
+- [x] **2C.7 — Booking confirmation page**
   Success page after Stripe redirect with booking summary, teacher info, and "Add to Calendar" button.
   _AC: Shows correct booking details. Calendar download works._
 
-- [ ] **2C.8 — Calendar component**
+- [x] **2C.8 — Calendar component**
   Date picker that highlights available days for the selected teacher. Fetches availability on month change. Disabled past dates.
   _AC: Available days visually distinct. Selecting a day loads time slots. Mobile-friendly._
 
 ### 2D — Lesson Communication (Week 7)
 
-- [ ] **2D.1 — Lesson comment feed API**
+- [x] **2D.1 — Lesson comment feed API**
   `GET /api/bookings/:id/comments` and `POST /api/bookings/:id/comments` — threaded comment feed attached to each booking. Only the student and assigned teacher can read/write.
   _AC: Comments persist and display in chronological order. Unauthorized users get 403._
 
-- [ ] **2D.2 — Lesson comment feed UI**
+- [x] **2D.2 — Lesson comment feed UI**
   On the booking detail page, show a comment thread between student and teacher. Supports text messages. Teacher and student can post before/after the lesson.
   _AC: Messages appear in real-time-ish (polling or optimistic updates). Clean, chat-like UI._
 
@@ -309,11 +309,11 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
 
 ### 2E — Student Dashboard (Week 7–8)
 
-- [ ] **2E.1 — Student calendar / upcoming lessons**
+- [x] **2E.1 — Student calendar / upcoming lessons**
   `/dashboard` — calendar view showing the student's upcoming booked lessons. Each entry shows lesson type, teacher, date/time, and status. Click to open booking detail with comment feed.
   _AC: Calendar displays all upcoming bookings. Supports month/week/day views. Mobile-friendly._
 
-- [ ] **2E.2 — Lesson history**
+- [x] **2E.2 — Lesson history**
   `/dashboard/history` — list of past lessons with date, teacher, lesson type, and status (completed, cancelled, no-show). Filterable by lesson type and teacher.
   _AC: Past bookings shown in reverse chronological order. Filters work._
 
@@ -327,11 +327,11 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
 
 ### 2F — Teacher Dashboard (Week 7–8)
 
-- [ ] **2F.1 — Teacher calendar view**
+- [x] **2F.1 — Teacher calendar view**
   `/teacher/calendar` — calendar showing all of the teacher's upcoming bookings. Color-coded by lesson type. Click to open booking detail with student info and comment feed.
   _AC: Teacher sees all their bookings. Day/week/month views. Can distinguish lesson types at a glance._
 
-- [ ] **2F.2 — Teacher booking management**
+- [x] **2F.2 — Teacher booking management**
   `/teacher/bookings` — list view of upcoming and past bookings. Can mark lessons as completed or no-show. Can view student profiles.
   _AC: Status updates reflect in student's booking list. Teacher can filter by status, lesson type, student._
 
