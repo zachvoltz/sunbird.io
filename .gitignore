@@ -12,6 +12,7 @@ dist/
 
 # Prisma
 packages/db/dist/
+apps/api/src/generated/
 packages/db/prisma/migrations/
 packages/db/prisma/*.db
 
