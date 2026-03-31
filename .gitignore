@@ -13,6 +13,8 @@ dist/
 # Prisma
 packages/db/dist/
 apps/api/src/generated/
+apps/api/public/*
+!apps/api/public/.gitkeep
 packages/db/prisma/migrations/
 packages/db/prisma/*.db
 

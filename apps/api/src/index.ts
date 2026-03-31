@@ -34,7 +34,7 @@ app.use("*", logger());
 app.use(
   "/api/*",
   cors({
-    origin: ["http://localhost:5173", "https://sunbird-8ww.pages.dev"],
+    origin: ["http://localhost:5173"],
     credentials: true,
   }),
 );
