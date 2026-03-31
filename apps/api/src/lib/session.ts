@@ -1,4 +1,4 @@
-import type { PrismaClient } from "@sunbird/db";
+import type { PrismaClient } from "../generated/prisma/client";
 
 const SESSION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 const SESSION_REFRESH_THRESHOLD_MS = SESSION_MAX_AGE_MS / 2; // 15 days

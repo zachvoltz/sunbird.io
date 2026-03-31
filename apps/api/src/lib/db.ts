@@ -1,7 +1,7 @@
 import { PrismaClient as WorkerPrismaClient } from "../generated/prisma/client";
 import { PrismaD1 } from "@prisma/adapter-d1";
 
-let prisma: any = null;
+let prisma: WorkerPrismaClient | null = null;
 
 /** Initialize with a D1 binding (Cloudflare Workers) */
 export function initDbD1(d1: D1Database): void {
@@ -12,17 +12,15 @@ export function initDbD1(d1: D1Database): void {
 /** Initialize with a datasource URL (local Node.js dev) */
 export function initDb(datasourceUrl?: string): void {
   if (!prisma) {
-    const { PrismaClient } = require("@prisma/client");
-    prisma = new PrismaClient({
+    prisma = new WorkerPrismaClient({
       datasources: datasourceUrl ? { db: { url: datasourceUrl } } : undefined,
-    });
+    } as any);
   }
 }
 
-export function getDb() {
+export function getDb(): WorkerPrismaClient {
   if (!prisma) {
-    const { PrismaClient } = require("@prisma/client");
-    prisma = new PrismaClient();
+    prisma = new WorkerPrismaClient();
   }
   return prisma;
 }
