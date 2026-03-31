@@ -106,7 +106,7 @@ export function Header() {
         <div className="hidden lg:flex items-center gap-5">
           {isAuthenticated && user ? (
             <>
-              {(user.role === "COACH" || user.role === "ADMIN") && (
+              {(user.role === "COACH" || user.role === "ADMIN") ? (
                 <NavLink
                   to="/coach"
                   className={({ isActive }) =>
@@ -115,24 +115,25 @@ export function Header() {
                     }`
                   }
                 >
-                  Dashboard
+                  {user.name}
                 </NavLink>
+              ) : (
+                <>
+                  <NavLink
+                    to="/my-bookings"
+                    className={({ isActive }) =>
+                      `text-[13px] font-medium tracking-wide transition-colors ${
+                        isActive ? "text-iris" : "text-text-secondary hover:text-charcoal"
+                      }`
+                    }
+                  >
+                    My Bookings
+                  </NavLink>
+                  <span className="text-[13px] font-medium text-text-secondary">
+                    {user.name}
+                  </span>
+                </>
               )}
-              {user.role === "STUDENT" && (
-                <NavLink
-                  to="/my-bookings"
-                  className={({ isActive }) =>
-                    `text-[13px] font-medium tracking-wide transition-colors ${
-                      isActive ? "text-iris" : "text-text-secondary hover:text-charcoal"
-                    }`
-                  }
-                >
-                  My Bookings
-                </NavLink>
-              )}
-              <span className="text-[13px] font-medium text-text-secondary">
-                {user.name}
-              </span>
               <button
                 onClick={handleLogout}
                 className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
@@ -202,7 +203,7 @@ export function Header() {
           <hr className="editorial-rule !my-4" />
           {isAuthenticated && user ? (
             <>
-              {(user.role === "COACH" || user.role === "ADMIN") && (
+              {(user.role === "COACH" || user.role === "ADMIN") ? (
                 <NavLink
                   to="/coach"
                   onClick={() => setMenuOpen(false)}
@@ -210,21 +211,22 @@ export function Header() {
                     `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`
                   }
                 >
-                  Dashboard
+                  {user.name}
                 </NavLink>
+              ) : (
+                <>
+                  <NavLink
+                    to="/my-bookings"
+                    onClick={() => setMenuOpen(false)}
+                    className={({ isActive }) =>
+                      `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`
+                    }
+                  >
+                    My Bookings
+                  </NavLink>
+                  <div className="text-[13px] text-text-secondary mb-2">{user.name}</div>
+                </>
               )}
-              {user.role === "STUDENT" && (
-                <NavLink
-                  to="/my-bookings"
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) =>
-                    `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`
-                  }
-                >
-                  My Bookings
-                </NavLink>
-              )}
-              <div className="text-[13px] text-text-secondary mb-2">{user.name}</div>
               <button
                 onClick={() => { handleLogout(); setMenuOpen(false); }}
                 className="block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
