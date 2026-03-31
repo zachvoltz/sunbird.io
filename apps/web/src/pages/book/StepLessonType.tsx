@@ -40,14 +40,14 @@ export function StepLessonType({ state, update }: Props) {
 
   return (
     <>
-      <h2 className="font-display text-3xl md:text-4xl font-bold mb-3">
+      <h2 className="font-display text-3xl md:text-4xl font-bold mb-3 text-center">
         What would you like to work on?
       </h2>
-      <p className="text-text-secondary mb-10">
+      <p className="text-text-secondary mb-10 text-center">
         Pick a lesson type, or choose "not sure" and we'll figure it out together.
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {state.lessonTypes.map((type) => {
           const Icon = iconMap[type.slug] || Mic;
           return (
