@@ -94,6 +94,18 @@ export const createCommentSchema = z.object({
   content: z.string().min(1, "Comment cannot be empty").max(2000),
 });
 
+// ─── Session (messages & resources) ───
+
+export const createSessionMessageSchema = z.object({
+  content: z.string().min(1, "Message cannot be empty").max(5000),
+});
+
+export const createSessionResourceSchema = z.object({
+  type: z.enum(["LINK", "PDF", "AUDIO"]),
+  title: z.string().min(1, "Title is required").max(200),
+  url: z.string().url("Must be a valid URL"),
+});
+
 // ─── Events ───
 
 export const eventRsvpSchema = z.object({

@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BookingPublic } from "@sunbird/shared";
 
@@ -110,9 +111,12 @@ export function TeacherDashboard() {
   const BookingCard = ({ b, actions }: { b: BookingPublic; actions?: React.ReactNode }) => (
     <div className="bg-surface rounded-card shadow-card p-6">
       <div className="flex items-baseline justify-between mb-1">
-        <h3 className="font-display text-lg font-semibold">
+        <Link
+          to={`/coach/session/${b.id}`}
+          className="font-display text-lg font-semibold hover:text-iris transition-colors"
+        >
           {b.lessonType.title}
-        </h3>
+        </Link>
         <span
           className={`text-[11px] uppercase tracking-wider ${
             b.status === "COMPLETED" ? "text-sage" : b.status === "CANCELLED" ? "text-coral" : "text-iris"
@@ -139,7 +143,16 @@ export function TeacherDashboard() {
           <p className="text-sm whitespace-pre-line">{b.practiceNotes}</p>
         </div>
       )}
-      {actions && <div className="mt-4">{actions}</div>}
+      {actions && <div className="mt-4" onClick={(e) => e.stopPropagation()}>{actions}</div>}
+
+      <div className="mt-4 pt-3 border-t border-charcoal/5">
+        <Link
+          to={`/coach/session/${b.id}`}
+          className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors"
+        >
+          View session &rarr;
+        </Link>
+      </div>
 
       {/* Inline notes form */}
       {notesBookingId === b.id && (

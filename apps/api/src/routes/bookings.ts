@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { createBookingSchema, practiceNotesSchema } from "@sunbird/shared";
+import { createBookingSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 
 const LESSON_DURATION_MINS = 60;
@@ -343,4 +343,146 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
   } catch {}
 
   return c.json({ data: serializeBooking(updated) });
+});
+
+// ─── Session Messages ───
+
+const senderSelect = { id: true, name: true, avatarUrl: true, bio: true };
+
+function serializeMessage(m: any) {
+  return {
+    id: m.id,
+    bookingId: m.bookingId,
+    sender: m.sender,
+    content: m.content,
+    createdAt: m.createdAt.toISOString(),
+  };
+}
+
+function serializeResource(r: any) {
+  return {
+    id: r.id,
+    bookingId: r.bookingId,
+    type: r.type,
+    title: r.title,
+    url: r.url,
+    addedBy: r.addedBy,
+    createdAt: r.createdAt.toISOString(),
+  };
+}
+
+/** Checks that the authenticated user is a participant (student, coach, or admin). */
+async function requireBookingParticipant(c: any): Promise<{ booking: any } | Response> {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const booking = await db.booking.findUnique({ where: { id } });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+
+  if (user.role !== "ADMIN" && booking.userId !== user.id && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  return { booking };
+}
+
+// GET /api/bookings/:id/messages
+bookingRoutes.get("/:id/messages", requireAuth, async (c) => {
+  const check = await requireBookingParticipant(c);
+  if (check instanceof Response) return check;
+
+  const db = getDb();
+  const messages = await db.sessionMessage.findMany({
+    where: { bookingId: check.booking.id },
+    include: { sender: { select: senderSelect } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return c.json({ data: messages.map(serializeMessage) });
+});
+
+// POST /api/bookings/:id/messages
+bookingRoutes.post("/:id/messages", requireAuth, async (c) => {
+  const check = await requireBookingParticipant(c);
+  if (check instanceof Response) return check;
+
+  const body = await c.req.json();
+  const parsed = createSessionMessageSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const user = c.get("user")!;
+  const db = getDb();
+  const message = await db.sessionMessage.create({
+    data: {
+      bookingId: check.booking.id,
+      senderId: user.id,
+      content: parsed.data.content,
+    },
+    include: { sender: { select: senderSelect } },
+  });
+
+  return c.json({ data: serializeMessage(message) }, 201);
+});
+
+// ─── Session Resources ───
+
+// GET /api/bookings/:id/resources
+bookingRoutes.get("/:id/resources", requireAuth, async (c) => {
+  const check = await requireBookingParticipant(c);
+  if (check instanceof Response) return check;
+
+  const db = getDb();
+  const resources = await db.sessionResource.findMany({
+    where: { bookingId: check.booking.id },
+    include: { addedBy: { select: senderSelect } },
+    orderBy: { createdAt: "desc" },
+  });
+
+  return c.json({ data: resources.map(serializeResource) });
+});
+
+// POST /api/bookings/:id/resources
+bookingRoutes.post("/:id/resources", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const check = await requireBookingParticipant(c);
+  if (check instanceof Response) return check;
+
+  const body = await c.req.json();
+  const parsed = createSessionResourceSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const user = c.get("user")!;
+  const db = getDb();
+  const resource = await db.sessionResource.create({
+    data: {
+      bookingId: check.booking.id,
+      addedById: user.id,
+      type: parsed.data.type,
+      title: parsed.data.title,
+      url: parsed.data.url,
+    },
+    include: { addedBy: { select: senderSelect } },
+  });
+
+  return c.json({ data: serializeResource(resource) }, 201);
+});
+
+// DELETE /api/bookings/:id/resources/:resourceId
+bookingRoutes.delete("/:id/resources/:resourceId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const check = await requireBookingParticipant(c);
+  if (check instanceof Response) return check;
+
+  const { resourceId } = c.req.param();
+  const db = getDb();
+
+  const resource = await db.sessionResource.findFirst({
+    where: { id: resourceId, bookingId: check.booking.id },
+  });
+  if (!resource) return c.json({ error: "Resource not found" }, 404);
+
+  await db.sessionResource.delete({ where: { id: resourceId } });
+  return c.json({ data: { ok: true } });
 });

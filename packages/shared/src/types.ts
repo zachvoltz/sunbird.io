@@ -10,6 +10,8 @@ import type {
   createCommentSchema,
   eventRsvpSchema,
   updateProfileSchema,
+  createSessionMessageSchema,
+  createSessionResourceSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -24,6 +26,8 @@ export type CreateSongInput = z.infer<typeof createSongSchema>;
 export type CreateCommentInput = z.infer<typeof createCommentSchema>;
 export type EventRsvpInput = z.infer<typeof eventRsvpSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
+export type CreateSessionMessageInput = z.infer<typeof createSessionMessageSchema>;
+export type CreateSessionResourceInput = z.infer<typeof createSessionResourceSchema>;
 
 // ─── Shared enums (mirroring DB values) ───
 
@@ -152,4 +156,24 @@ export interface BookingPublic {
   createdAt: string;
   user?: UserPublic;
   coach?: UserPublic;
+}
+
+export type SessionResourceType = "LINK" | "PDF" | "AUDIO";
+
+export interface SessionMessagePublic {
+  id: string;
+  bookingId: string;
+  sender: UserPublic;
+  content: string;
+  createdAt: string;
+}
+
+export interface SessionResourcePublic {
+  id: string;
+  bookingId: string;
+  type: SessionResourceType;
+  title: string;
+  url: string;
+  addedBy: UserPublic;
+  createdAt: string;
 }

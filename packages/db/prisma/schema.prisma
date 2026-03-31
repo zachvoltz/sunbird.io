@@ -32,6 +32,8 @@ model User {
   contactMessages    ContactMessage[]
   passwordResetTokens PasswordResetToken[]
   coachBookings      Booking[]           @relation("coachBookings")
+  sentMessages       SessionMessage[]
+  addedResources     SessionResource[]
 }
 
 model Session {
@@ -122,6 +124,32 @@ model Booking {
   coach          User?           @relation("coachBookings", fields: [coachId], references: [id])
   lessonType     LessonType      @relation(fields: [lessonTypeId], references: [id])
   lessonCategory LessonCategory? @relation(fields: [lessonCategoryId], references: [id])
+  messages       SessionMessage[]
+  resources      SessionResource[]
+}
+
+model SessionMessage {
+  id        String   @id @default(cuid())
+  bookingId String
+  senderId  String
+  content   String
+  createdAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender  User    @relation(fields: [senderId], references: [id])
+}
+
+model SessionResource {
+  id        String   @id @default(cuid())
+  bookingId String
+  addedById String
+  type      String
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  addedBy User    @relation(fields: [addedById], references: [id])
 }
 
 // ─── Subscriptions ───
