@@ -9,11 +9,10 @@ port = 8787
 [vars]
 ENVIRONMENT = "development"
 
-# Uncomment when D1 database is created:
-# [[d1_databases]]
-# binding = "DB"
-# database_name = "sunbird-db"
-# database_id = ""
+[[d1_databases]]
+binding = "DB"
+database_name = "sunbird-db"
+database_id = "0b13755a-6061-4f94-a548-8d212b00ea33"
 
 # Uncomment when R2 bucket is created:
 # [[r2_buckets]]

@@ -8,7 +8,7 @@ import { lessonRoutes } from "./routes/lessons";
 import { availabilityRoutes } from "./routes/availability";
 import { bookingRoutes } from "./routes/bookings";
 import { coachRoutes } from "./routes/coaches";
-import { initDb } from "./lib/db";
+import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
   ENVIRONMENT: string;
@@ -19,7 +19,7 @@ type Bindings = {
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
   DATABASE_URL: string;
-  // DB: D1Database;
+  DB: D1Database;
   // SONGS_BUCKET: R2Bucket;
 };
 
@@ -39,8 +39,14 @@ app.use(
   }),
 );
 app.use("/api/*", async (c, next) => {
-  const dbUrl = (c.env?.DATABASE_URL as string) || (typeof process !== "undefined" ? process.env.DATABASE_URL : undefined);
-  initDb(dbUrl);
+  if (c.env?.DB) {
+    // Cloudflare Workers — use D1 adapter
+    initDbD1(c.env.DB);
+  } else {
+    // Local Node.js dev — use SQLite via DATABASE_URL
+    const dbUrl = (c.env?.DATABASE_URL as string) || (typeof process !== "undefined" ? process.env.DATABASE_URL : undefined);
+    initDb(dbUrl);
+  }
   return next();
 });
 app.use("/api/*", sessionMiddleware);
