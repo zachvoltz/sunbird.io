@@ -630,27 +630,31 @@ A functioning community where students share songs, listen to each other's work,
   Skeleton loaders for all async content. Error boundaries with friendly error pages.
   _AC: No blank screens during loading. Errors show actionable messages._
 
-### 5D — Learning Path Roadmaps (Week 17)
+### 5D — Curriculum / Skill Tree Builder (Week 17)
 
-- [ ] **5D.1 — Learning path data model**
-  Add `LearningPath` model (lessonTypeId, nodes, edges, milestones). Each lesson type gets a structured curriculum tree with prerequisite relationships between topics. Teachers can customize paths for their students.
-  _AC: Schema supports directed acyclic graph of learning nodes per lesson type. Admin/teacher can CRUD paths._
+- [ ] **5D.1 — Curriculum schema**
+  Add `Curriculum` (one per coach per lesson type), `CurriculumNode` (title, description, x/y position, color), `CurriculumEdge` (DAG prerequisite links), `StudentProgress` (coach marks nodes complete per student). Install `@xyflow/react` for visual editor.
+  _AC: Schema supports DAG of skill nodes per coach per lesson type. Migration runs cleanly._
 
-- [ ] **5D.2 — Admin/teacher learning path editor**
-  Visual tree/graph editor for teachers to define the curriculum progression for each lesson type (e.g., Voice: Breathing -> Pitch -> Range -> Style). Drag-and-drop node arrangement.
-  _AC: Admin/teacher can create, reorder, and connect nodes. Prerequisite chains enforced (no cycles)._
+- [ ] **5D.2 — Curriculum API**
+  CRUD endpoints for curricula, nodes, edges. Bulk graph save with server-side cycle detection (Kahn's algorithm). Progress mark/unmark endpoints. Public preview and student-facing endpoints.
+  _AC: Coach can create, save, and delete curricula via API. Cycle detection returns 400. Progress persists per student per node._
 
-- [ ] **5D.3 — Learning path visualization UI**
-  Khan Academy-style roadmap view on each lesson page (`/lessons/[slug]/roadmap`). Interactive node map showing topics, prerequisites, and progression paths. Nodes are color-coded by category/difficulty.
-  _AC: Roadmap renders as a visual tree/graph. Nodes show title, description, and connections. Responsive at all breakpoints._
+- [ ] **5D.3 — Coach curriculum editor (React Flow)**
+  Visual drag-and-drop canvas at `/coach/curriculum`. Lesson type selector, custom SkillNode component, node edit panel (title, description, color), edge connections, save/load. Mini-map and background grid.
+  _AC: Coach can visually build a skill tree, drag nodes, connect prerequisites, save and reload. Cycle errors shown inline._
 
 - [ ] **5D.4 — Student progress tracking**
-  Track which learning nodes a student has completed (marked by their teacher after sessions). Show progress on the roadmap visualization (completed = filled, in-progress = outlined, locked = grayed).
-  _AC: Progress persists per student per lesson type. Roadmap reflects current progress state._
+  Coach marks nodes complete from the session page (compact checklist) or from a full student curriculum view. Node states: completed (sage), available (iris), locked (gray). Progress persists per student per node.
+  _AC: Coach can mark/unmark nodes. Progress reflected on session page and student roadmap._
 
-- [ ] **5D.5 — Roadmap links from lesson pages**
-  Add "View Learning Roadmap" CTA on each individual lesson page, linking to the interactive roadmap view.
-  _AC: CTA visible on all 5 lesson pages. Links route correctly._
+- [ ] **5D.5 — Student roadmap view**
+  Read-only React Flow roadmap at `/my-curriculum/:slug` showing the student's coach's curriculum with their progress overlaid. Progress summary header. Link from student session page and My Bookings.
+  _AC: Student sees their personalized roadmap with completed/available/locked states._
+
+- [ ] **5D.6 — Public curriculum preview**
+  Simplified read-only skill tree preview on lesson detail pages. "View full roadmap" CTA for authenticated users.
+  _AC: Visitors see a preview of the curriculum on lesson pages. CTA links to full view._
 
 ### 5E — Newsletter & Outreach (Week 18)
 

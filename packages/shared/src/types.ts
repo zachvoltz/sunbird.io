@@ -15,6 +15,9 @@ import type {
   updateCoachSettingsSchema,
   updateCoachAvailabilitySchema,
   updateCoachLessonTypesSchema,
+  createCurriculumSchema,
+  saveCurriculumGraphSchema,
+  markProgressSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -34,6 +37,9 @@ export type CreateSessionResourceInput = z.infer<typeof createSessionResourceSch
 export type UpdateCoachSettingsInput = z.infer<typeof updateCoachSettingsSchema>;
 export type UpdateCoachAvailabilityInput = z.infer<typeof updateCoachAvailabilitySchema>;
 export type UpdateCoachLessonTypesInput = z.infer<typeof updateCoachLessonTypesSchema>;
+export type CreateCurriculumInput = z.infer<typeof createCurriculumSchema>;
+export type SaveCurriculumGraphInput = z.infer<typeof saveCurriculumGraphSchema>;
+export type MarkProgressInput = z.infer<typeof markProgressSchema>;
 
 // ─── Shared enums (mirroring DB values) ───
 
@@ -204,4 +210,44 @@ export interface SessionResourcePublic {
   url: string;
   addedBy: UserPublic;
   createdAt: string;
+}
+
+// ─── Curriculum ───
+
+export interface CurriculumNodePublic {
+  id: string;
+  title: string;
+  description: string | null;
+  positionX: number;
+  positionY: number;
+  color: string | null;
+}
+
+export interface CurriculumEdgePublic {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+}
+
+export interface CurriculumPublic {
+  id: string;
+  coachId: string;
+  lessonTypeId: string;
+  title: string | null;
+  description: string | null;
+  nodes: CurriculumNodePublic[];
+  edges: CurriculumEdgePublic[];
+}
+
+export interface StudentProgressPublic {
+  id: string;
+  studentId: string;
+  nodeId: string;
+  coachId: string;
+  completedAt: string;
+  notes: string | null;
+}
+
+export interface CurriculumWithProgress extends CurriculumPublic {
+  progress: StudentProgressPublic[];
 }

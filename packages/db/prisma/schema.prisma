@@ -43,6 +43,9 @@ model User {
   addedResources     SessionResource[]
   coachAvailability  CoachAvailability[]
   coachLessonTypes   CoachLessonType[]
+  coachCurricula     Curriculum[]        @relation("coachCurricula")
+  studentProgress    StudentProgress[]   @relation("studentProgress")
+  coachProgressMarks StudentProgress[]   @relation("coachProgress")
 }
 
 model Session {
@@ -93,6 +96,7 @@ model LessonType {
   bookings        Booking[]
   workshops       Workshop[]
   coachLessonTypes CoachLessonType[]
+  curricula        Curriculum[]
 }
 
 model LessonCategory {
@@ -139,6 +143,69 @@ model CoachLessonType {
   lessonType LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
 
   @@unique([coachId, lessonTypeId])
+}
+
+// ─── Curriculum / Skill Trees ───
+
+model Curriculum {
+  id           String   @id @default(cuid())
+  coachId      String
+  lessonTypeId String
+  title        String?
+  description  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  coach      User             @relation("coachCurricula", fields: [coachId], references: [id], onDelete: Cascade)
+  lessonType LessonType       @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
+  nodes      CurriculumNode[]
+  edges      CurriculumEdge[]
+
+  @@unique([coachId, lessonTypeId])
+}
+
+model CurriculumNode {
+  id           String  @id @default(cuid())
+  curriculumId String
+  title        String
+  description  String?
+  positionX    Float   @default(0)
+  positionY    Float   @default(0)
+  color        String?
+  sortOrder    Int     @default(0)
+
+  curriculum Curriculum        @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  edgesFrom  CurriculumEdge[]  @relation("edgeFrom")
+  edgesTo    CurriculumEdge[]  @relation("edgeTo")
+  progress   StudentProgress[]
+}
+
+model CurriculumEdge {
+  id           String @id @default(cuid())
+  curriculumId String
+  fromNodeId   String
+  toNodeId     String
+
+  curriculum Curriculum     @relation(fields: [curriculumId], references: [id], onDelete: Cascade)
+  fromNode   CurriculumNode @relation("edgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode     CurriculumNode @relation("edgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId])
+}
+
+model StudentProgress {
+  id          String   @id @default(cuid())
+  studentId   String
+  nodeId      String
+  coachId     String
+  completedAt DateTime @default(now())
+  notes       String?
+
+  student User           @relation("studentProgress", fields: [studentId], references: [id], onDelete: Cascade)
+  node    CurriculumNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  coach   User           @relation("coachProgress", fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, nodeId])
 }
 
 model Booking {
