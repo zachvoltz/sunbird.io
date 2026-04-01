@@ -3,7 +3,7 @@ import { generateState, generateCodeVerifier } from "arctic";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createZoomClient } from "../lib/oauth";
-import { updateCoachSettingsSchema } from "@sunbird/shared";
+import { updateCoachSettingsSchema, updateCoachAvailabilitySchema, updateCoachLessonTypesSchema } from "@sunbird/shared";
 
 export const coachSettingsRoutes = new Hono();
 
@@ -16,10 +16,33 @@ coachSettingsRoutes.get("/", requireAuth, requireRole("COACH", "ADMIN"), async (
     where: { userId: user.id, provider: "zoom" },
   });
 
+  const availability = await db.coachAvailability.findMany({
+    where: { coachId: user.id },
+    orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+  });
+
+  const coachLessonTypes = await db.coachLessonType.findMany({
+    where: { coachId: user.id },
+  });
+
+  const allLessonTypes = await db.lessonType.findMany({
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, title: true },
+  });
+
   return c.json({
     data: {
       sessionAddress: (user as any).sessionAddress ?? null,
       zoomConnected: !!zoomAccount?.accessToken,
+      availability: availability.map((a: any) => ({
+        id: a.id,
+        dayOfWeek: a.dayOfWeek,
+        startTime: a.startTime,
+        endTime: a.endTime,
+        isActive: a.isActive,
+      })),
+      lessonTypeIds: coachLessonTypes.map((ct: any) => ct.lessonTypeId),
+      allLessonTypes,
     },
   });
 });
@@ -38,6 +61,58 @@ coachSettingsRoutes.patch("/", requireAuth, requireRole("COACH", "ADMIN"), async
     where: { id: user.id },
     data: { sessionAddress: parsed.data.sessionAddress ?? null },
   });
+
+  return c.json({ data: { ok: true } });
+});
+
+// PUT /api/coach-settings/availability — bulk replace weekly schedule
+coachSettingsRoutes.put("/availability", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const parsed = updateCoachAvailabilitySchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+
+  // Delete existing and re-create
+  await db.coachAvailability.deleteMany({ where: { coachId: user.id } });
+
+  for (const slot of parsed.data.slots) {
+    await db.coachAvailability.create({
+      data: {
+        coachId: user.id,
+        dayOfWeek: slot.dayOfWeek,
+        startTime: slot.startTime,
+        endTime: slot.endTime,
+        isActive: true,
+      },
+    });
+  }
+
+  return c.json({ data: { ok: true } });
+});
+
+// PUT /api/coach-settings/lesson-types — bulk replace lesson type assignments
+coachSettingsRoutes.put("/lesson-types", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const parsed = updateCoachLessonTypesSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+
+  // Delete existing and re-create
+  await db.coachLessonType.deleteMany({ where: { coachId: user.id } });
+
+  for (const lessonTypeId of parsed.data.lessonTypeIds) {
+    await db.coachLessonType.create({
+      data: { coachId: user.id, lessonTypeId },
+    });
+  }
 
   return c.json({ data: { ok: true } });
 });

@@ -41,6 +41,8 @@ model User {
   coachBookings      Booking[]           @relation("coachBookings")
   sentMessages       SessionMessage[]
   addedResources     SessionResource[]
+  coachAvailability  CoachAvailability[]
+  coachLessonTypes   CoachLessonType[]
 }
 
 model Session {
@@ -87,9 +89,10 @@ model LessonType {
   sortOrder       Int      @default(0)
   createdAt       DateTime @default(now())
 
-  categories LessonCategory[]
-  bookings   Booking[]
-  workshops  Workshop[]
+  categories      LessonCategory[]
+  bookings        Booking[]
+  workshops       Workshop[]
+  coachLessonTypes CoachLessonType[]
 }
 
 model LessonCategory {
@@ -112,6 +115,30 @@ model AvailabilitySlot {
   startTime String
   endTime   String
   isActive  Boolean @default(true)
+}
+
+model CoachAvailability {
+  id        String  @id @default(cuid())
+  coachId   String
+  dayOfWeek Int
+  startTime String
+  endTime   String
+  isActive  Boolean @default(true)
+
+  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, dayOfWeek, startTime])
+}
+
+model CoachLessonType {
+  id           String @id @default(cuid())
+  coachId      String
+  lessonTypeId String
+
+  coach      User       @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  lessonType LessonType @relation(fields: [lessonTypeId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, lessonTypeId])
 }
 
 model Booking {

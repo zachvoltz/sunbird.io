@@ -87,6 +87,18 @@ export const updateCoachSettingsSchema = z.object({
   sessionAddress: z.string().max(500).optional(),
 });
 
+export const updateCoachAvailabilitySchema = z.object({
+  slots: z.array(z.object({
+    dayOfWeek: z.number().min(0).max(6),
+    startTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format"),
+    endTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format"),
+  })),
+});
+
+export const updateCoachLessonTypesSchema = z.object({
+  lessonTypeIds: z.array(z.string().min(1)),
+});
+
 // ─── Community ───
 
 export const createSongSchema = z.object({

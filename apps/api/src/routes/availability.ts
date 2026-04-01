@@ -7,7 +7,7 @@ export const availabilityRoutes = new Hono();
 
 const LESSON_DURATION_MINS = 60;
 
-// GET /api/availability?date=YYYY-MM-DD — available time slots for a date
+// GET /api/availability?date=YYYY-MM-DD&lessonTypeId=X — available time slots
 availabilityRoutes.get("/", async (c) => {
   const dateStr = c.req.query("date");
   if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
@@ -32,15 +32,30 @@ availabilityRoutes.get("/", async (c) => {
   }
 
   const dayOfWeek = date.getDay();
+  const lessonTypeId = c.req.query("lessonTypeId");
   const db = getDb();
 
-  // Get availability slots for this day of week
-  const slots = await db.availabilitySlot.findMany({
+  // Get per-coach availability for this day
+  const coachSlots = await db.coachAvailability.findMany({
     where: { dayOfWeek, isActive: true },
     orderBy: { startTime: "asc" },
   });
 
-  // Get existing bookings for this date (not cancelled)
+  if (coachSlots.length === 0) {
+    return c.json({ data: [] });
+  }
+
+  // If lessonTypeId provided, filter to coaches who teach it
+  let qualifiedCoachIds: Set<string> | null = null;
+  if (lessonTypeId) {
+    const coachLessonTypes = await db.coachLessonType.findMany({
+      where: { lessonTypeId },
+      select: { coachId: true },
+    });
+    qualifiedCoachIds = new Set(coachLessonTypes.map((ct: any) => ct.coachId));
+  }
+
+  // Get existing bookings for this date (not cancelled), per coach
   const dayStart = new Date(dateStr + "T00:00:00Z");
   const dayEnd = new Date(dateStr + "T23:59:59Z");
 
@@ -49,33 +64,50 @@ availabilityRoutes.get("/", async (c) => {
       startsAt: { gte: dayStart, lte: dayEnd },
       status: { not: "CANCELLED" },
     },
-    select: { startsAt: true, endsAt: true },
+    select: { coachId: true, startsAt: true, endsAt: true },
   });
 
-  // Generate concrete time slots and filter out booked ones
-  const available = slots
-    .map((slot) => {
-      const startsAt = new Date(`${dateStr}T${slot.startTime}:00Z`);
-      const endsAt = new Date(startsAt.getTime() + LESSON_DURATION_MINS * 60 * 1000);
-      return { startsAt, endsAt };
-    })
-    .filter((slot) => {
-      // Filter out slots in the past
-      if (slot.startsAt <= now) return false;
-      // Filter out slots that overlap with existing bookings
-      return !bookings.some(
-        (b) => slot.startsAt < b.endsAt && slot.endsAt > b.startsAt,
-      );
-    })
-    .map((slot) => ({
-      startsAt: slot.startsAt.toISOString(),
-      endsAt: slot.endsAt.toISOString(),
-    }));
+  // Build a map: time string -> set of available coach IDs
+  const timeToCoaches = new Map<string, Set<string>>();
+
+  for (const slot of coachSlots) {
+    const coachId = (slot as any).coachId as string;
+
+    // Skip if coach doesn't teach this lesson type
+    if (qualifiedCoachIds && !qualifiedCoachIds.has(coachId)) continue;
+
+    const startsAt = new Date(`${dateStr}T${slot.startTime}:00Z`);
+    const endsAt = new Date(startsAt.getTime() + LESSON_DURATION_MINS * 60 * 1000);
+
+    // Skip past slots
+    if (startsAt <= now) continue;
+
+    // Check if this coach has a conflicting booking
+    const hasConflict = bookings.some(
+      (b: any) => b.coachId === coachId && startsAt < b.endsAt && endsAt > b.startsAt,
+    );
+    if (hasConflict) continue;
+
+    const key = startsAt.toISOString();
+    if (!timeToCoaches.has(key)) {
+      timeToCoaches.set(key, new Set());
+    }
+    timeToCoaches.get(key)!.add(coachId);
+  }
+
+  // Convert to response array
+  const available = Array.from(timeToCoaches.entries())
+    .map(([startsAt, coachIds]) => ({
+      startsAt,
+      endsAt: new Date(new Date(startsAt).getTime() + LESSON_DURATION_MINS * 60 * 1000).toISOString(),
+      coachIds: Array.from(coachIds),
+    }))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
 
   return c.json({ data: available });
 });
 
-// POST /api/availability — create availability slot (teacher/admin)
+// POST /api/availability — create availability slot (legacy global, kept for backward compat)
 availabilityRoutes.post("/", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const body = await c.req.json();
   const parsed = createAvailabilitySchema.safeParse(body);
@@ -91,7 +123,7 @@ availabilityRoutes.post("/", requireAuth, requireRole("COACH", "ADMIN"), async (
   return c.json({ data: slot }, 201);
 });
 
-// GET /api/availability/slots — list all availability slots (teacher/admin)
+// GET /api/availability/slots — list all availability slots (legacy)
 availabilityRoutes.get("/slots", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const db = getDb();
   const slots = await db.availabilitySlot.findMany({
@@ -100,7 +132,7 @@ availabilityRoutes.get("/slots", requireAuth, requireRole("COACH", "ADMIN"), asy
   return c.json({ data: slots });
 });
 
-// DELETE /api/availability/:id — remove a slot (teacher/admin)
+// DELETE /api/availability/:id — remove a slot (legacy)
 availabilityRoutes.delete("/:id", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const { id } = c.req.param();
   const db = getDb();

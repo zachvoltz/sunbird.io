@@ -15,6 +15,7 @@ export type BookingState = {
   selectedType: LessonTypeWithCategories | null;
   selectedCategoryId: string | null;
   selectedCoachId: string | null;
+  availableCoachIds: string[];
   mode: "ONLINE" | "IN_PERSON" | null;
   notSureType: boolean;
   notSureCategory: boolean;
@@ -31,6 +32,7 @@ const initialState: BookingState = {
   selectedType: null,
   selectedCategoryId: null,
   selectedCoachId: null,
+  availableCoachIds: [],
   mode: null,
   notSureType: false,
   notSureCategory: false,
@@ -39,6 +41,9 @@ const initialState: BookingState = {
   studentNote: "",
   bookingId: null,
 };
+
+// New flow: 1=LessonType, 2=Category, 3=DateTime, 4=Coach, 5=Confirm
+const TOTAL_STEPS = 5;
 
 export function BookPage() {
   const [state, setState] = useState<BookingState>(initialState);
@@ -50,13 +55,10 @@ export function BookPage() {
       apiFetch<{ data: CoachPublic[] }>("/api/coaches"),
     ])
       .then(([lessonsRes, coachesRes]) => {
-        const coaches = coachesRes.data;
         setState((s) => ({
           ...s,
           lessonTypes: lessonsRes.data,
-          coaches,
-          // Auto-select if only one coach
-          selectedCoachId: coaches.length === 1 ? coaches[0].id : null,
+          coaches: coachesRes.data,
         }));
       })
       .catch(console.error)
@@ -64,35 +66,33 @@ export function BookPage() {
   }, []);
 
   const update = (partial: Partial<BookingState>) =>
-    setState((s) => ({ ...s, ...partial }));
+    setState((s) => {
+      const next = { ...s, ...partial };
 
-  // Determine if we should show the coach step
-  const showCoachStep = state.coaches.length > 1;
-  // Total steps: 4 if coach auto-selected, 5 if coach selection needed
-  const totalSteps = showCoachStep ? 5 : 4;
+      // Auto-select coach if only one available after DateTime selection
+      if (partial.availableCoachIds && partial.availableCoachIds.length === 1 && partial.step === 4) {
+        next.selectedCoachId = partial.availableCoachIds[0];
+        next.step = 5; // Skip coach step
+      }
+
+      return next;
+    });
 
   const goBack = () => {
-    if (showCoachStep) {
-      // Steps: 1=lesson, 2=category, 3=coach, 4=datetime, 5=confirm
-      if (state.step === 2) update({ step: 1 });
-      else if (state.step === 3) {
-        if (state.notSureType) update({ step: 1 });
-        else update({ step: 2 });
-      }
-      else if (state.step === 4) update({ step: 3 });
-      else if (state.step === 5) update({ step: 4 });
-    } else {
-      // Steps: 1=lesson, 2=category, 3=datetime, 4=confirm
-      if (state.step === 2) update({ step: 1 });
-      else if (state.step === 3) {
-        if (state.notSureType) update({ step: 1 });
-        else update({ step: 2 });
-      }
-      else if (state.step === 4) update({ step: 3 });
+    // 1=LessonType, 2=Category, 3=DateTime, 4=Coach, 5=Confirm
+    if (state.step === 2) update({ step: 1 });
+    else if (state.step === 3) {
+      if (state.notSureType) update({ step: 1 });
+      else update({ step: 2 });
+    }
+    else if (state.step === 4) update({ step: 3 });
+    else if (state.step === 5) {
+      // Go back to coach if multiple were available, otherwise to datetime
+      if (state.availableCoachIds.length > 1) update({ step: 4, selectedCoachId: null });
+      else update({ step: 3 });
     }
   };
 
-  // Map logical step to display step number
   const displayStep = typeof state.step === "number" ? state.step : 0;
 
   if (loading) {
@@ -118,7 +118,7 @@ export function BookPage() {
               </button>
             )}
             <span className="ml-auto text-[12px] font-mono text-text-secondary">
-              {String(displayStep).padStart(2, "0")} / {String(totalSteps).padStart(2, "0")}
+              {String(displayStep).padStart(2, "0")} / {String(TOTAL_STEPS).padStart(2, "0")}
             </span>
           </div>
         )}
@@ -129,13 +129,13 @@ export function BookPage() {
         {state.step === 2 && (
           <StepCategory state={state} update={update} />
         )}
-        {state.step === 3 && showCoachStep && (
+        {state.step === 3 && (
+          <StepDateTime state={state} update={update} nextStep={4} />
+        )}
+        {state.step === 4 && (
           <StepCoach state={state} update={update} />
         )}
-        {state.step === (showCoachStep ? 4 : 3) && (
-          <StepDateTime state={state} update={update} nextStep={showCoachStep ? 5 : 4} />
-        )}
-        {state.step === (showCoachStep ? 5 : 4) && (
+        {state.step === 5 && (
           <StepConfirm state={state} update={update} />
         )}
         {state.step === "success" && (

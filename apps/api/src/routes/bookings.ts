@@ -137,19 +137,35 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "This time slot is no longer available" }, 409);
   }
 
-  // Verify the slot matches an availability window
+  // Verify coach teaches this lesson type
+  if (coachId) {
+    const coachTeaches = await db.coachLessonType.findFirst({
+      where: { coachId, lessonTypeId },
+    });
+    if (!coachTeaches) {
+      return c.json({ error: "This coach does not teach this lesson type" }, 400);
+    }
+  }
+
+  // Verify the slot matches the coach's availability
   const dayOfWeek = startsAt.getUTCDay();
   const timeStr = `${String(startsAt.getUTCHours()).padStart(2, "0")}:${String(startsAt.getUTCMinutes()).padStart(2, "0")}`;
-  const availSlot = await db.availabilitySlot.findFirst({
-    where: {
-      dayOfWeek,
-      startTime: timeStr,
-      isActive: true,
-    },
-  });
 
-  if (!availSlot) {
-    return c.json({ error: "This time is not within available hours" }, 400);
+  if (coachId) {
+    const coachAvail = await db.coachAvailability.findFirst({
+      where: { coachId, dayOfWeek, startTime: timeStr, isActive: true },
+    });
+    if (!coachAvail) {
+      return c.json({ error: "This time is not within the coach's available hours" }, 400);
+    }
+  } else {
+    // Fallback to global slots if no coach assigned
+    const availSlot = await db.availabilitySlot.findFirst({
+      where: { dayOfWeek, startTime: timeStr, isActive: true },
+    });
+    if (!availSlot) {
+      return c.json({ error: "This time is not within available hours" }, 400);
+    }
   }
 
   // If online, create Zoom meeting before persisting the booking

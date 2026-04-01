@@ -1,17 +1,28 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
+import type { CoachAvailabilitySlot } from "@sunbird/shared";
 
-type CoachSettings = {
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
+
+type LessonTypeOption = { id: string; title: string };
+
+type CoachSettingsData = {
   sessionAddress: string | null;
   zoomConnected: boolean;
+  availability: CoachAvailabilitySlot[];
+  lessonTypeIds: string[];
+  allLessonTypes: LessonTypeOption[];
 };
 
 export function CoachSettings() {
-  const [settings, setSettings] = useState<CoachSettings | null>(null);
+  const [settings, setSettings] = useState<CoachSettingsData | null>(null);
   const [address, setAddress] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  const [selectedLessonTypeIds, setSelectedLessonTypeIds] = useState<string[]>([]);
+  const [availabilityByDay, setAvailabilityByDay] = useState<Record<number, Set<string>>>({});
+  const [saving, setSaving] = useState<string | null>(null);
+  const [savedSection, setSavedSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchParams] = useSearchParams();
 
@@ -20,29 +31,91 @@ export function CoachSettings() {
   const errorDetail = searchParams.get("detail");
 
   useEffect(() => {
-    apiFetch<{ data: CoachSettings }>("/api/coach-settings")
+    apiFetch<{ data: CoachSettingsData }>("/api/coach-settings")
       .then((res) => {
         setSettings(res.data);
         setAddress(res.data.sessionAddress ?? "");
+        setSelectedLessonTypeIds(res.data.lessonTypeIds);
+
+        // Build availability map: dayOfWeek -> Set of startTime strings
+        const byDay: Record<number, Set<string>> = {};
+        for (let d = 0; d <= 6; d++) byDay[d] = new Set();
+        for (const slot of res.data.availability) {
+          byDay[slot.dayOfWeek]?.add(slot.startTime);
+        }
+        setAvailabilityByDay(byDay);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
+  const showSaved = (section: string) => {
+    setSavedSection(section);
+    setTimeout(() => setSavedSection(null), 3000);
+  };
+
   const saveAddress = async () => {
-    setSaving(true);
-    setSaved(false);
+    setSaving("address");
     try {
       await apiFetch("/api/coach-settings", {
         method: "PATCH",
         body: JSON.stringify({ sessionAddress: address || undefined }),
       });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch {
-    } finally {
-      setSaving(false);
+      showSaved("address");
+    } catch {} finally { setSaving(null); }
+  };
+
+  const saveLessonTypes = async () => {
+    setSaving("lessonTypes");
+    try {
+      await apiFetch("/api/coach-settings/lesson-types", {
+        method: "PUT",
+        body: JSON.stringify({ lessonTypeIds: selectedLessonTypeIds }),
+      });
+      showSaved("lessonTypes");
+    } catch {} finally { setSaving(null); }
+  };
+
+  const toggleLessonType = (id: string) => {
+    setSelectedLessonTypeIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const toggleHour = (day: number, hour: string) => {
+    setAvailabilityByDay((prev) => {
+      const next = { ...prev };
+      next[day] = new Set(prev[day]);
+      if (next[day].has(hour)) {
+        next[day].delete(hour);
+      } else {
+        next[day].add(hour);
+      }
+      return next;
+    });
+  };
+
+  const saveAvailability = async () => {
+    setSaving("availability");
+    const slots: { dayOfWeek: number; startTime: string; endTime: string }[] = [];
+    for (let day = 0; day <= 6; day++) {
+      for (const hour of availabilityByDay[day] ?? []) {
+        const h = parseInt(hour);
+        const endH = (h + 1) % 24;
+        slots.push({
+          dayOfWeek: day,
+          startTime: hour,
+          endTime: `${String(endH).padStart(2, "0")}:00`,
+        });
+      }
     }
+    try {
+      await apiFetch("/api/coach-settings/availability", {
+        method: "PUT",
+        body: JSON.stringify({ slots }),
+      });
+      showSaved("availability");
+    } catch {} finally { setSaving(null); }
   };
 
   const disconnectZoom = async () => {
@@ -63,7 +136,7 @@ export function CoachSettings() {
 
   return (
     <div className="py-16 px-6 md:px-10">
-      <div className="mx-auto max-w-[700px]">
+      <div className="mx-auto max-w-[800px]">
         <Link
           to="/coach"
           className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-charcoal transition-colors"
@@ -87,6 +160,90 @@ export function CoachSettings() {
           </div>
         )}
 
+        {/* Lesson Types */}
+        <section className="mb-12">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
+            Lessons I Teach
+          </h2>
+          <div className="bg-surface rounded-card shadow-card p-6">
+            <p className="text-sm text-text-secondary mb-4">
+              Select the lesson types you offer. Students will only be able to book these with you.
+            </p>
+            <div className="space-y-2 mb-4">
+              {settings?.allLessonTypes.map((lt) => (
+                <label key={lt.id} className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={selectedLessonTypeIds.includes(lt.id)}
+                    onChange={() => toggleLessonType(lt.id)}
+                    className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
+                  />
+                  <span className="text-sm font-medium">{lt.title}</span>
+                </label>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveLessonTypes}
+                disabled={saving === "lessonTypes"}
+                className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+              >
+                {saving === "lessonTypes" ? "Saving..." : "Save"}
+              </button>
+              {savedSection === "lessonTypes" && <span className="text-[12px] text-sage">Saved</span>}
+            </div>
+          </div>
+        </section>
+
+        {/* Weekly Availability */}
+        <section className="mb-12">
+          <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
+            Weekly Availability
+          </h2>
+          <div className="bg-surface rounded-card shadow-card p-6">
+            <p className="text-sm text-text-secondary mb-4">
+              Click hours to toggle your availability. Students can only book during these times.
+            </p>
+            <div className="space-y-4 mb-6">
+              {[1, 2, 3, 4, 5, 6, 0].map((day) => (
+                <div key={day}>
+                  <p className="text-[12px] font-medium text-charcoal mb-2">{DAY_NAMES[day]}</p>
+                  <div className="flex flex-wrap gap-1">
+                    {HOURS.map((hour) => {
+                      const isActive = availabilityByDay[day]?.has(hour);
+                      const h = parseInt(hour);
+                      const label = h === 0 ? "12a" : h < 12 ? `${h}a` : h === 12 ? "12p" : `${h - 12}p`;
+                      return (
+                        <button
+                          key={hour}
+                          onClick={() => toggleHour(day, hour)}
+                          className={`w-10 h-8 text-[10px] font-medium rounded transition-all ${
+                            isActive
+                              ? "bg-iris text-cream"
+                              : "bg-warm-gray/30 text-text-secondary hover:bg-warm-gray/50"
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveAvailability}
+                disabled={saving === "availability"}
+                className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+              >
+                {saving === "availability" ? "Saving..." : "Save Availability"}
+              </button>
+              {savedSection === "availability" && <span className="text-[12px] text-sage">Saved</span>}
+            </div>
+          </div>
+        </section>
+
         {/* Session Address */}
         <section className="mb-12">
           <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
@@ -106,14 +263,12 @@ export function CoachSettings() {
             <div className="flex items-center gap-3">
               <button
                 onClick={saveAddress}
-                disabled={saving}
+                disabled={saving === "address"}
                 className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
               >
-                {saving ? "Saving..." : "Save"}
+                {saving === "address" ? "Saving..." : "Save"}
               </button>
-              {saved && (
-                <span className="text-[12px] text-sage">Saved</span>
-              )}
+              {savedSection === "address" && <span className="text-[12px] text-sage">Saved</span>}
             </div>
           </div>
         </section>

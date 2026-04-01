@@ -6,8 +6,13 @@ type Props = {
 };
 
 export function StepCoach({ state, update }: Props) {
+  // Filter to only coaches available at the selected time
+  const availableCoaches = state.coaches.filter((c) =>
+    state.availableCoachIds.includes(c.id),
+  );
+
   const select = (coachId: string) => {
-    update({ selectedCoachId: coachId, step: 4 });
+    update({ selectedCoachId: coachId, step: 5 });
   };
 
   return (
@@ -16,11 +21,11 @@ export function StepCoach({ state, update }: Props) {
         Choose your coach
       </h2>
       <p className="text-text-secondary mb-10">
-        Pick the coach you'd like to work with.
+        {availableCoaches.length} coach{availableCoaches.length !== 1 ? "es" : ""} available at this time.
       </p>
 
       <div className="space-y-3">
-        {state.coaches.map((coach) => (
+        {availableCoaches.map((coach) => (
           <button
             key={coach.id}
             onClick={() => select(coach.id)}

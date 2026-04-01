@@ -48,7 +48,8 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     if (!selectedDate) return;
     setLoadingSlots(true);
     setError(null);
-    apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}`)
+    const ltParam = state.selectedType?.id ? `&lessonTypeId=${state.selectedType.id}` : "";
+    apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}${ltParam}`)
       .then((res) => {
             // Sort by local hour (12AM first, 11PM last)
             const sorted = res.data.sort((a, b) => {
@@ -69,6 +70,7 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     update({
       selectedDate,
       selectedSlot: slot,
+      availableCoachIds: slot.coachIds ?? [],
       step: nextStep,
     });
   };

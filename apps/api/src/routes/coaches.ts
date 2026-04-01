@@ -16,6 +16,7 @@ coachRoutes.get("/", async (c) => {
       bio: true,
       sessionAddress: true,
       oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
+      coachLessonTypes: { select: { lessonTypeId: true } },
     },
     orderBy: { name: "asc" },
   });
@@ -28,6 +29,7 @@ coachRoutes.get("/", async (c) => {
       bio: c.bio,
       sessionAddress: c.sessionAddress,
       hasZoomConnected: c.oauthAccounts.length > 0,
+      lessonTypeIds: c.coachLessonTypes.map((ct: any) => ct.lessonTypeId),
     })),
   });
 });

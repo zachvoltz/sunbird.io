@@ -13,6 +13,8 @@ import type {
   createSessionMessageSchema,
   createSessionResourceSchema,
   updateCoachSettingsSchema,
+  updateCoachAvailabilitySchema,
+  updateCoachLessonTypesSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -30,6 +32,8 @@ export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type CreateSessionMessageInput = z.infer<typeof createSessionMessageSchema>;
 export type CreateSessionResourceInput = z.infer<typeof createSessionResourceSchema>;
 export type UpdateCoachSettingsInput = z.infer<typeof updateCoachSettingsSchema>;
+export type UpdateCoachAvailabilityInput = z.infer<typeof updateCoachAvailabilitySchema>;
+export type UpdateCoachLessonTypesInput = z.infer<typeof updateCoachLessonTypesSchema>;
 
 // ─── Shared enums (mirroring DB values) ───
 
@@ -88,6 +92,7 @@ export interface UserPublic {
 export interface CoachPublic extends UserPublic {
   sessionAddress: string | null;
   hasZoomConnected: boolean;
+  lessonTypeIds: string[];
 }
 
 export interface LessonTypePublic {
@@ -151,6 +156,15 @@ export interface LessonTypeWithCategories extends LessonTypePublic {
 export interface AvailableSlot {
   startsAt: string;
   endsAt: string;
+  coachIds: string[];
+}
+
+export interface CoachAvailabilitySlot {
+  id: string;
+  dayOfWeek: number;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
 }
 
 export interface BookingPublic {
