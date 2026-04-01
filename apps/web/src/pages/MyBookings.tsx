@@ -53,6 +53,16 @@ export function MyBookings() {
     }
   };
 
+  const cancelSeries = async (scheduleId: string) => {
+    if (!confirm("Cancel all future bookings in this recurring series?")) return;
+    try {
+      await apiFetch(`/api/bookings/recurring/${scheduleId}/cancel`, { method: "POST" });
+      load();
+    } catch (err) {
+      if (err instanceof ApiError) alert(err.body.error);
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -105,6 +115,9 @@ export function MyBookings() {
                     <p className="text-sm text-text-secondary">
                       {b.lessonCategory?.title ?? "Open"} &middot;{" "}
                       {formatDate(b.startsAt)} at {formatTime(b.startsAt)}
+                      {b.scheduleId && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wider text-iris font-medium">Recurring</span>
+                      )}
                     </p>
                     <Link
                       to={`/my-bookings/${b.id}`}
@@ -113,13 +126,23 @@ export function MyBookings() {
                       View session &rarr;
                     </Link>
                   </div>
-                  <button
-                    onClick={() => cancelBooking(b.id)}
-                    disabled={cancellingId === b.id}
-                    className="text-[12px] font-medium text-coral hover:text-coral/80 transition-colors shrink-0"
-                  >
-                    {cancellingId === b.id ? "Cancelling..." : "Cancel"}
-                  </button>
+                  <div className="flex flex-col gap-1 shrink-0">
+                    <button
+                      onClick={() => cancelBooking(b.id)}
+                      disabled={cancellingId === b.id}
+                      className="text-[12px] font-medium text-coral hover:text-coral/80 transition-colors"
+                    >
+                      {cancellingId === b.id ? "Cancelling..." : "Cancel"}
+                    </button>
+                    {b.scheduleId && (
+                      <button
+                        onClick={() => cancelSeries(b.scheduleId!)}
+                        className="text-[11px] font-medium text-text-secondary hover:text-coral transition-colors"
+                      >
+                        Cancel series
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

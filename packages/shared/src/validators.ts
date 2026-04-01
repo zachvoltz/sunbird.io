@@ -66,6 +66,17 @@ export const createBookingSchema = z.object({
   studentNote: z.string().max(500).optional(),
 });
 
+export const createRecurringScheduleSchema = z.object({
+  lessonTypeId: z.string().min(1),
+  lessonCategoryId: z.string().nullish(),
+  coachId: z.string().min(1),
+  startsAt: z.string().datetime(),
+  frequency: z.enum(["WEEKLY", "BIWEEKLY"]),
+  endsOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Must be YYYY-MM-DD"),
+  mode: z.enum(["ONLINE", "IN_PERSON"]).default("IN_PERSON"),
+  studentNote: z.string().max(500).optional(),
+});
+
 export const cancelBookingSchema = z.object({
   reason: z.string().max(500).optional(),
 });

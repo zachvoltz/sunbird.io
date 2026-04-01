@@ -43,6 +43,8 @@ model User {
   addedResources     SessionResource[]
   coachAvailability  CoachAvailability[]
   coachLessonTypes   CoachLessonType[]
+  recurringSchedules RecurringSchedule[] @relation("studentSchedules")
+  coachSchedules     RecurringSchedule[] @relation("coachSchedules")
   coachResources     CoachResource[]     @relation("coachResources")
   coachCurricula     Curriculum[]        @relation("coachCurricula")
   studentProgress    StudentProgress[]   @relation("studentProgress")
@@ -264,14 +266,36 @@ model Booking {
   completedAt         DateTime?
   stripePaymentId     String?
   usedSubscription    Boolean   @default(false)
+  scheduleId          String?
   createdAt           DateTime  @default(now())
 
-  user           User            @relation(fields: [userId], references: [id])
-  coach          User?           @relation("coachBookings", fields: [coachId], references: [id])
-  lessonType     LessonType      @relation(fields: [lessonTypeId], references: [id])
-  lessonCategory LessonCategory? @relation(fields: [lessonCategoryId], references: [id])
+  user           User               @relation(fields: [userId], references: [id])
+  coach          User?              @relation("coachBookings", fields: [coachId], references: [id])
+  lessonType     LessonType         @relation(fields: [lessonTypeId], references: [id])
+  lessonCategory LessonCategory?    @relation(fields: [lessonCategoryId], references: [id])
+  schedule       RecurringSchedule? @relation(fields: [scheduleId], references: [id])
   messages       SessionMessage[]
   resources      SessionResource[]
+}
+
+model RecurringSchedule {
+  id               String   @id @default(cuid())
+  userId           String
+  coachId          String
+  lessonTypeId     String
+  lessonCategoryId String?
+  dayOfWeek        Int
+  startTime        String
+  frequency        String   @default("WEEKLY")
+  mode             String   @default("IN_PERSON")
+  startsOn         DateTime
+  endsOn           DateTime
+  status           String   @default("ACTIVE")
+  createdAt        DateTime @default(now())
+
+  user     User      @relation("studentSchedules", fields: [userId], references: [id])
+  coach    User      @relation("coachSchedules", fields: [coachId], references: [id])
+  bookings Booking[]
 }
 
 model SessionMessage {

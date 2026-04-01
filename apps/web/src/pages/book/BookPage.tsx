@@ -17,6 +17,9 @@ export type BookingState = {
   selectedCoachId: string | null;
   availableCoachIds: string[];
   mode: "ONLINE" | "IN_PERSON" | null;
+  recurring: boolean;
+  frequency: "WEEKLY" | "BIWEEKLY" | null;
+  recurringEndDate: string | null;
   notSureType: boolean;
   notSureCategory: boolean;
   selectedDate: string | null;
@@ -34,6 +37,9 @@ const initialState: BookingState = {
   selectedCoachId: null,
   availableCoachIds: [],
   mode: null,
+  recurring: false,
+  frequency: null,
+  recurringEndDate: null,
   notSureType: false,
   notSureCategory: false,
   selectedDate: null,

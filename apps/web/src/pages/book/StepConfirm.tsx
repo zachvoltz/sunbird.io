@@ -43,26 +43,62 @@ export function StepConfirm({ state, update }: Props) {
   const mode = state.mode ?? "IN_PERSON";
   const slot = state.selectedSlot!;
 
+  const recurring = state.recurring;
+  const frequency = state.frequency ?? "WEEKLY";
+  const recurringEndDate = state.recurringEndDate ?? "";
+
+  // Calculate session count for preview
+  const sessionCount = (() => {
+    if (!recurring || !recurringEndDate) return 0;
+    const start = new Date(slot.startsAt);
+    const end = new Date(recurringEndDate + "T23:59:59Z");
+    const intervalDays = frequency === "BIWEEKLY" ? 14 : 7;
+    let count = 0;
+    let d = new Date(start);
+    while (d <= end) {
+      if (d > new Date()) count++;
+      d = new Date(d.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+    }
+    return count;
+  })();
+
   const handleSubmit = async () => {
     setSubmitting(true);
     setError(null);
 
     try {
-      const res = await apiFetch<{ data: BookingPublic }>("/api/bookings", {
-        method: "POST",
-        body: JSON.stringify({
-          lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
-          lessonCategoryId: state.selectedCategoryId,
-          coachId: state.selectedCoachId || undefined,
-          mode,
-          startsAt: slot.startsAt,
-          studentNote: note || undefined,
-        }),
-      });
+      if (recurring && recurringEndDate) {
+        // Create recurring schedule
+        await apiFetch("/api/bookings/recurring", {
+          method: "POST",
+          body: JSON.stringify({
+            lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
+            lessonCategoryId: state.selectedCategoryId,
+            coachId: state.selectedCoachId,
+            mode,
+            frequency,
+            startsAt: slot.startsAt,
+            endsOn: recurringEndDate,
+            studentNote: note || undefined,
+          }),
+        });
+      } else {
+        // Create single booking
+        await apiFetch<{ data: BookingPublic }>("/api/bookings", {
+          method: "POST",
+          body: JSON.stringify({
+            lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
+            lessonCategoryId: state.selectedCategoryId,
+            coachId: state.selectedCoachId || undefined,
+            mode,
+            startsAt: slot.startsAt,
+            studentNote: note || undefined,
+          }),
+        });
+      }
 
       update({
         studentNote: note,
-        bookingId: res.data.id,
         step: "success",
       });
     } catch (err) {
@@ -119,6 +155,57 @@ export function StepConfirm({ state, update }: Props) {
           </div>
         </div>
       )}
+
+      {/* Recurring toggle */}
+      <div className="mb-8">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={recurring}
+            onChange={(e) => update({ recurring: e.target.checked, frequency: e.target.checked ? "WEEKLY" : null, recurringEndDate: null })}
+            className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
+          />
+          <span className="text-sm font-medium">Make this recurring</span>
+        </label>
+
+        {recurring && (
+          <div className="mt-4 space-y-3 pl-7">
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-2">Frequency</p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => update({ frequency: "WEEKLY" })}
+                  className={`px-4 py-2 rounded-card border text-sm transition-all ${frequency === "WEEKLY" ? "border-iris bg-iris/5" : "border-charcoal/10 hover:border-charcoal/25"}`}
+                >
+                  Weekly
+                </button>
+                <button
+                  onClick={() => update({ frequency: "BIWEEKLY" })}
+                  className={`px-4 py-2 rounded-card border text-sm transition-all ${frequency === "BIWEEKLY" ? "border-iris bg-iris/5" : "border-charcoal/10 hover:border-charcoal/25"}`}
+                >
+                  Every 2 weeks
+                </button>
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-2">Until</p>
+              <input
+                type="date"
+                value={recurringEndDate}
+                onChange={(e) => update({ recurringEndDate: e.target.value })}
+                min={new Date(new Date(slot.startsAt).getTime() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+                max={new Date(new Date(slot.startsAt).getTime() + 180 * 24 * 60 * 60 * 1000).toISOString().split("T")[0]}
+                className="px-3 py-2 text-sm border border-charcoal/10 rounded-card bg-cream focus:border-charcoal/30 focus:outline-none"
+              />
+            </div>
+            {sessionCount > 0 && (
+              <p className="text-sm text-iris font-medium">
+                {sessionCount} session{sessionCount !== 1 ? "s" : ""} will be booked
+              </p>
+            )}
+          </div>
+        )}
+      </div>
 
       <div className="bg-surface rounded-card shadow-card p-8 mb-8">
         <div className="space-y-4">

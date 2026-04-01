@@ -187,9 +187,25 @@ export interface BookingPublic {
   practiceNotes: string | null;
   completedAt: string | null;
   usedSubscription: boolean;
+  scheduleId: string | null;
   createdAt: string;
   user?: UserPublic;
   coach?: UserPublic;
+}
+
+export type RecurringFrequency = "WEEKLY" | "BIWEEKLY";
+
+export interface RecurringSchedulePublic {
+  id: string;
+  frequency: RecurringFrequency;
+  dayOfWeek: number;
+  startTime: string;
+  startsOn: string;
+  endsOn: string;
+  status: string;
+  lessonType: LessonTypePublic;
+  coach: UserPublic;
+  bookingCount: number;
 }
 
 export type SessionResourceType = "LINK" | "PDF" | "AUDIO";

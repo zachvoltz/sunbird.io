@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { createBookingSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
+import { createBookingSchema, createRecurringScheduleSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { createZoomService } from "../services/zoom.service";
 import { createZoomClient } from "../lib/oauth";
@@ -52,6 +52,7 @@ function serializeBooking(b: any) {
     practiceNotes: b.practiceNotes,
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
+    scheduleId: b.scheduleId ?? null,
     createdAt: b.createdAt.toISOString(),
     user: b.user
       ? { id: b.user.id, name: b.user.name, avatarUrl: b.user.avatarUrl, bio: b.user.bio }
@@ -409,6 +410,200 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
   } catch {}
 
   return c.json({ data: serializeBooking(updated) });
+});
+
+// ─── Recurring Schedules ───
+
+// POST /api/bookings/recurring — create a recurring schedule with bookings
+bookingRoutes.post("/recurring", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const parsed = createRecurringScheduleSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const { lessonTypeId, lessonCategoryId, coachId, startsAt: startsAtStr, frequency, endsOn: endsOnStr, mode, studentNote } = parsed.data;
+  const db = getDb();
+
+  // Verify lesson type and coach
+  const lessonType = await db.lessonType.findUnique({ where: { id: lessonTypeId } });
+  if (!lessonType) return c.json({ error: "Lesson type not found" }, 404);
+
+  const coachTeaches = await db.coachLessonType.findFirst({ where: { coachId, lessonTypeId } });
+  if (!coachTeaches) return c.json({ error: "Coach does not teach this lesson type" }, 400);
+
+  const firstStart = new Date(startsAtStr);
+  const endsOn = new Date(endsOnStr + "T23:59:59Z");
+  const dayOfWeek = firstStart.getUTCDay();
+  const timeStr = `${String(firstStart.getUTCHours()).padStart(2, "0")}:${String(firstStart.getUTCMinutes()).padStart(2, "0")}`;
+
+  // Verify coach availability for this day/time
+  const coachAvail = await db.coachAvailability.findFirst({
+    where: { coachId, dayOfWeek, startTime: timeStr, isActive: true },
+  });
+  if (!coachAvail) return c.json({ error: "Coach is not available at this time" }, 400);
+
+  // Generate all dates
+  const intervalDays = frequency === "BIWEEKLY" ? 14 : 7;
+  const dates: Date[] = [];
+  let current = new Date(firstStart);
+  while (current <= endsOn) {
+    if (current > new Date()) dates.push(new Date(current));
+    current = new Date(current.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+  }
+
+  if (dates.length === 0) return c.json({ error: "No valid dates in the selected range" }, 400);
+
+  // Check conflicts for all dates
+  for (const date of dates) {
+    const dateEnd = new Date(date.getTime() + LESSON_DURATION_MINS * 60 * 1000);
+    const conflict = await db.booking.findFirst({
+      where: {
+        coachId,
+        startsAt: { lt: dateEnd },
+        endsAt: { gt: date },
+        status: { not: "CANCELLED" },
+      },
+    });
+    if (conflict) {
+      return c.json({ error: `Time slot conflict on ${date.toISOString().split("T")[0]}` }, 409);
+    }
+  }
+
+  // Create schedule
+  const schedule = await db.recurringSchedule.create({
+    data: {
+      userId: user.id,
+      coachId,
+      lessonTypeId,
+      lessonCategoryId: lessonCategoryId ?? null,
+      dayOfWeek,
+      startTime: timeStr,
+      frequency,
+      mode,
+      startsOn: dates[0],
+      endsOn,
+      status: "ACTIVE",
+    },
+  });
+
+  // Create bookings
+  const createdBookings = [];
+  for (const date of dates) {
+    const endsAt = new Date(date.getTime() + LESSON_DURATION_MINS * 60 * 1000);
+
+    // Create Zoom meeting if online
+    let meetingUrl: string | null = null;
+    let meetingId: string | null = null;
+    let meetingProvider: string | null = null;
+
+    if (mode === "ONLINE") {
+      try {
+        const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
+        const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
+        const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
+        const zoom = createZoomClient(clientId, clientSecret, redirectUri);
+        const zoomService = createZoomService(db, zoom);
+        const meeting = await zoomService.createMeeting(coachId, {
+          topic: `Sunbird: ${lessonType.title} lesson`,
+          startTime: date.toISOString(),
+          duration: LESSON_DURATION_MINS,
+          inviteeEmail: user.email,
+        });
+        meetingUrl = meeting.joinUrl;
+        meetingId = meeting.meetingId;
+        meetingProvider = "zoom";
+      } catch {}
+    }
+
+    const booking = await db.booking.create({
+      data: {
+        userId: user.id,
+        coachId,
+        lessonTypeId,
+        lessonCategoryId: lessonCategoryId ?? null,
+        startsAt: date,
+        endsAt,
+        mode,
+        meetingUrl,
+        meetingId,
+        meetingProvider,
+        studentNote: studentNote ?? null,
+        scheduleId: schedule.id,
+        status: "CONFIRMED",
+      },
+      include: bookingInclude,
+    });
+
+    createdBookings.push(serializeBooking(booking));
+  }
+
+  // Send confirmation email
+  try {
+    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
+    const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+    const email = createEmailService(apiKey, from);
+    email.sendBookingConfirmation(
+      user.email, user.name, lessonType.title,
+      `${dates.length} ${frequency.toLowerCase()} sessions starting ${formatDateTime(dates[0])}`,
+    ).catch(console.error);
+  } catch {}
+
+  return c.json({
+    data: {
+      schedule: {
+        id: schedule.id,
+        frequency: schedule.frequency,
+        dayOfWeek: schedule.dayOfWeek,
+        startTime: schedule.startTime,
+        startsOn: schedule.startsOn.toISOString(),
+        endsOn: schedule.endsOn.toISOString(),
+        status: schedule.status,
+      },
+      bookings: createdBookings,
+    },
+  }, 201);
+});
+
+// POST /api/bookings/recurring/:scheduleId/cancel — cancel all future bookings in series
+bookingRoutes.post("/recurring/:scheduleId/cancel", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const { scheduleId } = c.req.param();
+  const db = getDb();
+
+  const schedule = await db.recurringSchedule.findUnique({ where: { id: scheduleId } });
+  if (!schedule) return c.json({ error: "Schedule not found" }, 404);
+  if (schedule.userId !== user.id && user.role !== "ADMIN") {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  // Cancel the schedule
+  await db.recurringSchedule.update({ where: { id: scheduleId }, data: { status: "CANCELLED" } });
+
+  // Cancel all future confirmed bookings
+  const now = new Date();
+  const futureBookings = await db.booking.findMany({
+    where: { scheduleId, status: "CONFIRMED", startsAt: { gt: now } },
+  });
+
+  for (const booking of futureBookings) {
+    await db.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
+
+    // Delete Zoom meeting if online
+    if (booking.meetingId && booking.meetingProvider === "zoom" && booking.coachId) {
+      try {
+        const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
+        const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
+        const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
+        const zoom = createZoomClient(clientId, clientSecret, redirectUri);
+        const zoomService = createZoomService(db, zoom);
+        zoomService.deleteMeeting(booking.coachId, booking.meetingId).catch(() => {});
+      } catch {}
+    }
+  }
+
+  return c.json({ data: { ok: true, cancelledCount: futureBookings.length } });
 });
 
 // ─── Session Messages ───
