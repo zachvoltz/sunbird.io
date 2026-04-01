@@ -252,6 +252,18 @@ export function StudentSession() {
               </div>
             </section>
 
+            {/* Curriculum link */}
+            {booking.lessonType.slug && (
+              <div className="mb-8">
+                <Link
+                  to={`/my-curriculum/${booking.lessonType.slug}`}
+                  className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors"
+                >
+                  View your learning roadmap &rarr;
+                </Link>
+              </div>
+            )}
+
             {/* Resources (read-only for students) */}
             <section>
               <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
