@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import type { LessonTypeWithCategories, AvailableSlot, CoachPublic } from "@sunbird/shared";
 import { StepLessonType } from "./StepLessonType";
@@ -54,18 +55,46 @@ const TOTAL_STEPS = 5;
 export function BookPage() {
   const [state, setState] = useState<BookingState>(initialState);
   const [loading, setLoading] = useState(true);
+  const [searchParams] = useSearchParams();
 
   useEffect(() => {
+    const qCoachId = searchParams.get("coachId");
+    const qLessonTypeId = searchParams.get("lessonTypeId");
+
     Promise.all([
       apiFetch<{ data: LessonTypeWithCategories[] }>("/api/lessons"),
-      apiFetch<{ data: CoachPublic[] }>("/api/coaches"),
+      apiFetch<{ data: CoachPublic[] }>("/api/coaches?all=true"),
     ])
       .then(([lessonsRes, coachesRes]) => {
-        setState((s) => ({
-          ...s,
+        const updates: Partial<BookingState> = {
           lessonTypes: lessonsRes.data,
           coaches: coachesRes.data,
-        }));
+        };
+
+        // Pre-select lesson type from query param
+        if (qLessonTypeId) {
+          const lt = lessonsRes.data.find((t) => t.id === qLessonTypeId);
+          if (lt) {
+            updates.selectedType = lt;
+            updates.notSureType = false;
+            // Skip to category or datetime
+            const skipCategory = lt.categories.length === 1 && lt.categories[0].slug === "open";
+            if (skipCategory) {
+              updates.selectedCategoryId = lt.categories[0].id;
+              updates.notSureCategory = true;
+              updates.step = 3;
+            } else {
+              updates.step = 2;
+            }
+          }
+        }
+
+        // Pre-select coach from query param
+        if (qCoachId) {
+          updates.selectedCoachId = qCoachId;
+        }
+
+        setState((s) => ({ ...s, ...updates }));
       })
       .catch(console.error)
       .finally(() => setLoading(false));

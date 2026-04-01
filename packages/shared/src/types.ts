@@ -96,9 +96,28 @@ export interface UserPublic {
 }
 
 export interface CoachPublic extends UserPublic {
+  slug: string | null;
+  headline: string | null;
+  coverImageUrl: string | null;
+  isPublished: boolean;
   sessionAddress: string | null;
   hasZoomConnected: boolean;
   lessonTypeIds: string[];
+}
+
+export interface CoachProfilePublic {
+  id: string;
+  slug: string;
+  name: string;
+  headline: string | null;
+  longBio: string | null;
+  avatarUrl: string | null;
+  coverImageUrl: string | null;
+  credentials: string | null;
+  socialLinks: Record<string, string> | null;
+  sessionAddress: string | null;
+  hasZoomConnected: boolean;
+  lessonTypes: (LessonTypePublic & { curriculumNodeCount: number })[];
 }
 
 export interface LessonTypePublic {

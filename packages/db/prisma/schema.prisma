@@ -23,6 +23,13 @@ model User {
   avatarUrl      String?
   bio            String?
   role           String   @default("STUDENT")
+  slug           String?  @unique
+  headline       String?
+  longBio        String?
+  coverImageUrl  String?
+  credentials    String?
+  socialLinks    String?
+  isPublished    Boolean  @default(false)
   sessionAddress String?
   referralSource String?
   createdAt      DateTime @default(now())

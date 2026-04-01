@@ -4,6 +4,8 @@ import { Home } from "@/pages/Home";
 import { Lessons } from "@/pages/Lessons";
 import { LessonDetail } from "@/pages/LessonDetail";
 import { Workshops } from "@/pages/Workshops";
+import { Coaches } from "@/pages/Coaches";
+import { CoachProfile } from "@/pages/CoachProfile";
 import { BookPage } from "@/pages/book/BookPage";
 import { MyBookings } from "@/pages/MyBookings";
 import { TeacherDashboard } from "@/pages/teacher/Dashboard";
@@ -26,6 +28,8 @@ export function App() {
         <Route path="lessons" element={<Lessons />} />
         <Route path="lessons/:slug" element={<LessonDetail />} />
         <Route path="workshops" element={<Workshops />} />
+        <Route path="coaches" element={<Coaches />} />
+        <Route path="coaches/:slug" element={<CoachProfile />} />
         <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
         <Route path="my-bookings" element={<AuthGate><MyBookings /></AuthGate>} />
         <Route path="my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />

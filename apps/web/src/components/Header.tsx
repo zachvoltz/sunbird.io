@@ -14,6 +14,7 @@ const navLinks = [
 
 const heroNavLinks = [
   { to: "/lessons", label: "lessons" },
+  { to: "/coaches", label: "coaches" },
   { to: "/workshops", label: "workshops" },
   { to: "/events", label: "events" },
 ];

@@ -9,6 +9,13 @@ const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")
 type LessonTypeOption = { id: string; title: string };
 
 type CoachSettingsData = {
+  slug: string | null;
+  headline: string | null;
+  longBio: string | null;
+  coverImageUrl: string | null;
+  credentials: string | null;
+  socialLinks: string | null;
+  isPublished: boolean;
   sessionAddress: string | null;
   zoomConnected: boolean;
   availability: CoachAvailabilitySlot[];
@@ -19,6 +26,15 @@ type CoachSettingsData = {
 export function CoachSettings() {
   const [settings, setSettings] = useState<CoachSettingsData | null>(null);
   const [address, setAddress] = useState("");
+
+  // Profile state
+  const [slug, setSlug] = useState("");
+  const [headline, setHeadline] = useState("");
+  const [longBio, setLongBio] = useState("");
+  const [coverImageUrl, setCoverImageUrl] = useState("");
+  const [credentials, setCredentials] = useState("");
+  const [socialLinks, setSocialLinks] = useState("");
+  const [isPublished, setIsPublished] = useState(false);
   const [selectedLessonTypeIds, setSelectedLessonTypeIds] = useState<string[]>([]);
   const [availabilityByDay, setAvailabilityByDay] = useState<Record<number, Set<string>>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -35,6 +51,13 @@ export function CoachSettings() {
       .then((res) => {
         setSettings(res.data);
         setAddress(res.data.sessionAddress ?? "");
+        setSlug(res.data.slug ?? "");
+        setHeadline(res.data.headline ?? "");
+        setLongBio(res.data.longBio ?? "");
+        setCoverImageUrl(res.data.coverImageUrl ?? "");
+        setCredentials(res.data.credentials ?? "");
+        setSocialLinks(res.data.socialLinks ?? "");
+        setIsPublished(res.data.isPublished ?? false);
         setSelectedLessonTypeIds(res.data.lessonTypeIds);
 
         // Build availability map: dayOfWeek -> Set of startTime strings
@@ -126,6 +149,31 @@ export function CoachSettings() {
     } catch {}
   };
 
+  const saveProfile = async () => {
+    setSaving("profile");
+    try {
+      await apiFetch("/api/coach-settings/profile", {
+        method: "PATCH",
+        body: JSON.stringify({ slug: slug || undefined, headline: headline || undefined, longBio: longBio || undefined, coverImageUrl: coverImageUrl || undefined, credentials: credentials || undefined, socialLinks: socialLinks || undefined }),
+      });
+      showSaved("profile");
+    } catch {} finally { setSaving(null); }
+  };
+
+  const togglePublish = async () => {
+    try {
+      if (isPublished) {
+        await apiFetch("/api/coach-settings/unpublish", { method: "POST" });
+        setIsPublished(false);
+      } else {
+        await apiFetch("/api/coach-settings/publish", { method: "POST" });
+        setIsPublished(true);
+      }
+    } catch (err: any) {
+      alert(err?.body?.error ?? "Failed to update publish status");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
@@ -159,6 +207,108 @@ export function CoachSettings() {
             Zoom connected successfully!
           </div>
         )}
+
+        {/* Public Profile */}
+        <section className="mb-12">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+              Public Profile
+            </h2>
+            <div className="flex items-center gap-3">
+              {slug && (
+                <a
+                  href={`/coaches/${slug}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-medium text-iris hover:text-iris-hover"
+                >
+                  Preview
+                </a>
+              )}
+              <button
+                onClick={togglePublish}
+                className={`text-[12px] font-medium px-3 py-1 rounded-card transition-colors ${
+                  isPublished
+                    ? "text-sage border border-sage/30 hover:bg-sage/10"
+                    : "text-text-secondary border border-charcoal/20 hover:border-charcoal/40"
+                }`}
+              >
+                {isPublished ? "Published" : "Publish"}
+              </button>
+            </div>
+          </div>
+          <div className="bg-surface rounded-card shadow-card p-6 space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">URL Slug</label>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-text-secondary">/coaches/</span>
+                <input
+                  value={slug}
+                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))}
+                  placeholder="your-name"
+                  className="flex-1 px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Headline</label>
+              <input
+                value={headline}
+                onChange={(e) => setHeadline(e.target.value)}
+                placeholder="e.g. Voice coach & songwriter"
+                className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Cover Image URL</label>
+              <input
+                value={coverImageUrl}
+                onChange={(e) => setCoverImageUrl(e.target.value)}
+                placeholder="https://..."
+                className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">About (Long Bio)</label>
+              <textarea
+                value={longBio}
+                onChange={(e) => setLongBio(e.target.value)}
+                rows={5}
+                placeholder="Tell students about yourself, your teaching philosophy, and what makes your lessons special..."
+                className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Credentials</label>
+              <textarea
+                value={credentials}
+                onChange={(e) => setCredentials(e.target.value)}
+                rows={3}
+                placeholder="Degrees, certifications, performance experience..."
+                className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none resize-none"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-charcoal mb-1">Social Links (JSON)</label>
+              <input
+                value={socialLinks}
+                onChange={(e) => setSocialLinks(e.target.value)}
+                placeholder='{"instagram": "https://...", "youtube": "https://..."}'
+                className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
+              />
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={saveProfile}
+                disabled={saving === "profile"}
+                className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+              >
+                {saving === "profile" ? "Saving..." : "Save Profile"}
+              </button>
+              {savedSection === "profile" && <span className="text-[12px] text-sage">Saved</span>}
+            </div>
+          </div>
+        </section>
 
         {/* Lesson Types */}
         <section className="mb-12">

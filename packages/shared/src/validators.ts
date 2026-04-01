@@ -98,6 +98,15 @@ export const updateCoachSettingsSchema = z.object({
   sessionAddress: z.string().max(500).optional(),
 });
 
+export const updateCoachProfileSchema = z.object({
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and hyphens only").optional(),
+  headline: z.string().max(200).optional(),
+  longBio: z.string().max(10000).optional(),
+  coverImageUrl: z.string().url().optional().or(z.literal("")),
+  credentials: z.string().max(5000).optional(),
+  socialLinks: z.string().max(2000).optional(),
+});
+
 export const updateCoachAvailabilitySchema = z.object({
   slots: z.array(z.object({
     dayOfWeek: z.number().min(0).max(6),

@@ -3,7 +3,7 @@ import { generateState, generateCodeVerifier } from "arctic";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createZoomClient } from "../lib/oauth";
-import { updateCoachSettingsSchema, updateCoachAvailabilitySchema, updateCoachLessonTypesSchema } from "@sunbird/shared";
+import { updateCoachSettingsSchema, updateCoachAvailabilitySchema, updateCoachLessonTypesSchema, updateCoachProfileSchema } from "@sunbird/shared";
 
 export const coachSettingsRoutes = new Hono();
 
@@ -30,9 +30,19 @@ coachSettingsRoutes.get("/", requireAuth, requireRole("COACH", "ADMIN"), async (
     select: { id: true, title: true },
   });
 
+  // Fetch full user for profile fields
+  const fullUser = await db.user.findUnique({ where: { id: user.id } }) as any;
+
   return c.json({
     data: {
-      sessionAddress: (user as any).sessionAddress ?? null,
+      slug: fullUser?.slug ?? null,
+      headline: fullUser?.headline ?? null,
+      longBio: fullUser?.longBio ?? null,
+      coverImageUrl: fullUser?.coverImageUrl ?? null,
+      credentials: fullUser?.credentials ?? null,
+      socialLinks: fullUser?.socialLinks ?? null,
+      isPublished: fullUser?.isPublished ?? false,
+      sessionAddress: fullUser?.sessionAddress ?? null,
       zoomConnected: !!zoomAccount?.accessToken,
       availability: availability.map((a: any) => ({
         id: a.id,
@@ -62,6 +72,71 @@ coachSettingsRoutes.patch("/", requireAuth, requireRole("COACH", "ADMIN"), async
     data: { sessionAddress: parsed.data.sessionAddress ?? null },
   });
 
+  return c.json({ data: { ok: true } });
+});
+
+// PATCH /api/coach-settings/profile — update public profile fields
+coachSettingsRoutes.patch("/profile", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const parsed = updateCoachProfileSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+
+  // Validate slug uniqueness if provided
+  if (parsed.data.slug) {
+    const existing = await db.user.findFirst({
+      where: { slug: parsed.data.slug, id: { not: user.id } },
+    });
+    if (existing) {
+      return c.json({ error: "This URL slug is already taken" }, 409);
+    }
+  }
+
+  await db.user.update({
+    where: { id: user.id },
+    data: {
+      slug: parsed.data.slug ?? undefined,
+      headline: parsed.data.headline ?? undefined,
+      longBio: parsed.data.longBio ?? undefined,
+      coverImageUrl: parsed.data.coverImageUrl || null,
+      credentials: parsed.data.credentials ?? undefined,
+      socialLinks: parsed.data.socialLinks ?? undefined,
+    },
+  });
+
+  return c.json({ data: { ok: true } });
+});
+
+// POST /api/coach-settings/publish — publish public page
+coachSettingsRoutes.post("/publish", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+
+  // Must have at least one curriculum
+  const curriculumCount = await db.curriculum.count({ where: { coachId: user.id } });
+  if (curriculumCount === 0) {
+    return c.json({ error: "You need at least one curriculum before publishing your profile" }, 400);
+  }
+
+  // Must have a slug
+  const coach = await db.user.findUnique({ where: { id: user.id } });
+  if (!(coach as any)?.slug) {
+    return c.json({ error: "Set a URL slug in your profile before publishing" }, 400);
+  }
+
+  await db.user.update({ where: { id: user.id }, data: { isPublished: true } });
+  return c.json({ data: { ok: true } });
+});
+
+// POST /api/coach-settings/unpublish — unpublish public page
+coachSettingsRoutes.post("/unpublish", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  await db.user.update({ where: { id: user.id }, data: { isPublished: false } });
   return c.json({ data: { ok: true } });
 });
 
