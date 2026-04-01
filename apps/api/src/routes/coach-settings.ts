@@ -89,15 +89,23 @@ coachSettingsRoutes.get("/zoom/cb", requireAuth, async (c) => {
     const expiresAt = tokens.accessTokenExpiresAt();
 
     // Fetch Zoom user info
-    const userRes = await fetch("https://api.zoom.us/v2/users/me", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    const zoomUser = (await userRes.json()) as { id: string };
+    // Fetch Zoom user info — use user's own ID as fallback if API fails
+    let zoomProviderId = user.id;
+    try {
+      const userRes = await fetch("https://api.zoom.us/v2/users/me", {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (userRes.ok) {
+        const zoomUserData = (await userRes.json()) as Record<string, any>;
+        zoomProviderId = zoomUserData.id ?? zoomUserData.user_id ?? user.id;
+      }
+    } catch {}
+    zoomProviderId = String(zoomProviderId);
 
     const db = getDb();
     await db.oAuthAccount.upsert({
       where: {
-        provider_providerId: { provider: "zoom", providerId: zoomUser.id },
+        provider_providerId: { provider: "zoom", providerId: String(zoomProviderId) },
       },
       update: {
         userId: user.id,
@@ -108,7 +116,7 @@ coachSettingsRoutes.get("/zoom/cb", requireAuth, async (c) => {
       },
       create: {
         provider: "zoom",
-        providerId: zoomUser.id,
+        providerId: String(zoomProviderId),
         userId: user.id,
         accessToken,
         refreshToken,
