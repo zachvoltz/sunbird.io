@@ -52,7 +52,7 @@ coachSettingsRoutes.get("/zoom/connect", requireAuth, requireRole("COACH", "ADMI
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
 
-  const url = zoom.createAuthorizationURL(state, codeVerifier, ["meeting:write"]);
+  const url = zoom.createAuthorizationURL(state, codeVerifier, ["meeting:write:meeting"]);
 
   const cookieOpts = "HttpOnly; SameSite=Lax; Path=/; Max-Age=600";
   c.header("Set-Cookie", `zoom_oauth_state=${state}; ${cookieOpts}`);
@@ -104,7 +104,7 @@ coachSettingsRoutes.get("/zoom/cb", requireAuth, async (c) => {
         accessToken,
         refreshToken,
         accessTokenExpiresAt: expiresAt,
-        scopes: "meeting:write",
+        scopes: "meeting:write:meeting",
       },
       create: {
         provider: "zoom",
@@ -113,7 +113,7 @@ coachSettingsRoutes.get("/zoom/cb", requireAuth, async (c) => {
         accessToken,
         refreshToken,
         accessTokenExpiresAt: expiresAt,
-        scopes: "meeting:write",
+        scopes: "meeting:write:meeting",
       },
     });
 
