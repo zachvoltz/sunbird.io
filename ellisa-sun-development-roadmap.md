@@ -387,6 +387,36 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   `/teacher/bookings` — list view of upcoming and past bookings. Can mark lessons as completed or no-show. Can view student profiles.
   _AC: Status updates reflect in student's booking list. Teacher can filter by status, lesson type, student._
 
+### 2F+ — Coach Public Pages (Week 8)
+
+- [ ] **2F+.1 — Coach profile schema**
+  Add profile fields to User: `slug` (unique, for URLs), `headline`, `longBio`, `coverImageUrl`, `credentials`, `socialLinks` (JSON), `isPublished` (boolean, default false). Coaches must have at least 1 curriculum to publish.
+  _AC: Migration runs cleanly. Profile fields nullable and only relevant for COACH users._
+
+- [ ] **2F+.2 — Coach profile API**
+  `PATCH /api/coach-settings/profile` for updating profile fields. `POST /api/coach-settings/publish` and `/unpublish` for toggling visibility. `GET /api/coaches/:slug` returns full public profile with lesson types and curriculum stats.
+  _AC: Coach can update profile and publish. Public endpoint returns rich profile data. Unpublished coaches return 404._
+
+- [ ] **2F+.3 — Coach profile settings UI**
+  New "Public Profile" section on the Settings page with: slug, headline, long bio, cover image URL, credentials, social links, and publish/unpublish toggle. Preview link to the public page.
+  _AC: Coach can configure all profile fields and publish. Publish blocked without at least 1 curriculum._
+
+- [ ] **2F+.4 — Coach profile page**
+  Public page at `/coaches/:slug` showing hero (cover image + avatar), bio, credentials, courses taught (with curriculum node counts and "Book a lesson" CTAs), availability preview, and social links.
+  _AC: Profile renders with all sections. "Book a lesson" links to `/book?coachId=X&lessonTypeId=Y`._
+
+- [ ] **2F+.5 — Coaches directory page**
+  Public page at `/coaches` listing all published coaches with cards showing cover image, avatar, name, headline, and lesson types. Optional filter by lesson type.
+  _AC: Directory shows only published coaches. Cards link to individual profiles._
+
+- [ ] **2F+.6 — Booking flow pre-filtering**
+  Read `coachId` and `lessonTypeId` query params in BookPage. Pre-select and skip relevant steps.
+  _AC: `/book?coachId=X&lessonTypeId=Y` skips lesson type and coach steps._
+
+- [ ] **2F+.7 — Navigation integration**
+  Add "Coaches" link to the public nav. Add "Our Coaches" section to the home page. Add "Coaches who teach this" section to lesson detail pages.
+  _AC: Coaches discoverable from nav, home page, and lesson pages._
+
 ### 2G — Admin Management (Week 8)
 
 - [ ] **2G.1 — Admin teacher management**
