@@ -7,6 +7,8 @@ import type {
   SessionMessagePublic,
   SessionResourcePublic,
   SessionResourceType,
+  CurriculumPublic,
+  StudentProgressPublic,
 } from "@sunbird/shared";
 
 function formatDate(iso: string): string {
@@ -59,6 +61,10 @@ export function CoachSession() {
   const [sendingChat, setSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
+  // Curriculum state
+  const [curriculum, setCurriculum] = useState<CurriculumPublic | null>(null);
+  const [progress, setProgress] = useState<StudentProgressPublic[]>([]);
+
   // Resource form state
   const [showResourceForm, setShowResourceForm] = useState(false);
   const [resType, setResType] = useState<SessionResourceType>("LINK");
@@ -87,6 +93,24 @@ export function CoachSession() {
       setLoading(false),
     );
   }, [bookingId]);
+
+  // Load curriculum + student progress once booking is loaded
+  useEffect(() => {
+    if (!booking) return;
+    apiFetch<{ data: CurriculumPublic }>(`/api/curriculum/${booking.lessonType.id}`)
+      .then((res) => {
+        setCurriculum(res.data);
+        if (booking.user?.id) {
+          return apiFetch<{ data: StudentProgressPublic[] }>(
+            `/api/curriculum/${res.data.id}/progress/${booking.user.id}`,
+          );
+        }
+      })
+      .then((res) => {
+        if (res) setProgress(res.data);
+      })
+      .catch(() => {});
+  }, [booking?.id]);
 
   // Poll for new messages every 15s
   useEffect(() => {
@@ -154,6 +178,41 @@ export function CoachSession() {
       });
       setResources((prev) => prev.filter((r) => r.id !== resourceId));
     } catch {}
+  };
+
+  const completedNodeIds = new Set(progress.map((p) => p.nodeId));
+
+  // Build prereq map for determining locked state
+  const prereqMap = new Map<string, string[]>();
+  for (const edge of curriculum?.edges ?? []) {
+    const existing = prereqMap.get(edge.toNodeId) ?? [];
+    existing.push(edge.fromNodeId);
+    prereqMap.set(edge.toNodeId, existing);
+  }
+
+  const toggleNodeProgress = async (nodeId: string) => {
+    if (!curriculum || !booking?.user?.id) return;
+    const isCompleted = completedNodeIds.has(nodeId);
+    if (isCompleted) {
+      try {
+        await apiFetch(`/api/curriculum/${curriculum.id}/progress`, {
+          method: "DELETE",
+          body: JSON.stringify({ nodeId, studentId: booking.user.id }),
+        });
+        setProgress((prev) => prev.filter((p) => p.nodeId !== nodeId));
+      } catch {}
+    } else {
+      try {
+        const res = await apiFetch<{ data: StudentProgressPublic }>(
+          `/api/curriculum/${curriculum.id}/progress`,
+          {
+            method: "POST",
+            body: JSON.stringify({ nodeId, studentId: booking.user.id }),
+          },
+        );
+        setProgress((prev) => [...prev, res.data]);
+      } catch {}
+    }
   };
 
   if (loading) {
@@ -294,6 +353,56 @@ export function CoachSession() {
                 )}
               </div>
             </section>
+
+            {/* Curriculum Progress */}
+            {curriculum && curriculum.nodes.length > 0 && (
+              <section className="mb-8">
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
+                  Curriculum ({completedNodeIds.size}/{curriculum.nodes.length})
+                </h2>
+                <div className="bg-surface rounded-card shadow-card p-5 space-y-1">
+                  {curriculum.nodes.map((node) => {
+                    const isCompleted = completedNodeIds.has(node.id);
+                    const prereqs = prereqMap.get(node.id) ?? [];
+                    const isLocked = prereqs.length > 0 && !prereqs.every((p) => completedNodeIds.has(p));
+
+                    return (
+                      <button
+                        key={node.id}
+                        onClick={() => !isLocked && toggleNodeProgress(node.id)}
+                        disabled={isLocked}
+                        className={`w-full flex items-center gap-3 py-2 px-2 rounded text-left transition-colors ${
+                          isLocked
+                            ? "opacity-40 cursor-not-allowed"
+                            : "hover:bg-warm-gray/20"
+                        }`}
+                      >
+                        <span
+                          className={`shrink-0 w-4 h-4 rounded border flex items-center justify-center text-[10px] ${
+                            isCompleted
+                              ? "bg-sage border-sage text-cream"
+                              : isLocked
+                                ? "border-charcoal/20"
+                                : "border-charcoal/30"
+                          }`}
+                        >
+                          {isCompleted && "✓"}
+                        </span>
+                        <span
+                          className={`text-sm ${
+                            isCompleted
+                              ? "text-text-secondary line-through"
+                              : "text-charcoal"
+                          }`}
+                        >
+                          {node.title}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
 
             {/* Resources */}
             <section>
