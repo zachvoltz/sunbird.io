@@ -203,6 +203,21 @@ export function StudentSession() {
                   {formatDate(booking.startsAt)}<br />
                   {formatTime(booking.startsAt)} &ndash; {formatTime(booking.endsAt)}
                 </p>
+                {booking.mode === "ONLINE" && booking.meetingUrl && (
+                  <a
+                    href={booking.meetingUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 block text-[13px] font-medium text-cream bg-iris px-4 py-2 rounded-card hover:bg-iris-hover transition-colors text-center"
+                  >
+                    Join Zoom Meeting
+                  </a>
+                )}
+                {booking.mode === "IN_PERSON" && booking.coach?.bio && (
+                  <p className="text-[12px] text-text-secondary mt-3">
+                    In person
+                  </p>
+                )}
               </div>
             </section>
 

@@ -9,11 +9,27 @@ coachRoutes.get("/", async (c) => {
   const db = getDb();
   const coaches = await db.user.findMany({
     where: { role: "COACH" },
-    select: { id: true, name: true, avatarUrl: true, bio: true },
+    select: {
+      id: true,
+      name: true,
+      avatarUrl: true,
+      bio: true,
+      sessionAddress: true,
+      oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
+    },
     orderBy: { name: "asc" },
   });
 
-  return c.json({ data: coaches });
+  return c.json({
+    data: coaches.map((c: any) => ({
+      id: c.id,
+      name: c.name,
+      avatarUrl: c.avatarUrl,
+      bio: c.bio,
+      sessionAddress: c.sessionAddress,
+      hasZoomConnected: c.oauthAccounts.length > 0,
+    })),
+  });
 });
 
 // GET /api/coaches/students — list coach's students (coach/admin)

@@ -62,6 +62,7 @@ export const createBookingSchema = z.object({
   lessonCategoryId: z.string().nullish(),
   coachId: z.string().optional(),
   startsAt: z.string().datetime(),
+  mode: z.enum(["ONLINE", "IN_PERSON"]).default("IN_PERSON"),
   studentNote: z.string().max(500).optional(),
 });
 
@@ -78,6 +79,12 @@ export const createAvailabilitySchema = z.object({
   startTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format"),
   endTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be HH:MM format"),
   isActive: z.boolean().default(true),
+});
+
+// ─── Coach Settings ───
+
+export const updateCoachSettingsSchema = z.object({
+  sessionAddress: z.string().max(500).optional(),
 });
 
 // ─── Community ───

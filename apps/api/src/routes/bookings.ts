@@ -3,6 +3,8 @@ import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createBookingSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
+import { createZoomService } from "../services/zoom.service";
+import { createZoomClient } from "../lib/oauth";
 
 const LESSON_DURATION_MINS = 60;
 
@@ -43,6 +45,9 @@ function serializeBooking(b: any) {
     startsAt: b.startsAt.toISOString(),
     endsAt: b.endsAt.toISOString(),
     status: b.status,
+    mode: b.mode ?? "IN_PERSON",
+    meetingUrl: b.meetingUrl ?? null,
+    meetingProvider: b.meetingProvider ?? null,
     studentNote: b.studentNote,
     practiceNotes: b.practiceNotes,
     completedAt: b.completedAt?.toISOString() ?? null,
@@ -61,7 +66,7 @@ const bookingInclude = {
   lessonType: true,
   lessonCategory: true,
   user: { select: { id: true, name: true, avatarUrl: true, bio: true } },
-  coach: { select: { id: true, name: true, avatarUrl: true, bio: true } },
+  coach: { select: { id: true, name: true, avatarUrl: true, bio: true, sessionAddress: true } },
 };
 
 // POST /api/bookings — create a booking
@@ -73,7 +78,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
   }
 
-  const { lessonTypeId, lessonCategoryId, coachId: providedCoachId, startsAt: startsAtStr, studentNote } = parsed.data;
+  const { lessonTypeId, lessonCategoryId, coachId: providedCoachId, startsAt: startsAtStr, mode, studentNote } = parsed.data;
   const db = getDb();
 
   // Verify lesson type exists
@@ -147,6 +152,35 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "This time is not within available hours" }, 400);
   }
 
+  // If online, create Zoom meeting before persisting the booking
+  let meetingUrl: string | null = null;
+  let meetingId: string | null = null;
+  let meetingProvider: string | null = null;
+
+  if (mode === "ONLINE" && coachId) {
+    try {
+      const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
+      const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
+      const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
+      const zoom = createZoomClient(clientId, clientSecret, redirectUri);
+      const zoomService = createZoomService(db, zoom);
+
+      const meeting = await zoomService.createMeeting(coachId, {
+        topic: `Sunbird: ${lessonType.title} lesson`,
+        startTime: startsAt.toISOString(),
+        duration: LESSON_DURATION_MINS,
+        inviteeEmail: user.email,
+      });
+
+      meetingUrl = meeting.joinUrl;
+      meetingId = meeting.meetingId;
+      meetingProvider = "zoom";
+    } catch (err) {
+      console.error("Zoom meeting creation failed:", err);
+      return c.json({ error: "Failed to create Zoom meeting. Please ensure your coach has Zoom connected." }, 400);
+    }
+  }
+
   const booking = await db.booking.create({
     data: {
       userId: user.id,
@@ -155,6 +189,10 @@ bookingRoutes.post("/", requireAuth, async (c) => {
       lessonCategoryId: lessonCategoryId ?? null,
       startsAt,
       endsAt,
+      mode,
+      meetingUrl,
+      meetingId,
+      meetingProvider,
       studentNote: studentNote ?? null,
       status: "CONFIRMED",
     },
@@ -252,6 +290,18 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     data: { status: "CANCELLED" },
     include: bookingInclude,
   });
+
+  // Delete Zoom meeting if online (fire and forget)
+  if (booking.meetingId && booking.meetingProvider === "zoom" && booking.coachId) {
+    try {
+      const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
+      const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
+      const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
+      const zoom = createZoomClient(clientId, clientSecret, redirectUri);
+      const zoomService = createZoomService(db, zoom);
+      zoomService.deleteMeeting(booking.coachId, booking.meetingId).catch(console.error);
+    } catch {}
+  }
 
   // Send cancellation email
   try {

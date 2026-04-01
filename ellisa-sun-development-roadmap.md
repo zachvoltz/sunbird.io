@@ -329,6 +329,36 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   On completed sessions, prompt the student to book their next lesson with a CTA linking to `/book?lessonTypeId=xxx`. Pre-select lesson type in the booking flow.
   _AC: Student sees "Ready for your next session?" on completed bookings. Link pre-fills lesson type._
 
+### 2D++ — Video & Location Integration (Week 7–8)
+
+- [ ] **2D++.1 — Schema: booking mode, meeting fields, coach address, OAuth tokens**
+  Add `mode` (ONLINE/IN_PERSON), `meetingUrl`, `meetingId`, `meetingProvider` to Booking. Add `sessionAddress` to User. Extend OAuthAccount with `accessToken`, `refreshToken`, `accessTokenExpiresAt`, `scopes`.
+  _AC: Migration runs cleanly. Existing bookings default to IN_PERSON._
+
+- [ ] **2D++.2 — Zoom OAuth for coaches**
+  Coach settings page at `/coach/settings` with Zoom connect/disconnect. OAuth flow follows existing Google pattern using `arctic` library. Tokens stored in OAuthAccount.
+  _AC: Coach can connect Zoom, see "Connected" status, and disconnect. Gear icon on Dashboard links to settings._
+
+- [ ] **2D++.3 — Coach session address**
+  Text input on coach settings page for in-person lesson address. `PATCH /api/coach-settings` endpoint.
+  _AC: Coach can save an address. Address shown to students who book in-person lessons._
+
+- [ ] **2D++.4 — Booking mode selection**
+  Add Online/In-Person radio toggle to StepConfirm in the booking flow. Only show Online option if selected coach has Zoom connected. Send `mode` in booking POST body.
+  _AC: Student can choose lesson mode. In-person shows coach address. Online only available when coach has Zoom._
+
+- [ ] **2D++.5 — Auto-create Zoom meeting on booking**
+  When an online booking is confirmed, call Zoom API to create a meeting in the coach's account with the student invited. Store `meetingUrl` and `meetingId` on the booking. Delete meeting on cancellation.
+  _AC: Online booking automatically creates Zoom meeting. Link available immediately. Cancelled bookings clean up Zoom meeting._
+
+- [ ] **2D++.6 — Display meeting info on session pages**
+  Show "Join Zoom" button on both coach and student session pages for online bookings. Show address for in-person bookings. Include meeting/address info in booking confirmation email.
+  _AC: Both parties see the Zoom link or address. Confirmation email includes the relevant info._
+
+- [ ] **2D++.7 — Google Meet support (future)**
+  Add Google Meet as a second video provider using the same pattern. Coach connects Google account, meetings auto-created via Google Calendar API.
+  _AC: Coach can choose between Zoom and Google Meet. Same booking flow works for both providers._
+
 ### 2E — Student Dashboard (Week 7–8)
 
 - [x] **2E.1 — Student calendar / upcoming lessons**

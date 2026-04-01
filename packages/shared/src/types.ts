@@ -12,6 +12,7 @@ import type {
   updateProfileSchema,
   createSessionMessageSchema,
   createSessionResourceSchema,
+  updateCoachSettingsSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -28,6 +29,7 @@ export type EventRsvpInput = z.infer<typeof eventRsvpSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
 export type CreateSessionMessageInput = z.infer<typeof createSessionMessageSchema>;
 export type CreateSessionResourceInput = z.infer<typeof createSessionResourceSchema>;
+export type UpdateCoachSettingsInput = z.infer<typeof updateCoachSettingsSchema>;
 
 // ─── Shared enums (mirroring DB values) ───
 
@@ -43,6 +45,10 @@ export interface AuthUser {
 }
 
 export type BookingStatus = "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
+
+export type BookingMode = "ONLINE" | "IN_PERSON";
+
+export type MeetingProvider = "zoom" | "google_meet";
 
 export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELLED" | "PAUSED";
 
@@ -77,6 +83,11 @@ export interface UserPublic {
   name: string;
   avatarUrl: string | null;
   bio: string | null;
+}
+
+export interface CoachPublic extends UserPublic {
+  sessionAddress: string | null;
+  hasZoomConnected: boolean;
 }
 
 export interface LessonTypePublic {
@@ -149,6 +160,9 @@ export interface BookingPublic {
   startsAt: string;
   endsAt: string;
   status: BookingStatus;
+  mode: BookingMode;
+  meetingUrl: string | null;
+  meetingProvider: string | null;
   studentNote: string | null;
   practiceNotes: string | null;
   completedAt: string | null;

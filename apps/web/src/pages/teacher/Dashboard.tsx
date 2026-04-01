@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { Settings } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BookingPublic } from "@sunbird/shared";
 
@@ -187,9 +188,18 @@ export function TeacherDashboard() {
   return (
     <div className="py-16 px-6 md:px-10">
       <div className="mx-auto max-w-[900px]">
-        <h1 className="font-display text-3xl md:text-4xl font-bold mb-8">
+        <div className="flex items-center justify-between mb-8">
+        <h1 className="font-display text-3xl md:text-4xl font-bold">
           Coach Dashboard
         </h1>
+        <Link
+          to="/coach/settings"
+          className="text-text-secondary hover:text-charcoal transition-colors"
+          title="Settings"
+        >
+          <Settings className="w-5 h-5" strokeWidth={1.5} />
+        </Link>
+        </div>
 
         {/* Tab toggle */}
         <div className="flex border-b border-warm-gray mb-10">

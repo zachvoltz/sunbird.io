@@ -36,9 +36,13 @@ export function StepConfirm({ state, update }: Props) {
     state.notSureCategory
       ? "Open"
       : state.selectedType?.categories.find(
-          (c) => c.id === state.selectedCategoryId,
+          (c: any) => c.id === state.selectedCategoryId,
         )?.title ?? "Open";
-  const coachName = state.coaches.find((c) => c.id === state.selectedCoachId)?.name;
+  const selectedCoach = state.coaches.find((c) => c.id === state.selectedCoachId);
+  const coachName = selectedCoach?.name;
+  const coachHasZoom = selectedCoach?.hasZoomConnected ?? false;
+  const coachAddress = selectedCoach?.sessionAddress;
+  const mode = state.mode ?? "IN_PERSON";
   const slot = state.selectedSlot!;
 
   const handleSubmit = async () => {
@@ -52,6 +56,7 @@ export function StepConfirm({ state, update }: Props) {
           lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
           lessonCategoryId: state.selectedCategoryId,
           coachId: state.selectedCoachId || undefined,
+          mode,
           startsAt: slot.startsAt,
           studentNote: note || undefined,
         }),
@@ -81,6 +86,41 @@ export function StepConfirm({ state, update }: Props) {
       <p className="text-text-secondary mb-10">
         Review the details below and book when you're ready.
       </p>
+
+      {/* Mode selection */}
+      {coachHasZoom && (
+        <div className="mb-8">
+          <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-3">
+            Lesson format
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => update({ mode: "ONLINE" })}
+              className={`p-4 rounded-card border text-left transition-all duration-200 ${
+                mode === "ONLINE"
+                  ? "border-iris bg-iris/5 shadow-card"
+                  : "border-charcoal/10 hover:border-charcoal/25"
+              }`}
+            >
+              <span className="font-display text-sm font-semibold block mb-0.5">Online</span>
+              <span className="text-[12px] text-text-secondary">Via Zoom</span>
+            </button>
+            <button
+              onClick={() => update({ mode: "IN_PERSON" })}
+              className={`p-4 rounded-card border text-left transition-all duration-200 ${
+                mode === "IN_PERSON"
+                  ? "border-iris bg-iris/5 shadow-card"
+                  : "border-charcoal/10 hover:border-charcoal/25"
+              }`}
+            >
+              <span className="font-display text-sm font-semibold block mb-0.5">In Person</span>
+              <span className="text-[12px] text-text-secondary">
+                {coachAddress ? coachAddress : "At the studio"}
+              </span>
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="bg-surface rounded-card shadow-card p-8 mb-8">
         <div className="space-y-4">

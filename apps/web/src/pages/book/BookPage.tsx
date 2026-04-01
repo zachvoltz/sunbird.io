@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { apiFetch } from "@/lib/api";
-import type { LessonTypeWithCategories, AvailableSlot, UserPublic } from "@sunbird/shared";
+import type { LessonTypeWithCategories, AvailableSlot, CoachPublic } from "@sunbird/shared";
 import { StepLessonType } from "./StepLessonType";
 import { StepCategory } from "./StepCategory";
 import { StepCoach } from "./StepCoach";
@@ -11,10 +11,11 @@ import { BookingSuccess } from "./BookingSuccess";
 export type BookingState = {
   step: 1 | 2 | 3 | 4 | 5 | "success";
   lessonTypes: LessonTypeWithCategories[];
-  coaches: UserPublic[];
+  coaches: CoachPublic[];
   selectedType: LessonTypeWithCategories | null;
   selectedCategoryId: string | null;
   selectedCoachId: string | null;
+  mode: "ONLINE" | "IN_PERSON" | null;
   notSureType: boolean;
   notSureCategory: boolean;
   selectedDate: string | null;
@@ -30,6 +31,7 @@ const initialState: BookingState = {
   selectedType: null,
   selectedCategoryId: null,
   selectedCoachId: null,
+  mode: null,
   notSureType: false,
   notSureCategory: false,
   selectedDate: null,
@@ -45,7 +47,7 @@ export function BookPage() {
   useEffect(() => {
     Promise.all([
       apiFetch<{ data: LessonTypeWithCategories[] }>("/api/lessons"),
-      apiFetch<{ data: UserPublic[] }>("/api/coaches"),
+      apiFetch<{ data: CoachPublic[] }>("/api/coaches"),
     ])
       .then(([lessonsRes, coachesRes]) => {
         const coaches = coachesRes.data;

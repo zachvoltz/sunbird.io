@@ -8,6 +8,7 @@ import { lessonRoutes } from "./routes/lessons";
 import { availabilityRoutes } from "./routes/availability";
 import { bookingRoutes } from "./routes/bookings";
 import { coachRoutes } from "./routes/coaches";
+import { coachSettingsRoutes } from "./routes/coach-settings";
 import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
@@ -18,6 +19,9 @@ type Bindings = {
   GOOGLE_REDIRECT_URI: string;
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
+  ZOOM_CLIENT_ID: string;
+  ZOOM_CLIENT_SECRET: string;
+  ZOOM_REDIRECT_URI: string;
   DATABASE_URL: string;
   DB: D1Database;
   ASSETS: { fetch: typeof fetch };
@@ -62,6 +66,7 @@ app.route("/api/lessons", lessonRoutes);
 app.route("/api/availability", availabilityRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/coaches", coachRoutes);
+app.route("/api/coach-settings", coachSettingsRoutes);
 
 // Serve frontend assets for all non-API routes (SPA fallback)
 app.get("*", async (c) => {

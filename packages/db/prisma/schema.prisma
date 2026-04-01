@@ -23,6 +23,7 @@ model User {
   avatarUrl      String?
   bio            String?
   role           String   @default("STUDENT")
+  sessionAddress String?
   referralSource String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -50,11 +51,15 @@ model Session {
 }
 
 model OAuthAccount {
-  id         String @id @default(cuid())
-  provider   String
-  providerId String
-  userId     String
-  user       User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id                   String    @id @default(cuid())
+  provider             String
+  providerId           String
+  userId               String
+  accessToken          String?
+  refreshToken         String?
+  accessTokenExpiresAt DateTime?
+  scopes               String?
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([provider, providerId])
 }
@@ -118,6 +123,10 @@ model Booking {
   startsAt            DateTime
   endsAt              DateTime
   status              String    @default("CONFIRMED")
+  mode                String    @default("IN_PERSON")
+  meetingUrl          String?
+  meetingId           String?
+  meetingProvider     String?
   studentNote         String?
   practiceNotes       String?
   practiceNotesSentAt DateTime?
