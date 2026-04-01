@@ -114,7 +114,7 @@ export function CurriculumEditor() {
     const newNode: Node = {
       id,
       type: "skill",
-      position: { x: 250, y: nodes.length * 120 + 50 },
+      position: { x: 240, y: nodes.length * 120 + 40 },
       data: { title: "New Skill", description: "", color: "iris" } as SkillNodeData,
     };
     setNodes((nds) => [...nds, newNode]);
@@ -265,6 +265,8 @@ export function CurriculumEditor() {
               onNodeClick={onNodeClick}
               onPaneClick={() => setSelectedNode(null)}
               nodeTypes={nodeTypes}
+              snapToGrid
+              snapGrid={[20, 20]}
               fitView
               deleteKeyCode="Delete"
             >
