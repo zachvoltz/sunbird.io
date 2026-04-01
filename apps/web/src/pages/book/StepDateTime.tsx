@@ -50,7 +50,7 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     setLoadingSlots(true);
     setError(null);
     apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}`)
-      .then((res) => setSlots(res.data))
+      .then((res) => setSlots(res.data.sort((a, b) => a.startsAt.localeCompare(b.startsAt))))
       .catch((err) => {
         if (err instanceof ApiError) setError(err.body.error);
         else setError("Failed to load availability");
@@ -91,19 +91,14 @@ export function StepDateTime({ state, update, nextStep }: Props) {
         {dates.map((d) => {
           const { day, date, month } = formatDateLabel(d);
           const isSelected = d === selectedDate;
-          const dayOfWeek = new Date(d + "T12:00:00").getDay();
-          const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
           return (
             <button
               key={d}
               onClick={() => setSelectedDate(d)}
-              disabled={isWeekend}
               className={`flex flex-col items-center shrink-0 w-16 py-3 rounded-card transition-all duration-200 ${
                 isSelected
                   ? "bg-charcoal text-cream"
-                  : isWeekend
-                    ? "text-text-secondary/30 cursor-not-allowed"
-                    : "bg-surface shadow-card text-charcoal hover:shadow-elevated"
+                  : "bg-surface shadow-card text-charcoal hover:shadow-elevated"
               }`}
             >
               <span className="text-[10px] uppercase tracking-wider">{day}</span>
