@@ -93,12 +93,13 @@ async function main() {
     },
   });
 
-  // ─── Availability Slots (weekdays 9am-5pm, 1-hour blocks) ───
+  // ─── Availability Slots (every day, every hour) ───
 
-  for (let day = 1; day <= 5; day++) {
-    for (let hour = 9; hour < 17; hour++) {
+  for (let day = 0; day <= 6; day++) {
+    for (let hour = 0; hour < 24; hour++) {
       const start = `${String(hour).padStart(2, "0")}:00`;
-      const end = `${String(hour + 1).padStart(2, "0")}:00`;
+      const next = (hour + 1) % 24;
+      const end = `${String(next).padStart(2, "0")}:00`;
       await db.availabilitySlot.create({
         data: { dayOfWeek: day, startTime: start, endTime: end, isActive: true },
       });
