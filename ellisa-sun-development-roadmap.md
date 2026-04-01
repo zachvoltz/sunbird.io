@@ -126,7 +126,7 @@ Sunbird is a webapp/PWA that connects students with music teachers for lessons, 
   Intro paragraph + lesson type cards (Voice, Songwriting, Performance, Theory, Poetry in Song). Cards link to individual lesson pages.
   _AC: Cards display correctly in staggered layout. Hover states work._
 
-- [ ] **1C.4 — Individual lesson pages**
+- [x] **1C.4 — Individual lesson pages**
   Template component for `/lessons/[slug]`. Sections: hero banner, "What You'll Explore", "Who This Is For", "What a Session Looks Like", pricing summary, "Book a Lesson" CTA.
   _AC: All 5 lesson pages render from the same template with different content._
 
@@ -273,7 +273,7 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
   `POST /api/bookings/recurring` — student requests a recurring lesson schedule (e.g., weekly on Tuesdays at 4pm with Teacher X). Creates a `RecurringSchedule` record. Generates upcoming `Booking` records for the next N weeks. Payment handled per-session or via subscription.
   _AC: Recurring bookings generated correctly. Teacher can see the recurring pattern. Student can cancel the series or individual sessions._
 
-- [ ] **2C.4 — Booking confirmation email**
+- [x] **2C.4 — Booking confirmation email**
   On booking creation, send confirmation email with date, time, lesson type, teacher name, and calendar invite (`.ics` attachment).
   _AC: User receives email with correct details and downloadable calendar event._
 
@@ -331,27 +331,27 @@ A fully deployed, responsive public-facing PWA shell with landing pages, lesson 
 
 ### 2D++ — Video & Location Integration (Week 7–8)
 
-- [ ] **2D++.1 — Schema: booking mode, meeting fields, coach address, OAuth tokens**
+- [x] **2D++.1 — Schema: booking mode, meeting fields, coach address, OAuth tokens**
   Add `mode` (ONLINE/IN_PERSON), `meetingUrl`, `meetingId`, `meetingProvider` to Booking. Add `sessionAddress` to User. Extend OAuthAccount with `accessToken`, `refreshToken`, `accessTokenExpiresAt`, `scopes`.
   _AC: Migration runs cleanly. Existing bookings default to IN_PERSON._
 
-- [ ] **2D++.2 — Zoom OAuth for coaches**
+- [x] **2D++.2 — Zoom OAuth for coaches**
   Coach settings page at `/coach/settings` with Zoom connect/disconnect. OAuth flow follows existing Google pattern using `arctic` library. Tokens stored in OAuthAccount.
   _AC: Coach can connect Zoom, see "Connected" status, and disconnect. Gear icon on Dashboard links to settings._
 
-- [ ] **2D++.3 — Coach session address**
+- [x] **2D++.3 — Coach session address**
   Text input on coach settings page for in-person lesson address. `PATCH /api/coach-settings` endpoint.
   _AC: Coach can save an address. Address shown to students who book in-person lessons._
 
-- [ ] **2D++.4 — Booking mode selection**
+- [x] **2D++.4 — Booking mode selection**
   Add Online/In-Person radio toggle to StepConfirm in the booking flow. Only show Online option if selected coach has Zoom connected. Send `mode` in booking POST body.
   _AC: Student can choose lesson mode. In-person shows coach address. Online only available when coach has Zoom._
 
-- [ ] **2D++.5 — Auto-create Zoom meeting on booking**
+- [x] **2D++.5 — Auto-create Zoom meeting on booking**
   When an online booking is confirmed, call Zoom API to create a meeting in the coach's account with the student invited. Store `meetingUrl` and `meetingId` on the booking. Delete meeting on cancellation.
   _AC: Online booking automatically creates Zoom meeting. Link available immediately. Cancelled bookings clean up Zoom meeting._
 
-- [ ] **2D++.6 — Display meeting info on session pages**
+- [x] **2D++.6 — Display meeting info on session pages**
   Show "Join Zoom" button on both coach and student session pages for online bookings. Show address for in-person bookings. Include meeting/address info in booking confirmation email.
   _AC: Both parties see the Zoom link or address. Confirmation email includes the relevant info._
 
