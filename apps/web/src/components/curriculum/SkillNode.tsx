@@ -5,6 +5,8 @@ export type SkillNodeData = {
   title: string;
   description?: string;
   color?: string;
+  resources?: any[];
+  drills?: any[];
 };
 
 function SkillNodeComponent({ data, selected }: NodeProps) {

@@ -214,6 +214,23 @@ export interface SessionResourcePublic {
 
 // ─── Curriculum ───
 
+export interface NodeResourcePublic {
+  id: string;
+  nodeId: string;
+  type: SessionResourceType;
+  title: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface PracticeDrillPublic {
+  id: string;
+  nodeId: string;
+  title: string;
+  description: string | null;
+  resourceId: string | null;
+}
+
 export interface CurriculumNodePublic {
   id: string;
   title: string;
@@ -221,6 +238,8 @@ export interface CurriculumNodePublic {
   positionX: number;
   positionY: number;
   color: string | null;
+  resources: NodeResourcePublic[];
+  drills: PracticeDrillPublic[];
 }
 
 export interface CurriculumEdgePublic {

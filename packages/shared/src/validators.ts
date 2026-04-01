@@ -134,6 +134,18 @@ export const unmarkProgressSchema = z.object({
   studentId: z.string().min(1),
 });
 
+export const createNodeResourceSchema = z.object({
+  type: z.enum(["LINK", "PDF", "AUDIO"]),
+  title: z.string().min(1, "Title is required").max(200),
+  url: z.string().url("Must be a valid URL"),
+});
+
+export const createPracticeDrillSchema = z.object({
+  title: z.string().min(1, "Title is required").max(200),
+  description: z.string().max(2000).optional(),
+  resourceId: z.string().optional(),
+});
+
 // ─── Community ───
 
 export const createSongSchema = z.object({

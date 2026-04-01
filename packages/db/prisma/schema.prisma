@@ -178,6 +178,30 @@ model CurriculumNode {
   edgesFrom  CurriculumEdge[]  @relation("edgeFrom")
   edgesTo    CurriculumEdge[]  @relation("edgeTo")
   progress   StudentProgress[]
+  resources  NodeResource[]
+  drills     PracticeDrill[]
+}
+
+model NodeResource {
+  id        String   @id @default(cuid())
+  nodeId    String
+  type      String
+  title     String
+  url       String
+  createdAt DateTime @default(now())
+
+  node CurriculumNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+}
+
+model PracticeDrill {
+  id          String  @id @default(cuid())
+  nodeId      String
+  title       String
+  description String?
+  resourceId  String?
+  sortOrder   Int     @default(0)
+
+  node CurriculumNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
 }
 
 model CurriculumEdge {

@@ -7,6 +7,8 @@ import {
   saveCurriculumGraphSchema,
   markProgressSchema,
   unmarkProgressSchema,
+  createNodeResourceSchema,
+  createPracticeDrillSchema,
 } from "@sunbird/shared";
 
 export const curriculumRoutes = new Hono();
@@ -25,6 +27,21 @@ function serializeCurriculum(c: any) {
       positionX: n.positionX,
       positionY: n.positionY,
       color: n.color,
+      resources: (n.resources ?? []).map((r: any) => ({
+        id: r.id,
+        nodeId: r.nodeId,
+        type: r.type,
+        title: r.title,
+        url: r.url,
+        createdAt: r.createdAt.toISOString(),
+      })),
+      drills: (n.drills ?? []).map((d: any) => ({
+        id: d.id,
+        nodeId: d.nodeId,
+        title: d.title,
+        description: d.description,
+        resourceId: d.resourceId,
+      })),
     })),
     edges: (c.edges ?? []).map((e: any) => ({
       id: e.id,
@@ -55,7 +72,7 @@ curriculumRoutes.get("/:lessonTypeId", requireAuth, requireRole("COACH", "ADMIN"
 
   const curriculum = await db.curriculum.findUnique({
     where: { coachId_lessonTypeId: { coachId: user.id, lessonTypeId } },
-    include: { nodes: { orderBy: { sortOrder: "asc" } }, edges: true },
+    include: { nodes: { orderBy: { sortOrder: "asc" }, include: { resources: true, drills: { orderBy: { sortOrder: "asc" } } } }, edges: true },
   });
 
   if (!curriculum) {
@@ -99,7 +116,7 @@ curriculumRoutes.post("/", requireAuth, requireRole("COACH", "ADMIN"), async (c)
       title: parsed.data.title ?? null,
       description: parsed.data.description ?? null,
     },
-    include: { nodes: true, edges: true },
+    include: { nodes: { include: { resources: true, drills: true } }, edges: true },
   });
 
   return c.json({ data: serializeCurriculum(curriculum) }, 201);
@@ -163,7 +180,7 @@ curriculumRoutes.put("/:curriculumId/graph", requireAuth, requireRole("COACH", "
   // Return updated curriculum
   const updated = await db.curriculum.findUnique({
     where: { id: curriculumId },
-    include: { nodes: { orderBy: { sortOrder: "asc" } }, edges: true },
+    include: { nodes: { orderBy: { sortOrder: "asc" }, include: { resources: true, drills: { orderBy: { sortOrder: "asc" } } } }, edges: true },
   });
 
   return c.json({ data: serializeCurriculum(updated) });
@@ -267,6 +284,87 @@ curriculumRoutes.delete("/:curriculumId/progress", requireAuth, requireRole("COA
   return c.json({ data: { ok: true } });
 });
 
+// ─── Node Resources & Drills ───
+
+// POST /api/curriculum/:curriculumId/nodes/:nodeId/resources
+curriculumRoutes.post("/:curriculumId/nodes/:nodeId/resources", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { curriculumId, nodeId } = c.req.param();
+  const body = await c.req.json();
+  const parsed = createNodeResourceSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+  const node = await db.curriculumNode.findFirst({ where: { id: nodeId, curriculumId } });
+  if (!node) return c.json({ error: "Node not found" }, 404);
+
+  const curriculum = await db.curriculum.findUnique({ where: { id: curriculumId } });
+  if (!curriculum || curriculum.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  const resource = await db.nodeResource.create({
+    data: { nodeId, type: parsed.data.type, title: parsed.data.title, url: parsed.data.url },
+  });
+
+  return c.json({ data: { id: resource.id, nodeId: resource.nodeId, type: resource.type, title: resource.title, url: resource.url, createdAt: resource.createdAt.toISOString() } }, 201);
+});
+
+// DELETE /api/curriculum/:curriculumId/nodes/:nodeId/resources/:resourceId
+curriculumRoutes.delete("/:curriculumId/nodes/:nodeId/resources/:resourceId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { curriculumId, resourceId } = c.req.param();
+  const db = getDb();
+
+  const curriculum = await db.curriculum.findUnique({ where: { id: curriculumId } });
+  if (!curriculum || curriculum.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  await db.nodeResource.delete({ where: { id: resourceId } }).catch(() => {});
+  return c.json({ data: { ok: true } });
+});
+
+// POST /api/curriculum/:curriculumId/nodes/:nodeId/drills
+curriculumRoutes.post("/:curriculumId/nodes/:nodeId/drills", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { curriculumId, nodeId } = c.req.param();
+  const body = await c.req.json();
+  const parsed = createPracticeDrillSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+  const node = await db.curriculumNode.findFirst({ where: { id: nodeId, curriculumId } });
+  if (!node) return c.json({ error: "Node not found" }, 404);
+
+  const curriculum = await db.curriculum.findUnique({ where: { id: curriculumId } });
+  if (!curriculum || curriculum.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  const drill = await db.practiceDrill.create({
+    data: {
+      nodeId,
+      title: parsed.data.title,
+      description: parsed.data.description ?? null,
+      resourceId: parsed.data.resourceId ?? null,
+    },
+  });
+
+  return c.json({ data: { id: drill.id, nodeId: drill.nodeId, title: drill.title, description: drill.description, resourceId: drill.resourceId } }, 201);
+});
+
+// DELETE /api/curriculum/:curriculumId/nodes/:nodeId/drills/:drillId
+curriculumRoutes.delete("/:curriculumId/nodes/:nodeId/drills/:drillId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { curriculumId, drillId } = c.req.param();
+  const db = getDb();
+
+  const curriculum = await db.curriculum.findUnique({ where: { id: curriculumId } });
+  if (!curriculum || curriculum.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  await db.practiceDrill.delete({ where: { id: drillId } }).catch(() => {});
+  return c.json({ data: { ok: true } });
+});
+
 // ─── Student / Public Endpoints ───
 
 // GET /api/curriculum/for-student/:lessonTypeId — student's coach's curriculum + progress
@@ -288,7 +386,7 @@ curriculumRoutes.get("/for-student/:lessonTypeId", requireAuth, async (c) => {
 
   const curriculum = await db.curriculum.findUnique({
     where: { coachId_lessonTypeId: { coachId: recentBooking.coachId, lessonTypeId } },
-    include: { nodes: { orderBy: { sortOrder: "asc" } }, edges: true },
+    include: { nodes: { orderBy: { sortOrder: "asc" }, include: { resources: true, drills: { orderBy: { sortOrder: "asc" } } } }, edges: true },
   });
 
   if (!curriculum) {
@@ -321,7 +419,7 @@ curriculumRoutes.get("/preview/:lessonTypeSlug", async (c) => {
   // Find any curriculum for this lesson type (first coach's)
   const curriculum = await db.curriculum.findFirst({
     where: { lessonTypeId: lessonType.id },
-    include: { nodes: { orderBy: { sortOrder: "asc" } }, edges: true },
+    include: { nodes: { orderBy: { sortOrder: "asc" }, include: { resources: true, drills: { orderBy: { sortOrder: "asc" } } } }, edges: true },
   });
 
   if (!curriculum) {

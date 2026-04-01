@@ -17,7 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { apiFetch } from "@/lib/api";
 import { SkillNode, type SkillNodeData } from "@/components/curriculum/SkillNode";
-import type { CurriculumPublic } from "@sunbird/shared";
+import type { CurriculumPublic, NodeResourcePublic, PracticeDrillPublic, SessionResourceType } from "@sunbird/shared";
 
 type LessonTypeOption = { id: string; title: string };
 
@@ -49,6 +49,18 @@ export function CurriculumEditor() {
   const [status, setStatus] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Node detail state
+  const [nodeResources, setNodeResources] = useState<NodeResourcePublic[]>([]);
+  const [nodeDrills, setNodeDrills] = useState<PracticeDrillPublic[]>([]);
+  const [showResForm, setShowResForm] = useState(false);
+  const [resType, setResType] = useState<SessionResourceType>("LINK");
+  const [resTitle, setResTitle] = useState("");
+  const [resUrl, setResUrl] = useState("");
+  const [showDrillForm, setShowDrillForm] = useState(false);
+  const [drillTitle, setDrillTitle] = useState("");
+  const [drillDesc, setDrillDesc] = useState("");
+  const [drillResourceId, setDrillResourceId] = useState("");
+
   // Load coach's lesson types
   useEffect(() => {
     apiFetch<{ data: { lessonTypeIds: string[]; allLessonTypes: LessonTypeOption[] } }>("/api/coach-settings")
@@ -75,7 +87,7 @@ export function CurriculumEditor() {
             id: n.id,
             type: "skill",
             position: { x: n.positionX, y: n.positionY },
-            data: { title: n.title, description: n.description, color: n.color } as SkillNodeData,
+            data: { title: n.title, description: n.description, color: n.color, resources: n.resources ?? [], drills: n.drills ?? [] } as SkillNodeData,
           })),
         );
         setEdges(
@@ -185,7 +197,67 @@ export function CurriculumEditor() {
     setSelectedNode(null);
   };
 
-  const onNodeClick = useCallback((_: any, node: Node) => setSelectedNode(node), []);
+  const onNodeClick = useCallback((_: any, node: Node) => {
+    setSelectedNode(node);
+    const d = node.data as SkillNodeData;
+    setNodeResources(d.resources ?? []);
+    setNodeDrills(d.drills ?? []);
+    setShowResForm(false);
+    setShowDrillForm(false);
+  }, []);
+
+  const addNodeResource = async () => {
+    if (!curriculumId || !selectedNode || !resTitle.trim() || !resUrl.trim()) return;
+    try {
+      const res = await apiFetch<{ data: NodeResourcePublic }>(
+        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources`,
+        { method: "POST", body: JSON.stringify({ type: resType, title: resTitle.trim(), url: resUrl.trim() }) },
+      );
+      setNodeResources((prev) => [...prev, res.data]);
+      // Also update node data so it persists across selections
+      setNodes((nds) => nds.map((n) =>
+        n.id === selectedNode.id ? { ...n, data: { ...n.data, resources: [...(n.data as SkillNodeData).resources ?? [], res.data] } } : n,
+      ));
+      setResTitle(""); setResUrl(""); setResType("LINK"); setShowResForm(false);
+    } catch {}
+  };
+
+  const deleteNodeResource = async (resourceId: string) => {
+    if (!curriculumId || !selectedNode) return;
+    try {
+      await apiFetch(`/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources/${resourceId}`, { method: "DELETE" });
+      setNodeResources((prev) => prev.filter((r) => r.id !== resourceId));
+      setNodes((nds) => nds.map((n) =>
+        n.id === selectedNode.id ? { ...n, data: { ...n.data, resources: ((n.data as SkillNodeData).resources ?? []).filter((r: any) => r.id !== resourceId) } } : n,
+      ));
+    } catch {}
+  };
+
+  const addDrill = async () => {
+    if (!curriculumId || !selectedNode || !drillTitle.trim()) return;
+    try {
+      const res = await apiFetch<{ data: PracticeDrillPublic }>(
+        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/drills`,
+        { method: "POST", body: JSON.stringify({ title: drillTitle.trim(), description: drillDesc.trim() || undefined, resourceId: drillResourceId || undefined }) },
+      );
+      setNodeDrills((prev) => [...prev, res.data]);
+      setNodes((nds) => nds.map((n) =>
+        n.id === selectedNode.id ? { ...n, data: { ...n.data, drills: [...(n.data as SkillNodeData).drills ?? [], res.data] } } : n,
+      ));
+      setDrillTitle(""); setDrillDesc(""); setDrillResourceId(""); setShowDrillForm(false);
+    } catch {}
+  };
+
+  const deleteDrill = async (drillId: string) => {
+    if (!curriculumId || !selectedNode) return;
+    try {
+      await apiFetch(`/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/drills/${drillId}`, { method: "DELETE" });
+      setNodeDrills((prev) => prev.filter((d) => d.id !== drillId));
+      setNodes((nds) => nds.map((n) =>
+        n.id === selectedNode.id ? { ...n, data: { ...n.data, drills: ((n.data as SkillNodeData).drills ?? []).filter((d: any) => d.id !== drillId) } } : n,
+      ));
+    } catch {}
+  };
 
   const selectedData = selectedNode?.data as SkillNodeData | undefined;
 
@@ -289,7 +361,7 @@ export function CurriculumEditor() {
 
         {/* Node edit panel */}
         {selectedNode && selectedData && (
-          <div className="w-72 shrink-0 border-l border-charcoal/10 bg-surface p-5 space-y-4 overflow-y-auto">
+          <div className="w-80 shrink-0 border-l border-charcoal/10 bg-surface p-5 space-y-5 overflow-y-auto">
             <h3 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
               Edit Skill
             </h3>
@@ -303,10 +375,11 @@ export function CurriculumEditor() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-charcoal mb-1">Description</label>
+              <label className="block text-sm font-medium text-charcoal mb-1">Summary / Goal</label>
               <textarea
                 value={selectedData.description ?? ""}
                 onChange={(e) => updateSelectedNode("description", e.target.value)}
+                placeholder='e.g. "I can sustain a note for 8 counts with consistent tone"'
                 rows={3}
                 className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none resize-none"
               />
@@ -326,6 +399,133 @@ export function CurriculumEditor() {
                 ))}
               </div>
             </div>
+
+            {/* Resources */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+                  Resources
+                </label>
+                {!showResForm && (
+                  <button onClick={() => setShowResForm(true)} className="text-[11px] font-medium text-iris hover:text-iris-hover">
+                    + Add
+                  </button>
+                )}
+              </div>
+              {showResForm && (
+                <div className="space-y-2 mb-3 bg-warm-gray/20 rounded-card p-3">
+                  <select
+                    value={resType}
+                    onChange={(e) => setResType(e.target.value as SessionResourceType)}
+                    className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
+                  >
+                    <option value="LINK">Link</option>
+                    <option value="PDF">PDF</option>
+                    <option value="AUDIO">Audio</option>
+                  </select>
+                  <input
+                    value={resTitle}
+                    onChange={(e) => setResTitle(e.target.value)}
+                    placeholder="Title"
+                    className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
+                  />
+                  <input
+                    value={resUrl}
+                    onChange={(e) => setResUrl(e.target.value)}
+                    placeholder="URL"
+                    className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
+                  />
+                  <div className="flex gap-2">
+                    <button onClick={addNodeResource} disabled={!resTitle.trim() || !resUrl.trim()} className="text-[11px] font-medium text-cream bg-iris px-3 py-1 rounded hover:bg-iris-hover disabled:opacity-50">Add</button>
+                    <button onClick={() => setShowResForm(false)} className="text-[11px] text-text-secondary">Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1">
+                {nodeResources.map((r) => (
+                  <div key={r.id} className="flex items-center gap-2 bg-warm-gray/15 px-2 py-1.5 rounded text-xs">
+                    <span>{r.type === "PDF" ? "\u{1F4C4}" : r.type === "AUDIO" ? "\u{1F3B5}" : "\u{1F517}"}</span>
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate font-medium hover:text-iris">{r.title}</a>
+                    <button onClick={() => deleteNodeResource(r.id)} className="text-coral shrink-0">&times;</button>
+                  </div>
+                ))}
+                {nodeResources.length === 0 && !showResForm && (
+                  <p className="text-[11px] text-text-secondary">No resources yet</p>
+                )}
+              </div>
+            </div>
+
+            {/* Practice Drills */}
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+                  Practice Schedule
+                </label>
+                {!showDrillForm && (
+                  <button onClick={() => setShowDrillForm(true)} className="text-[11px] font-medium text-iris hover:text-iris-hover">
+                    + Add
+                  </button>
+                )}
+              </div>
+              {showDrillForm && (
+                <div className="space-y-2 mb-3 bg-warm-gray/20 rounded-card p-3">
+                  <input
+                    value={drillTitle}
+                    onChange={(e) => setDrillTitle(e.target.value)}
+                    placeholder="Drill name"
+                    className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
+                  />
+                  <textarea
+                    value={drillDesc}
+                    onChange={(e) => setDrillDesc(e.target.value)}
+                    placeholder="Instructions (optional)"
+                    rows={2}
+                    className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded resize-none"
+                  />
+                  {nodeResources.length > 0 && (
+                    <select
+                      value={drillResourceId}
+                      onChange={(e) => setDrillResourceId(e.target.value)}
+                      className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
+                    >
+                      <option value="">Link to resource (optional)</option>
+                      {nodeResources.map((r) => (
+                        <option key={r.id} value={r.id}>{r.title}</option>
+                      ))}
+                    </select>
+                  )}
+                  <div className="flex gap-2">
+                    <button onClick={addDrill} disabled={!drillTitle.trim()} className="text-[11px] font-medium text-cream bg-iris px-3 py-1 rounded hover:bg-iris-hover disabled:opacity-50">Add</button>
+                    <button onClick={() => setShowDrillForm(false)} className="text-[11px] text-text-secondary">Cancel</button>
+                  </div>
+                </div>
+              )}
+              <div className="space-y-1">
+                {nodeDrills.map((d, i) => {
+                  const linkedRes = nodeResources.find((r) => r.id === d.resourceId);
+                  return (
+                    <div key={d.id} className="bg-warm-gray/15 px-2 py-1.5 rounded text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="text-text-secondary">{i + 1}.</span>
+                        <span className="flex-1 font-medium">{d.title}</span>
+                        <button onClick={() => deleteDrill(d.id)} className="text-coral shrink-0">&times;</button>
+                      </div>
+                      {d.description && <p className="text-text-secondary mt-0.5 ml-4">{d.description}</p>}
+                      {linkedRes && (
+                        <a href={linkedRes.url} target="_blank" rel="noopener noreferrer" className="text-iris hover:underline ml-4 block mt-0.5">
+                          {linkedRes.title}
+                        </a>
+                      )}
+                    </div>
+                  );
+                })}
+                {nodeDrills.length === 0 && !showDrillForm && (
+                  <p className="text-[11px] text-text-secondary">No drills yet</p>
+                )}
+              </div>
+            </div>
+
+            <hr className="border-charcoal/10" />
             <button
               onClick={deleteSelected}
               className="text-[12px] font-medium text-coral hover:text-coral/80 transition-colors"
