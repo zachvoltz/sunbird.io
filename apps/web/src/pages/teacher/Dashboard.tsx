@@ -21,7 +21,6 @@ function formatDate(iso: string): string {
     weekday: "short",
     month: "short",
     day: "numeric",
-    timeZone: "America/Chicago",
   });
 }
 
@@ -29,7 +28,6 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Chicago",
   });
 }
 

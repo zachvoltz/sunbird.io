@@ -15,7 +15,6 @@ function formatDate(iso: string): string {
     month: "long",
     day: "numeric",
     year: "numeric",
-    timeZone: "America/Chicago",
   });
 }
 
@@ -23,7 +22,6 @@ function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Chicago",
   });
 }
 
@@ -31,7 +29,6 @@ function formatTimestamp(iso: string): string {
   return new Date(iso).toLocaleTimeString("en-US", {
     hour: "numeric",
     minute: "2-digit",
-    timeZone: "America/Chicago",
   });
 }
 
