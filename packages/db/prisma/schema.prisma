@@ -43,6 +43,7 @@ model User {
   addedResources     SessionResource[]
   coachAvailability  CoachAvailability[]
   coachLessonTypes   CoachLessonType[]
+  coachResources     CoachResource[]     @relation("coachResources")
   coachCurricula     Curriculum[]        @relation("coachCurricula")
   studentProgress    StudentProgress[]   @relation("studentProgress")
   coachProgressMarks StudentProgress[]   @relation("coachProgress")
@@ -178,19 +179,31 @@ model CurriculumNode {
   edgesFrom  CurriculumEdge[]  @relation("edgeFrom")
   edgesTo    CurriculumEdge[]  @relation("edgeTo")
   progress   StudentProgress[]
-  resources  NodeResource[]
-  drills     PracticeDrill[]
+  resourceLinks NodeResourceLink[]
+  drills        PracticeDrill[]
 }
 
-model NodeResource {
+model CoachResource {
   id        String   @id @default(cuid())
-  nodeId    String
+  coachId   String
   type      String
   title     String
   url       String
   createdAt DateTime @default(now())
 
-  node CurriculumNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  coach     User               @relation("coachResources", fields: [coachId], references: [id], onDelete: Cascade)
+  nodeLinks NodeResourceLink[]
+}
+
+model NodeResourceLink {
+  id         String @id @default(cuid())
+  nodeId     String
+  resourceId String
+
+  node     CurriculumNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  resource CoachResource  @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, resourceId])
 }
 
 model PracticeDrill {

@@ -117,6 +117,74 @@ coachSettingsRoutes.put("/lesson-types", requireAuth, requireRole("COACH", "ADMI
   return c.json({ data: { ok: true } });
 });
 
+// ─── Coach Resource Library ───
+
+// GET /api/coach-settings/resources?q=search — search coach's resource library
+coachSettingsRoutes.get("/resources", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const q = c.req.query("q") ?? "";
+  const db = getDb();
+
+  const where: any = { coachId: user.id };
+  if (q) {
+    where.title = { contains: q };
+  }
+
+  const resources = await db.coachResource.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+    take: 20,
+  });
+
+  return c.json({
+    data: resources.map((r: any) => ({
+      id: r.id,
+      type: r.type,
+      title: r.title,
+      url: r.url,
+      createdAt: r.createdAt.toISOString(),
+    })),
+  });
+});
+
+// POST /api/coach-settings/resources — create a resource in the library
+coachSettingsRoutes.post("/resources", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const { createNodeResourceSchema } = await import("@sunbird/shared");
+  const parsed = createNodeResourceSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+  const resource = await db.coachResource.create({
+    data: {
+      coachId: user.id,
+      type: parsed.data.type,
+      title: parsed.data.title,
+      url: parsed.data.url,
+    },
+  });
+
+  return c.json({
+    data: { id: resource.id, type: resource.type, title: resource.title, url: resource.url, createdAt: resource.createdAt.toISOString() },
+  }, 201);
+});
+
+// DELETE /api/coach-settings/resources/:id — delete from library
+coachSettingsRoutes.delete("/resources/:id", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { id } = c.req.param();
+  const db = getDb();
+
+  const resource = await db.coachResource.findFirst({ where: { id, coachId: user.id } });
+  if (!resource) return c.json({ error: "Resource not found" }, 404);
+
+  await db.coachResource.delete({ where: { id } });
+  return c.json({ data: { ok: true } });
+});
+
 // GET /api/coach-settings/zoom/connect — initiate Zoom OAuth
 coachSettingsRoutes.get("/zoom/connect", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";

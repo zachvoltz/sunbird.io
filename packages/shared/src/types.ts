@@ -214,9 +214,8 @@ export interface SessionResourcePublic {
 
 // ─── Curriculum ───
 
-export interface NodeResourcePublic {
+export interface CoachResourcePublic {
   id: string;
-  nodeId: string;
   type: SessionResourceType;
   title: string;
   url: string;
@@ -238,7 +237,7 @@ export interface CurriculumNodePublic {
   positionX: number;
   positionY: number;
   color: string | null;
-  resources: NodeResourcePublic[];
+  resources: CoachResourcePublic[];
   drills: PracticeDrillPublic[];
 }
 

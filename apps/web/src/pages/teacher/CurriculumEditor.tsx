@@ -17,7 +17,7 @@ import {
 import "@xyflow/react/dist/style.css";
 import { apiFetch } from "@/lib/api";
 import { SkillNode, type SkillNodeData } from "@/components/curriculum/SkillNode";
-import type { CurriculumPublic, NodeResourcePublic, PracticeDrillPublic, SessionResourceType } from "@sunbird/shared";
+import type { CurriculumPublic, CoachResourcePublic, PracticeDrillPublic, SessionResourceType } from "@sunbird/shared";
 
 type LessonTypeOption = { id: string; title: string };
 
@@ -50,12 +50,19 @@ export function CurriculumEditor() {
   const [loading, setLoading] = useState(true);
 
   // Node detail state
-  const [nodeResources, setNodeResources] = useState<NodeResourcePublic[]>([]);
+  const [nodeResources, setNodeResources] = useState<CoachResourcePublic[]>([]);
   const [nodeDrills, setNodeDrills] = useState<PracticeDrillPublic[]>([]);
-  const [showResForm, setShowResForm] = useState(false);
-  const [resType, setResType] = useState<SessionResourceType>("LINK");
-  const [resTitle, setResTitle] = useState("");
-  const [resUrl, setResUrl] = useState("");
+
+  // Resource search state
+  const [resSearch, setResSearch] = useState("");
+  const [resSearchResults, setResSearchResults] = useState<CoachResourcePublic[]>([]);
+  const [showResSearch, setShowResSearch] = useState(false);
+  const [showNewResForm, setShowNewResForm] = useState(false);
+  const [newResType, setNewResType] = useState<SessionResourceType>("LINK");
+  const [newResTitle, setNewResTitle] = useState("");
+  const [newResUrl, setNewResUrl] = useState("");
+
+  // Drill state
   const [showDrillForm, setShowDrillForm] = useState(false);
   const [drillTitle, setDrillTitle] = useState("");
   const [drillDesc, setDrillDesc] = useState("");
@@ -202,27 +209,66 @@ export function CurriculumEditor() {
     const d = node.data as SkillNodeData;
     setNodeResources(d.resources ?? []);
     setNodeDrills(d.drills ?? []);
-    setShowResForm(false);
+    setShowResSearch(false);
+    setShowNewResForm(false);
     setShowDrillForm(false);
+    setResSearch("");
+    setResSearchResults([]);
   }, []);
 
-  const addNodeResource = async () => {
-    if (!curriculumId || !selectedNode || !resTitle.trim() || !resUrl.trim()) return;
+  // Search coach resource library
+  const searchResources = async (query: string) => {
+    setResSearch(query);
+    if (!query.trim()) { setResSearchResults([]); return; }
     try {
-      const res = await apiFetch<{ data: NodeResourcePublic }>(
-        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources`,
-        { method: "POST", body: JSON.stringify({ type: resType, title: resTitle.trim(), url: resUrl.trim() }) },
+      const res = await apiFetch<{ data: CoachResourcePublic[] }>(
+        `/api/coach-settings/resources?q=${encodeURIComponent(query)}`,
       );
-      setNodeResources((prev) => [...prev, res.data]);
-      // Also update node data so it persists across selections
-      setNodes((nds) => nds.map((n) =>
-        n.id === selectedNode.id ? { ...n, data: { ...n.data, resources: [...(n.data as SkillNodeData).resources ?? [], res.data] } } : n,
-      ));
-      setResTitle(""); setResUrl(""); setResType("LINK"); setShowResForm(false);
+      // Exclude already-linked resources
+      const linkedIds = new Set(nodeResources.map((r) => r.id));
+      setResSearchResults(res.data.filter((r) => !linkedIds.has(r.id)));
     } catch {}
   };
 
-  const deleteNodeResource = async (resourceId: string) => {
+  // Link existing resource to node
+  const linkResourceToNode = async (resource: CoachResourcePublic) => {
+    if (!curriculumId || !selectedNode) return;
+    try {
+      await apiFetch(
+        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources`,
+        { method: "POST", body: JSON.stringify({ resourceId: resource.id }) },
+      );
+      setNodeResources((prev) => [...prev, resource]);
+      setNodes((nds) => nds.map((n) =>
+        n.id === selectedNode.id ? { ...n, data: { ...n.data, resources: [...(n.data as SkillNodeData).resources ?? [], resource] } } : n,
+      ));
+      setResSearch(""); setResSearchResults([]); setShowResSearch(false);
+    } catch {}
+  };
+
+  // Create new resource in library and link to node
+  const createAndLinkResource = async () => {
+    if (!curriculumId || !selectedNode || !newResTitle.trim() || !newResUrl.trim()) return;
+    try {
+      // Create in library
+      const res = await apiFetch<{ data: CoachResourcePublic }>(
+        "/api/coach-settings/resources",
+        { method: "POST", body: JSON.stringify({ type: newResType, title: newResTitle.trim(), url: newResUrl.trim() }) },
+      );
+      // Link to node
+      await apiFetch(
+        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources`,
+        { method: "POST", body: JSON.stringify({ resourceId: res.data.id }) },
+      );
+      setNodeResources((prev) => [...prev, res.data]);
+      setNodes((nds) => nds.map((n) =>
+        n.id === selectedNode.id ? { ...n, data: { ...n.data, resources: [...(n.data as SkillNodeData).resources ?? [], res.data] } } : n,
+      ));
+      setNewResTitle(""); setNewResUrl(""); setNewResType("LINK"); setShowNewResForm(false); setShowResSearch(false);
+    } catch {}
+  };
+
+  const unlinkResource = async (resourceId: string) => {
     if (!curriculumId || !selectedNode) return;
     try {
       await apiFetch(`/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources/${resourceId}`, { method: "DELETE" });
@@ -406,17 +452,57 @@ export function CurriculumEditor() {
                 <label className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
                   Resources
                 </label>
-                {!showResForm && (
-                  <button onClick={() => setShowResForm(true)} className="text-[11px] font-medium text-iris hover:text-iris-hover">
+                {!showResSearch && (
+                  <button onClick={() => setShowResSearch(true)} className="text-[11px] font-medium text-iris hover:text-iris-hover">
                     + Add
                   </button>
                 )}
               </div>
-              {showResForm && (
+
+              {/* Search / create combobox */}
+              {showResSearch && !showNewResForm && (
+                <div className="mb-3">
+                  <input
+                    value={resSearch}
+                    onChange={(e) => searchResources(e.target.value)}
+                    placeholder="Search your resources..."
+                    autoFocus
+                    className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded mb-1"
+                  />
+                  {resSearchResults.length > 0 && (
+                    <div className="border border-charcoal/10 rounded bg-cream max-h-32 overflow-y-auto">
+                      {resSearchResults.map((r) => (
+                        <button
+                          key={r.id}
+                          onClick={() => linkResourceToNode(r)}
+                          className="w-full text-left px-2 py-1.5 text-xs hover:bg-warm-gray/30 flex items-center gap-1.5"
+                        >
+                          <span>{r.type === "PDF" ? "\u{1F4C4}" : r.type === "AUDIO" ? "\u{1F3B5}" : "\u{1F517}"}</span>
+                          <span className="truncate">{r.title}</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {resSearch.trim() && resSearchResults.length === 0 && (
+                    <p className="text-[10px] text-text-secondary mt-1">No matches.</p>
+                  )}
+                  <div className="flex gap-2 mt-2">
+                    <button onClick={() => { setShowNewResForm(true); setNewResTitle(resSearch); }} className="text-[11px] font-medium text-iris hover:text-iris-hover">
+                      Create new resource
+                    </button>
+                    <button onClick={() => { setShowResSearch(false); setResSearch(""); setResSearchResults([]); }} className="text-[11px] text-text-secondary">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* New resource form */}
+              {showNewResForm && (
                 <div className="space-y-2 mb-3 bg-warm-gray/20 rounded-card p-3">
                   <select
-                    value={resType}
-                    onChange={(e) => setResType(e.target.value as SessionResourceType)}
+                    value={newResType}
+                    onChange={(e) => setNewResType(e.target.value as SessionResourceType)}
                     className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
                   >
                     <option value="LINK">Link</option>
@@ -424,32 +510,34 @@ export function CurriculumEditor() {
                     <option value="AUDIO">Audio</option>
                   </select>
                   <input
-                    value={resTitle}
-                    onChange={(e) => setResTitle(e.target.value)}
+                    value={newResTitle}
+                    onChange={(e) => setNewResTitle(e.target.value)}
                     placeholder="Title"
                     className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
                   />
                   <input
-                    value={resUrl}
-                    onChange={(e) => setResUrl(e.target.value)}
+                    value={newResUrl}
+                    onChange={(e) => setNewResUrl(e.target.value)}
                     placeholder="URL"
                     className="w-full px-2 py-1.5 text-xs bg-cream border border-charcoal/10 rounded"
                   />
                   <div className="flex gap-2">
-                    <button onClick={addNodeResource} disabled={!resTitle.trim() || !resUrl.trim()} className="text-[11px] font-medium text-cream bg-iris px-3 py-1 rounded hover:bg-iris-hover disabled:opacity-50">Add</button>
-                    <button onClick={() => setShowResForm(false)} className="text-[11px] text-text-secondary">Cancel</button>
+                    <button onClick={createAndLinkResource} disabled={!newResTitle.trim() || !newResUrl.trim()} className="text-[11px] font-medium text-cream bg-iris px-3 py-1 rounded hover:bg-iris-hover disabled:opacity-50">Create & Add</button>
+                    <button onClick={() => { setShowNewResForm(false); setNewResTitle(""); setNewResUrl(""); }} className="text-[11px] text-text-secondary">Cancel</button>
                   </div>
                 </div>
               )}
+
+              {/* Linked resources list */}
               <div className="space-y-1">
                 {nodeResources.map((r) => (
                   <div key={r.id} className="flex items-center gap-2 bg-warm-gray/15 px-2 py-1.5 rounded text-xs">
                     <span>{r.type === "PDF" ? "\u{1F4C4}" : r.type === "AUDIO" ? "\u{1F3B5}" : "\u{1F517}"}</span>
                     <a href={r.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate font-medium hover:text-iris">{r.title}</a>
-                    <button onClick={() => deleteNodeResource(r.id)} className="text-coral shrink-0">&times;</button>
+                    <button onClick={() => unlinkResource(r.id)} className="text-coral shrink-0">&times;</button>
                   </div>
                 ))}
-                {nodeResources.length === 0 && !showResForm && (
+                {nodeResources.length === 0 && !showResSearch && !showNewResForm && (
                   <p className="text-[11px] text-text-secondary">No resources yet</p>
                 )}
               </div>
