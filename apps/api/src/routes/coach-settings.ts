@@ -123,9 +123,10 @@ coachSettingsRoutes.get("/zoom/cb", requireAuth, async (c) => {
     c.header("Set-Cookie", `zoom_oauth_verifier=; ${clearOpts}`, { append: true });
 
     return c.redirect("/coach/settings?zoom=connected");
-  } catch (err) {
+  } catch (err: any) {
     console.error("Zoom OAuth error:", err);
-    return c.redirect("/coach/settings?error=oauth_failed");
+    const msg = encodeURIComponent(err?.message ?? "unknown");
+    return c.redirect(`/coach/settings?error=oauth_failed&detail=${msg}`);
   }
 });
 

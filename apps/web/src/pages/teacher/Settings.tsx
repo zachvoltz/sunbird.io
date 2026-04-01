@@ -17,6 +17,7 @@ export function CoachSettings() {
 
   const zoomStatus = searchParams.get("zoom");
   const error = searchParams.get("error");
+  const errorDetail = searchParams.get("detail");
 
   useEffect(() => {
     apiFetch<{ data: CoachSettings }>("/api/coach-settings")
@@ -76,7 +77,7 @@ export function CoachSettings() {
 
         {error === "oauth_failed" && (
           <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-lg mb-8">
-            Zoom connection failed. Please try again.
+            Zoom connection failed. {errorDetail && <span className="block mt-1 text-xs opacity-75">{errorDetail}</span>}
           </div>
         )}
 
