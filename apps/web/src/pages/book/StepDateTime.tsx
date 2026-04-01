@@ -50,7 +50,15 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     setLoadingSlots(true);
     setError(null);
     apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}`)
-      .then((res) => setSlots(res.data.sort((a, b) => a.startsAt.localeCompare(b.startsAt))))
+      .then((res) => {
+            // Sort by local hour in Central Time (12AM first, 11PM last)
+            const sorted = res.data.sort((a, b) => {
+              const ha = new Date(a.startsAt).toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Chicago" });
+              const hb = new Date(b.startsAt).toLocaleString("en-US", { hour: "numeric", hour12: false, timeZone: "America/Chicago" });
+              return Number(ha) - Number(hb);
+            });
+            setSlots(sorted);
+          })
       .catch((err) => {
         if (err instanceof ApiError) setError(err.body.error);
         else setError("Failed to load availability");
