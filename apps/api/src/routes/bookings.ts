@@ -644,12 +644,10 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
 
   const body = await c.req.json();
 
-  // First tracks call for this user — create a new CF session with the SDP
+  // Create a new CF session if user doesn't have one yet
   if (!mySessionId) {
     const newSession = await callsService.createSession();
     mySessionId = newSession.sessionId;
-
-    // Store this user's session ID
     sessions[user.id] = mySessionId;
     await db.booking.update({
       where: { id },
@@ -657,11 +655,31 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
     });
   }
 
-  const result = await callsService.newTracks(mySessionId, body);
+  // Try to push/pull tracks; if session is stale (410), create a fresh one and retry
+  let result;
+  try {
+    result = await callsService.newTracks(mySessionId, body);
+  } catch (err: any) {
+    if (err.message?.includes("410")) {
+      const freshSession = await callsService.createSession();
+      mySessionId = freshSession.sessionId;
+      sessions[user.id] = mySessionId;
+      await db.booking.update({
+        where: { id },
+        data: { callSessionId: JSON.stringify(sessions) },
+      });
+      result = await callsService.newTracks(mySessionId, body);
+    } else {
+      throw err;
+    }
+  }
 
   // Return the peer's session ID alongside the track result so client can pull
   const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
-  const peerSessionId = peerId ? (sessions[peerId] ?? null) : null;
+  // Re-read sessions from DB in case peer joined concurrently
+  const freshBooking = await db.booking.findUnique({ where: { id } });
+  const latestSessions = parseCallSessions(freshBooking?.callSessionId ?? null);
+  const peerSessionId = peerId ? (latestSessions[peerId] ?? null) : null;
 
   return c.json({ data: { ...result, mySessionId, peerSessionId } });
 });
