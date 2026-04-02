@@ -27,7 +27,6 @@ coachRoutes.get("/", async (c) => {
       coverImageUrl: true,
       isPublished: true,
       sessionAddress: true,
-      oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
       coachCategories: { select: { categoryId: true } },
     },
     orderBy: { name: "asc" },
@@ -51,7 +50,6 @@ coachRoutes.get("/", async (c) => {
       coverImageUrl: c.coverImageUrl,
       isPublished: c.isPublished,
       sessionAddress: c.sessionAddress,
-      hasZoomConnected: c.oauthAccounts.length > 0,
       categoryIds: c.coachCategories.map((cc: any) => cc.categoryId),
     })),
   });
@@ -75,7 +73,6 @@ coachRoutes.get("/:slug", async (c) => {
       credentials: true,
       socialLinks: true,
       sessionAddress: true,
-      oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
       coachCategories: {
         include: { category: true },
       },
@@ -107,7 +104,6 @@ coachRoutes.get("/:slug", async (c) => {
       credentials: (coach as any).credentials,
       socialLinks,
       sessionAddress: (coach as any).sessionAddress,
-      hasZoomConnected: coach.oauthAccounts.length > 0,
       categories: (coach as any).coachCategories.map((cc: any) => {
         const skillTreeCount = (coach as any).coachSkillTrees.filter((st: any) => st.categoryId === cc.categoryId).length;
         return {

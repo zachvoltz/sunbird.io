@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { VideoCall } from "@/components/session/VideoCall";
 import type {
   BookingPublic,
   SessionMessagePublic,
@@ -175,6 +176,17 @@ export function StudentSession() {
           </span>
         </div>
 
+        {/* Video call for online sessions */}
+        {booking.mode === "ONLINE" && booking.status === "CONFIRMED" && (
+          <div className="mb-8">
+            <VideoCall
+              bookingId={bookingId!}
+              localUserName={user?.name ?? "You"}
+              remoteUserName={coach?.name ?? "Coach"}
+            />
+          </div>
+        )}
+
         {/* Two-column layout */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           {/* Left column — Lesson, Coach, Resources */}
@@ -200,16 +212,6 @@ export function StudentSession() {
                   {formatDate(booking.startsAt)}<br />
                   {formatTime(booking.startsAt)} &ndash; {formatTime(booking.endsAt)}
                 </p>
-                {booking.mode === "ONLINE" && booking.meetingUrl && (
-                  <a
-                    href={booking.meetingUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-4 block text-[13px] font-medium text-cream bg-iris px-4 py-2 rounded-card hover:bg-iris-hover transition-colors text-center"
-                  >
-                    Join Zoom Meeting
-                  </a>
-                )}
                 {booking.mode === "IN_PERSON" && booking.coach?.bio && (
                   <p className="text-[12px] text-text-secondary mt-3">
                     In person

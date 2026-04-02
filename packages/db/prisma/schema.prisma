@@ -388,6 +388,7 @@ model Booking {
   meetingUrl          String?
   meetingId           String?
   meetingProvider     String?
+  callSessionId       String?
   studentNote         String?
   practiceNotes       String?
   practiceNotesSentAt DateTime?

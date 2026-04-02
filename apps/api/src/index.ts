@@ -20,9 +20,8 @@ type Bindings = {
   GOOGLE_REDIRECT_URI: string;
   RESEND_API_KEY: string;
   EMAIL_FROM: string;
-  ZOOM_CLIENT_ID: string;
-  ZOOM_CLIENT_SECRET: string;
-  ZOOM_REDIRECT_URI: string;
+  CF_CALLS_APP_ID: string;
+  CF_CALLS_APP_TOKEN: string;
   DATABASE_URL: string;
   DB: D1Database;
   ASSETS: { fetch: typeof fetch };

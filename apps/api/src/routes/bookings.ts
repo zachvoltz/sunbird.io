@@ -3,8 +3,7 @@ import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createBookingSchema, createRecurringScheduleSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
-import { createZoomService } from "../services/zoom.service";
-import { createZoomClient } from "../lib/oauth";
+import { createCallsService } from "../services/calls.service";
 
 const LESSON_DURATION_MINS = 60;
 
@@ -168,35 +167,6 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     }
   }
 
-  // If online, create Zoom meeting before persisting the booking
-  let meetingUrl: string | null = null;
-  let meetingId: string | null = null;
-  let meetingProvider: string | null = null;
-
-  if (mode === "ONLINE" && coachId) {
-    try {
-      const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
-      const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
-      const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
-      const zoom = createZoomClient(clientId, clientSecret, redirectUri);
-      const zoomService = createZoomService(db, zoom);
-
-      const meeting = await zoomService.createMeeting(coachId, {
-        topic: `Sunbird: ${category.title} lesson`,
-        startTime: startsAt.toISOString(),
-        duration: LESSON_DURATION_MINS,
-        inviteeEmail: user.email,
-      });
-
-      meetingUrl = meeting.joinUrl;
-      meetingId = meeting.meetingId;
-      meetingProvider = "zoom";
-    } catch (err) {
-      console.error("Zoom meeting creation failed:", err);
-      return c.json({ error: "Failed to create Zoom meeting. Please ensure your coach has Zoom connected." }, 400);
-    }
-  }
-
   const booking = await db.booking.create({
     data: {
       userId: user.id,
@@ -208,9 +178,6 @@ bookingRoutes.post("/", requireAuth, async (c) => {
       startsAt,
       endsAt,
       mode,
-      meetingUrl,
-      meetingId,
-      meetingProvider,
       studentNote: studentNote ?? null,
       status: "CONFIRMED",
     },
@@ -361,18 +328,6 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     data: { status: "CANCELLED" },
     include: bookingInclude,
   });
-
-  // Delete Zoom meeting if online (fire and forget)
-  if (booking.meetingId && booking.meetingProvider === "zoom" && booking.coachId) {
-    try {
-      const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
-      const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
-      const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
-      const zoom = createZoomClient(clientId, clientSecret, redirectUri);
-      const zoomService = createZoomService(db, zoom);
-      zoomService.deleteMeeting(booking.coachId, booking.meetingId).catch(console.error);
-    } catch {}
-  }
 
   // Send cancellation email
   try {
@@ -548,30 +503,6 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
   for (const date of dates) {
     const endsAt = new Date(date.getTime() + LESSON_DURATION_MINS * 60 * 1000);
 
-    // Create Zoom meeting if online
-    let meetingUrl: string | null = null;
-    let meetingId: string | null = null;
-    let meetingProvider: string | null = null;
-
-    if (mode === "ONLINE") {
-      try {
-        const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
-        const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
-        const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
-        const zoom = createZoomClient(clientId, clientSecret, redirectUri);
-        const zoomService = createZoomService(db, zoom);
-        const meeting = await zoomService.createMeeting(coachId, {
-          topic: `Sunbird: ${category.title} lesson`,
-          startTime: date.toISOString(),
-          duration: LESSON_DURATION_MINS,
-          inviteeEmail: user.email,
-        });
-        meetingUrl = meeting.joinUrl;
-        meetingId = meeting.meetingId;
-        meetingProvider = "zoom";
-      } catch {}
-    }
-
     const booking = await db.booking.create({
       data: {
         userId: user.id,
@@ -583,9 +514,6 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
         startsAt: date,
         endsAt,
         mode,
-        meetingUrl,
-        meetingId,
-        meetingProvider,
         studentNote: studentNote ?? null,
         scheduleId: schedule.id,
         status: "CONFIRMED",
@@ -646,21 +574,116 @@ bookingRoutes.post("/recurring/:scheduleId/cancel", requireAuth, async (c) => {
 
   for (const booking of futureBookings) {
     await db.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
-
-    // Delete Zoom meeting if online
-    if (booking.meetingId && booking.meetingProvider === "zoom" && booking.coachId) {
-      try {
-        const clientId = (c.env as any)?.ZOOM_CLIENT_ID || process.env.ZOOM_CLIENT_ID || "";
-        const clientSecret = (c.env as any)?.ZOOM_CLIENT_SECRET || process.env.ZOOM_CLIENT_SECRET || "";
-        const redirectUri = (c.env as any)?.ZOOM_REDIRECT_URI || process.env.ZOOM_REDIRECT_URI || "";
-        const zoom = createZoomClient(clientId, clientSecret, redirectUri);
-        const zoomService = createZoomService(db, zoom);
-        zoomService.deleteMeeting(booking.coachId, booking.meetingId).catch(() => {});
-      } catch {}
-    }
   }
 
   return c.json({ data: { ok: true, cancelledCount: futureBookings.length } });
+});
+
+// ─── Video Call ───
+
+// POST /api/bookings/:id/call/join — get or create a Cloudflare Calls session for this booking
+bookingRoutes.post("/:id/call/join", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const booking = await db.booking.findUnique({ where: { id } });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+
+  if (user.role !== "ADMIN" && booking.userId !== user.id && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  if (booking.mode !== "ONLINE") {
+    return c.json({ error: "This is not an online session" }, 400);
+  }
+
+  if (booking.status !== "CONFIRMED") {
+    return c.json({ error: "This session is not active" }, 400);
+  }
+
+  const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
+  const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
+
+  let sessionId = booking.callSessionId;
+
+  // Create a new Calls session on first join
+  if (!sessionId) {
+    const callsService = createCallsService(appId, appToken);
+    const session = await callsService.createSession();
+    sessionId = session.sessionId;
+
+    await db.booking.update({
+      where: { id },
+      data: { callSessionId: sessionId },
+    });
+  }
+
+  // Return session info + the peer's user ID so client knows which tracks to pull
+  const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
+
+  return c.json({
+    data: {
+      sessionId,
+      appId,
+      userId: user.id,
+      peerId,
+    },
+  });
+});
+
+// POST /api/bookings/:id/call/tracks — proxy SDP negotiation to Cloudflare Calls
+bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const booking = await db.booking.findUnique({ where: { id } });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+
+  if (user.role !== "ADMIN" && booking.userId !== user.id && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  if (!booking.callSessionId) {
+    return c.json({ error: "Call session not started" }, 400);
+  }
+
+  const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
+  const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
+  const callsService = createCallsService(appId, appToken);
+
+  const body = await c.req.json();
+  const result = await callsService.newTracks(booking.callSessionId, body);
+
+  return c.json({ data: result });
+});
+
+// PUT /api/bookings/:id/call/renegotiate — proxy SDP renegotiation to Cloudflare Calls
+bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const booking = await db.booking.findUnique({ where: { id } });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+
+  if (user.role !== "ADMIN" && booking.userId !== user.id && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  if (!booking.callSessionId) {
+    return c.json({ error: "Call session not started" }, 400);
+  }
+
+  const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
+  const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
+  const callsService = createCallsService(appId, appToken);
+
+  const body = await c.req.json();
+  const result = await callsService.renegotiate(booking.callSessionId, body.sessionDescription);
+
+  return c.json({ data: result });
 });
 
 // ─── Session Messages ───

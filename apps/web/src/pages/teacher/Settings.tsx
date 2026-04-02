@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import type { CoachAvailabilitySlot } from "@sunbird/shared";
 
@@ -17,7 +17,6 @@ type CoachSettingsData = {
   socialLinks: string | null;
   isPublished: boolean;
   sessionAddress: string | null;
-  zoomConnected: boolean;
   availability: CoachAvailabilitySlot[];
   categoryIds: string[];
   allCategories: CategoryOption[];
@@ -40,11 +39,6 @@ export function CoachSettings() {
   const [saving, setSaving] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [searchParams] = useSearchParams();
-
-  const zoomStatus = searchParams.get("zoom");
-  const error = searchParams.get("error");
-  const errorDetail = searchParams.get("detail");
 
   useEffect(() => {
     apiFetch<{ data: CoachSettingsData }>("/api/coach-settings")
@@ -141,14 +135,6 @@ export function CoachSettings() {
     } catch {} finally { setSaving(null); }
   };
 
-  const disconnectZoom = async () => {
-    if (!confirm("Disconnect your Zoom account?")) return;
-    try {
-      await apiFetch("/api/coach-settings/zoom/disconnect", { method: "POST" });
-      setSettings((s) => s ? { ...s, zoomConnected: false } : s);
-    } catch {}
-  };
-
   const saveProfile = async () => {
     setSaving("profile");
     try {
@@ -195,18 +181,6 @@ export function CoachSettings() {
         <h1 className="font-display text-3xl md:text-4xl font-bold mt-8 mb-10">
           Settings
         </h1>
-
-        {error === "oauth_failed" && (
-          <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-lg mb-8">
-            Zoom connection failed. {errorDetail && <span className="block mt-1 text-xs opacity-75">{errorDetail}</span>}
-          </div>
-        )}
-
-        {zoomStatus === "connected" && (
-          <div className="bg-sage/10 text-sage text-sm px-4 py-3 rounded-lg mb-8">
-            Zoom connected successfully!
-          </div>
-        )}
 
         {/* Public Profile */}
         <section className="mb-12">
@@ -425,41 +399,6 @@ export function CoachSettings() {
           </div>
         </section>
 
-        {/* Video Platform */}
-        <section>
-          <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-            Video Platform
-          </h2>
-          <div className="bg-surface rounded-card shadow-card p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-display text-base font-semibold mb-1">Zoom</h3>
-                {settings?.zoomConnected ? (
-                  <p className="text-sm text-sage">Connected</p>
-                ) : (
-                  <p className="text-sm text-text-secondary">
-                    Connect your Zoom account to offer online lessons.
-                  </p>
-                )}
-              </div>
-              {settings?.zoomConnected ? (
-                <button
-                  onClick={disconnectZoom}
-                  className="text-[12px] font-medium text-coral hover:text-coral/80 transition-colors"
-                >
-                  Disconnect
-                </button>
-              ) : (
-                <a
-                  href="/api/coach-settings/zoom/connect"
-                  className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors inline-block"
-                >
-                  Connect Zoom
-                </a>
-              )}
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   );

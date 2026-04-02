@@ -49,8 +49,6 @@ export type BookingStatus = "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";
 
 export type BookingMode = "ONLINE" | "IN_PERSON";
 
-export type MeetingProvider = "zoom" | "google_meet";
-
 export type SubscriptionStatus = "ACTIVE" | "PAST_DUE" | "CANCELLED" | "PAUSED";
 
 export type ContactSubject =
@@ -92,7 +90,6 @@ export interface CoachPublic extends UserPublic {
   coverImageUrl: string | null;
   isPublished: boolean;
   sessionAddress: string | null;
-  hasZoomConnected: boolean;
   categoryIds: string[];
 }
 
@@ -156,7 +153,6 @@ export interface CoachProfilePublic {
   credentials: string | null;
   socialLinks: Record<string, string> | null;
   sessionAddress: string | null;
-  hasZoomConnected: boolean;
   categories: (CategoryPublic & { skillTreeCount: number })[];
 }
 
