@@ -55,6 +55,61 @@ coachRoutes.get("/", async (c) => {
   });
 });
 
+// GET /api/coaches/students — list coach's students (coach/admin)
+// NOTE: Must be before /:slug to avoid being caught by the wildcard
+coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const coachFilter = user.role === "COACH" ? { coachId: user.id } : {};
+
+  const bookings = await db.booking.findMany({
+    where: {
+      ...coachFilter,
+      status: { not: "CANCELLED" },
+    },
+    select: {
+      userId: true,
+      startsAt: true,
+      user: { select: { id: true, name: true, avatarUrl: true, bio: true, email: true } },
+    },
+    orderBy: { startsAt: "desc" },
+  });
+
+  const studentMap = new Map<string, {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    bio: string | null;
+    email: string;
+    bookingCount: number;
+    lastLessonAt: string;
+  }>();
+
+  for (const b of bookings) {
+    const existing = studentMap.get(b.userId);
+    if (existing) {
+      existing.bookingCount++;
+    } else {
+      studentMap.set(b.userId, {
+        id: b.user.id,
+        name: b.user.name,
+        avatarUrl: b.user.avatarUrl,
+        bio: b.user.bio,
+        email: b.user.email,
+        bookingCount: 1,
+        lastLessonAt: b.startsAt.toISOString(),
+      });
+    }
+  }
+
+  const students = Array.from(studentMap.values()).sort((a, b) =>
+    b.lastLessonAt.localeCompare(a.lastLessonAt),
+  );
+
+  return c.json({ data: students });
+});
+
 // GET /api/coaches/:slug — public coach profile
 coachRoutes.get("/:slug", async (c) => {
   const { slug } = c.req.param();
@@ -120,56 +175,3 @@ coachRoutes.get("/:slug", async (c) => {
   });
 });
 
-// GET /api/coaches/students — list coach's students (coach/admin)
-coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
-  const user = c.get("user")!;
-  const db = getDb();
-
-  const coachFilter = user.role === "COACH" ? { coachId: user.id } : {};
-
-  const bookings = await db.booking.findMany({
-    where: {
-      ...coachFilter,
-      status: { not: "CANCELLED" },
-    },
-    select: {
-      userId: true,
-      startsAt: true,
-      user: { select: { id: true, name: true, avatarUrl: true, bio: true, email: true } },
-    },
-    orderBy: { startsAt: "desc" },
-  });
-
-  const studentMap = new Map<string, {
-    id: string;
-    name: string;
-    avatarUrl: string | null;
-    bio: string | null;
-    email: string;
-    bookingCount: number;
-    lastLessonAt: string;
-  }>();
-
-  for (const b of bookings) {
-    const existing = studentMap.get(b.userId);
-    if (existing) {
-      existing.bookingCount++;
-    } else {
-      studentMap.set(b.userId, {
-        id: b.user.id,
-        name: b.user.name,
-        avatarUrl: b.user.avatarUrl,
-        bio: b.user.bio,
-        email: b.user.email,
-        bookingCount: 1,
-        lastLessonAt: b.startsAt.toISOString(),
-      });
-    }
-  }
-
-  const students = Array.from(studentMap.values()).sort((a, b) =>
-    b.lastLessonAt.localeCompare(a.lastLessonAt),
-  );
-
-  return c.json({ data: students });
-});
