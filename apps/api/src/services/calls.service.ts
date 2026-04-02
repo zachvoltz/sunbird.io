@@ -34,8 +34,7 @@ export function createCallsService(appId: string, appToken: string) {
   async function createSession(): Promise<CallsSession> {
     const res = await fetch(`${baseUrl}/sessions/new`, {
       method: "POST",
-      headers,
-      body: JSON.stringify({}),
+      headers: { Authorization: `Bearer ${appToken}` },
     });
 
     if (!res.ok) {
