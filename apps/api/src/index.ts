@@ -10,6 +10,8 @@ import { bookingRoutes } from "./routes/bookings";
 import { coachRoutes } from "./routes/coaches";
 import { coachSettingsRoutes } from "./routes/coach-settings";
 import { curriculumRoutes } from "./routes/curriculum";
+import { categoryRoutes } from "./routes/categories";
+import { skillTreeRoutes } from "./routes/skill-trees";
 import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
@@ -69,6 +71,8 @@ app.route("/api/bookings", bookingRoutes);
 app.route("/api/coaches", coachRoutes);
 app.route("/api/coach-settings", coachSettingsRoutes);
 app.route("/api/curriculum", curriculumRoutes);
+app.route("/api/categories", categoryRoutes);
+app.route("/api/skill-trees", skillTreeRoutes);
 
 // Serve frontend assets for all non-API routes (SPA fallback)
 app.get("*", async (c) => {

@@ -58,8 +58,9 @@ export const contactSchema = z.object({
 // ─── Booking ───
 
 export const createBookingSchema = z.object({
-  lessonTypeId: z.string().min(1),
-  lessonCategoryId: z.string().nullish(),
+  categoryId: z.string().min(1),
+  skillTreeId: z.string().nullish(),
+  nodeId: z.string().nullish(),
   coachId: z.string().optional(),
   startsAt: z.string().datetime(),
   mode: z.enum(["ONLINE", "IN_PERSON"]).default("IN_PERSON"),
@@ -67,8 +68,9 @@ export const createBookingSchema = z.object({
 });
 
 export const createRecurringScheduleSchema = z.object({
-  lessonTypeId: z.string().min(1),
-  lessonCategoryId: z.string().nullish(),
+  categoryId: z.string().min(1),
+  skillTreeId: z.string().nullish(),
+  nodeId: z.string().nullish(),
   coachId: z.string().min(1),
   startsAt: z.string().datetime(),
   frequency: z.enum(["WEEKLY", "BIWEEKLY"]),
@@ -105,6 +107,55 @@ export const updateCoachProfileSchema = z.object({
   coverImageUrl: z.string().url().optional().or(z.literal("")),
   credentials: z.string().max(5000).optional(),
   socialLinks: z.string().max(2000).optional(),
+});
+
+export const createCategorySchema = z.object({
+  slug: z.string().min(1).max(100).regex(/^[a-z0-9-]+$/, "Slug must be lowercase letters, numbers, and hyphens"),
+  title: z.string().min(1).max(200),
+  subtitle: z.string().max(500).optional(),
+  description: z.string().min(1).max(5000),
+  imageUrl: z.string().url().optional(),
+});
+
+export const createSkillTreeSchema = z.object({
+  categoryId: z.string().min(1),
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+});
+
+export const saveSkillTreeGraphSchema = z.object({
+  nodes: z.array(z.object({
+    id: z.string().min(1),
+    title: z.string().min(1).max(200),
+    description: z.string().max(2000).optional(),
+    positionX: z.number(),
+    positionY: z.number(),
+    color: z.string().max(20).optional(),
+  })),
+  edges: z.array(z.object({
+    id: z.string().min(1),
+    fromNodeId: z.string().min(1),
+    toNodeId: z.string().min(1),
+  })),
+});
+
+export const updateCoachCategoriesSchema = z.object({
+  categoryIds: z.array(z.string().min(1)),
+});
+
+export const selectBookingNodeSchema = z.object({
+  nodeId: z.string().min(1),
+});
+
+export const stMarkProgressSchema = z.object({
+  nodeId: z.string().min(1),
+  studentId: z.string().min(1),
+  notes: z.string().max(2000).optional(),
+});
+
+export const stUnmarkProgressSchema = z.object({
+  nodeId: z.string().min(1),
+  studentId: z.string().min(1),
 });
 
 export const updateCoachAvailabilitySchema = z.object({

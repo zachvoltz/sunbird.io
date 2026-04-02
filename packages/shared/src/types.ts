@@ -103,6 +103,56 @@ export interface CoachPublic extends UserPublic {
   sessionAddress: string | null;
   hasZoomConnected: boolean;
   lessonTypeIds: string[];
+  categoryIds: string[];
+}
+
+// ─── New Hierarchy Types ───
+
+export interface CategoryPublic {
+  id: string;
+  slug: string;
+  title: string;
+  subtitle: string | null;
+  description: string;
+  imageUrl: string | null;
+}
+
+export interface SkillTreeSummary {
+  id: string;
+  title: string;
+  description: string | null;
+  nodeCount: number;
+}
+
+export interface SkillTreeNodeST {
+  id: string;
+  title: string;
+  description: string | null;
+  positionX: number;
+  positionY: number;
+  color: string | null;
+  resources: CoachResourcePublic[];
+  drills: PracticeDrillPublic[];
+}
+
+export interface SkillTreeEdgeST {
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+}
+
+export interface SkillTreeFull {
+  id: string;
+  coachId: string;
+  categoryId: string;
+  title: string;
+  description: string | null;
+  nodes: SkillTreeNodeST[];
+  edges: SkillTreeEdgeST[];
+}
+
+export interface SkillTreeWithProgress extends SkillTreeFull {
+  progress: StudentProgressPublic[];
 }
 
 export interface CoachProfilePublic {
@@ -118,6 +168,7 @@ export interface CoachProfilePublic {
   sessionAddress: string | null;
   hasZoomConnected: boolean;
   lessonTypes: (LessonTypePublic & { curriculumNodeCount: number })[];
+  categories: (CategoryPublic & { skillTreeCount: number })[];
 }
 
 export interface LessonTypePublic {
@@ -207,6 +258,9 @@ export interface BookingPublic {
   completedAt: string | null;
   usedSubscription: boolean;
   scheduleId: string | null;
+  category: CategoryPublic | null;
+  skillTree: { id: string; title: string } | null;
+  node: { id: string; title: string } | null;
   createdAt: string;
   user?: UserPublic;
   coach?: UserPublic;
