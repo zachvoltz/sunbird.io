@@ -100,17 +100,24 @@ export function CoachSession() {
     if (!booking) return;
     const categoryId = booking.category?.id;
     if (!categoryId) return;
-    apiFetch<{ data: SkillTreeFull[] }>(`/api/skill-trees/by-category/${categoryId}`)
+
+    // First get the tree list (summaries), then fetch the full tree
+    apiFetch<{ data: Array<{ id: string; title: string }> }>(`/api/skill-trees/by-category/${categoryId}`)
       .then((res) => {
         const trees = res.data;
-        // Use the booking's skill tree if set, otherwise the first one
-        const tree = (booking.skillTree?.id
-          ? trees.find((t) => t.id === booking.skillTree!.id)
-          : trees[0]) ?? null;
-        setCurriculum(tree);
-        if (tree && booking.user?.id) {
+        const treeId = booking.skillTree?.id
+          ? trees.find((t) => t.id === booking.skillTree!.id)?.id
+          : trees[0]?.id;
+        if (!treeId) return;
+        // Fetch the full tree with nodes and edges
+        return apiFetch<{ data: SkillTreeFull }>(`/api/skill-trees/${treeId}`);
+      })
+      .then((res) => {
+        if (!res) return;
+        setCurriculum(res.data);
+        if (booking.user?.id) {
           return apiFetch<{ data: StudentProgressPublic[] }>(
-            `/api/skill-trees/${tree.id}/progress/${booking.user.id}`,
+            `/api/skill-trees/${res.data.id}/progress/${booking.user.id}`,
           );
         }
       })
