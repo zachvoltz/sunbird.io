@@ -100,12 +100,17 @@ export function CoachSession() {
     if (!booking) return;
     const categoryId = booking.category?.id;
     if (!categoryId) return;
-    apiFetch<{ data: SkillTreeFull }>(`/api/skill-trees/by-category/${categoryId}`)
+    apiFetch<{ data: SkillTreeFull[] }>(`/api/skill-trees/by-category/${categoryId}`)
       .then((res) => {
-        setCurriculum(res.data);
-        if (booking.user?.id) {
+        const trees = res.data;
+        // Use the booking's skill tree if set, otherwise the first one
+        const tree = (booking.skillTree?.id
+          ? trees.find((t) => t.id === booking.skillTree!.id)
+          : trees[0]) ?? null;
+        setCurriculum(tree);
+        if (tree && booking.user?.id) {
           return apiFetch<{ data: StudentProgressPublic[] }>(
-            `/api/skill-trees/${res.data.id}/progress/${booking.user.id}`,
+            `/api/skill-trees/${tree.id}/progress/${booking.user.id}`,
           );
         }
       })
