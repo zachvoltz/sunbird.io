@@ -32,7 +32,7 @@ availabilityRoutes.get("/", async (c) => {
   }
 
   const dayOfWeek = date.getDay();
-  const lessonTypeId = c.req.query("lessonTypeId");
+  const categoryId = c.req.query("categoryId") || c.req.query("lessonTypeId");
   const db = getDb();
 
   // Get per-coach availability for this day
@@ -45,14 +45,24 @@ availabilityRoutes.get("/", async (c) => {
     return c.json({ data: [] });
   }
 
-  // If lessonTypeId provided, filter to coaches who teach it
+  // If categoryId provided, filter to coaches who teach it
   let qualifiedCoachIds: Set<string> | null = null;
-  if (lessonTypeId) {
-    const coachLessonTypes = await db.coachLessonType.findMany({
-      where: { lessonTypeId },
+  if (categoryId) {
+    // Try new CoachCategory first, fall back to old CoachLessonType
+    const coachCategories = await db.coachCategory.findMany({
+      where: { categoryId },
       select: { coachId: true },
     });
-    qualifiedCoachIds = new Set(coachLessonTypes.map((ct: any) => ct.coachId));
+    if (coachCategories.length > 0) {
+      qualifiedCoachIds = new Set(coachCategories.map((cc: any) => cc.coachId));
+    } else {
+      // Fallback to old CoachLessonType for backwards compat
+      const coachLessonTypes = await db.coachLessonType.findMany({
+        where: { lessonTypeId: categoryId },
+        select: { coachId: true },
+      });
+      qualifiedCoachIds = new Set(coachLessonTypes.map((ct: any) => ct.coachId));
+    }
   }
 
   // Get existing bookings for this date (not cancelled), per coach

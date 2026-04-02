@@ -8,7 +8,7 @@ export const coachRoutes = new Hono();
 coachRoutes.get("/", async (c) => {
   const db = getDb();
   const all = c.req.query("all"); // ?all=true to include unpublished (for booking flow)
-  const lessonTypeId = c.req.query("lessonTypeId");
+  const categoryId = c.req.query("categoryId") || c.req.query("lessonTypeId");
 
   const where: any = { role: "COACH" };
   if (!all) {
@@ -29,14 +29,16 @@ coachRoutes.get("/", async (c) => {
       sessionAddress: true,
       oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
       coachLessonTypes: { select: { lessonTypeId: true } },
+      coachCategories: { select: { categoryId: true } },
     },
     orderBy: { name: "asc" },
   });
 
   let filtered = coaches;
-  if (lessonTypeId) {
+  if (categoryId) {
     filtered = coaches.filter((c: any) =>
-      c.coachLessonTypes.some((ct: any) => ct.lessonTypeId === lessonTypeId),
+      c.coachCategories.some((cc: any) => cc.categoryId === categoryId) ||
+      c.coachLessonTypes.some((ct: any) => ct.lessonTypeId === categoryId),
     );
   }
 
@@ -53,6 +55,7 @@ coachRoutes.get("/", async (c) => {
       sessionAddress: c.sessionAddress,
       hasZoomConnected: c.oauthAccounts.length > 0,
       lessonTypeIds: c.coachLessonTypes.map((ct: any) => ct.lessonTypeId),
+      categoryIds: c.coachCategories.map((cc: any) => cc.categoryId),
     })),
   });
 });
@@ -80,6 +83,12 @@ coachRoutes.get("/:slug", async (c) => {
         include: { lessonType: true },
       },
       coachCurricula: {
+        include: { nodes: { select: { id: true } } },
+      },
+      coachCategories: {
+        include: { category: true },
+      },
+      coachSkillTrees: {
         include: { nodes: { select: { id: true } } },
       },
     },
@@ -124,6 +133,18 @@ coachRoutes.get("/:slug", async (c) => {
       sessionAddress: (coach as any).sessionAddress,
       hasZoomConnected: coach.oauthAccounts.length > 0,
       lessonTypes,
+      categories: (coach as any).coachCategories.map((cc: any) => {
+        const skillTreeCount = (coach as any).coachSkillTrees.filter((st: any) => st.category?.id === cc.categoryId || true).length;
+        return {
+          id: cc.category.id,
+          slug: cc.category.slug,
+          title: cc.category.title,
+          subtitle: cc.category.subtitle,
+          description: cc.category.description,
+          imageUrl: cc.category.imageUrl,
+          skillTreeCount,
+        };
+      }),
     },
   });
 });

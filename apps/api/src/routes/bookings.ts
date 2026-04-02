@@ -53,6 +53,15 @@ function serializeBooking(b: any) {
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
     scheduleId: b.scheduleId ?? null,
+    category: b.category
+      ? { id: b.category.id, slug: b.category.slug, title: b.category.title, subtitle: b.category.subtitle, description: b.category.description, imageUrl: b.category.imageUrl }
+      : null,
+    skillTree: b.skillTree
+      ? { id: b.skillTree.id, title: b.skillTree.title }
+      : null,
+    node: b.node
+      ? { id: b.node.id, title: b.node.title }
+      : null,
     createdAt: b.createdAt.toISOString(),
     user: b.user
       ? { id: b.user.id, name: b.user.name, avatarUrl: b.user.avatarUrl, bio: b.user.bio }
@@ -66,6 +75,9 @@ function serializeBooking(b: any) {
 const bookingInclude = {
   lessonType: true,
   lessonCategory: true,
+  category: true,
+  skillTree: { select: { id: true, title: true } },
+  node: { select: { id: true, title: true } },
   user: { select: { id: true, name: true, avatarUrl: true, bio: true } },
   coach: { select: { id: true, name: true, avatarUrl: true, bio: true, sessionAddress: true } },
 };
@@ -79,22 +91,28 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
   }
 
-  const { lessonTypeId, lessonCategoryId, coachId: providedCoachId, startsAt: startsAtStr, mode, studentNote } = parsed.data;
+  const { categoryId, skillTreeId, nodeId, coachId: providedCoachId, startsAt: startsAtStr, mode, studentNote } = parsed.data;
   const db = getDb();
 
-  // Verify lesson type exists
-  const lessonType = await db.lessonType.findUnique({ where: { id: lessonTypeId } });
-  if (!lessonType) {
-    return c.json({ error: "Lesson type not found" }, 404);
+  // Verify category exists
+  const category = await db.category.findUnique({ where: { id: categoryId } });
+  if (!category) {
+    return c.json({ error: "Category not found" }, 404);
   }
 
-  // Verify category belongs to this lesson type (if provided)
-  if (lessonCategoryId) {
-    const category = await db.lessonCategory.findFirst({
-      where: { id: lessonCategoryId, lessonTypeId },
-    });
-    if (!category) {
-      return c.json({ error: "Lesson category not found for this lesson type" }, 400);
+  // Verify skill tree belongs to coach+category (if provided)
+  if (skillTreeId) {
+    const st = await db.skillTree.findFirst({ where: { id: skillTreeId, categoryId } });
+    if (!st) {
+      return c.json({ error: "Skill tree not found for this category" }, 400);
+    }
+  }
+
+  // Verify node belongs to skill tree (if provided)
+  if (nodeId && skillTreeId) {
+    const node = await db.skillTreeNode.findFirst({ where: { id: nodeId, skillTreeId } });
+    if (!node) {
+      return c.json({ error: "Node not found in this skill tree" }, 400);
     }
   }
 
@@ -138,13 +156,13 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "This time slot is no longer available" }, 409);
   }
 
-  // Verify coach teaches this lesson type
+  // Verify coach teaches this category
   if (coachId) {
-    const coachTeaches = await db.coachLessonType.findFirst({
-      where: { coachId, lessonTypeId },
+    const coachTeaches = await db.coachCategory.findFirst({
+      where: { coachId, categoryId },
     });
     if (!coachTeaches) {
-      return c.json({ error: "This coach does not teach this lesson type" }, 400);
+      return c.json({ error: "This coach does not teach this category" }, 400);
     }
   }
 
@@ -183,7 +201,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
       const zoomService = createZoomService(db, zoom);
 
       const meeting = await zoomService.createMeeting(coachId, {
-        topic: `Sunbird: ${lessonType.title} lesson`,
+        topic: `Sunbird: ${category.title} lesson`,
         startTime: startsAt.toISOString(),
         duration: LESSON_DURATION_MINS,
         inviteeEmail: user.email,
@@ -202,8 +220,10 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     data: {
       userId: user.id,
       coachId,
-      lessonTypeId,
-      lessonCategoryId: lessonCategoryId ?? null,
+      lessonTypeId: "legacy",
+      categoryId,
+      skillTreeId: skillTreeId ?? null,
+      nodeId: nodeId ?? null,
       startsAt,
       endsAt,
       mode,
@@ -221,10 +241,63 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
     const email = createEmailService(apiKey, from);
-    email.sendBookingConfirmation(user.email, user.name, lessonType.title, formatDateTime(startsAt)).catch(console.error);
+    email.sendBookingConfirmation(user.email, user.name, category.title, formatDateTime(startsAt)).catch(console.error);
   } catch {}
 
   return c.json({ data: serializeBooking(booking) }, 201);
+});
+
+// PATCH /api/bookings/:id/node — select/change node on a session
+bookingRoutes.patch("/:id/node", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const { nodeId: newNodeId } = body as { nodeId: string };
+
+  if (!newNodeId) return c.json({ error: "nodeId is required" }, 400);
+
+  const db = getDb();
+  const booking = await db.booking.findUnique({ where: { id } });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+
+  if (user.role === "STUDENT" && booking.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
+  if (user.role === "COACH" && booking.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  // Verify node exists
+  const node = await db.skillTreeNode.findUnique({
+    where: { id: newNodeId },
+    include: {
+      resourceLinks: { include: { resource: true } },
+      drills: { orderBy: { sortOrder: "asc" } },
+    },
+  });
+  if (!node) return c.json({ error: "Node not found" }, 404);
+
+  // Update booking with the new node (and its skill tree)
+  const updated = await db.booking.update({
+    where: { id },
+    data: { nodeId: newNodeId, skillTreeId: node.skillTreeId },
+    include: bookingInclude,
+  });
+
+  // Auto-copy node resources to session resources
+  for (const link of (node as any).resourceLinks ?? []) {
+    const r = link.resource;
+    await db.sessionResource.upsert({
+      where: { id: `sr_${id}_${r.id}` },
+      update: {},
+      create: {
+        id: `sr_${id}_${r.id}`,
+        bookingId: id,
+        addedById: user.id,
+        type: r.type,
+        title: r.title,
+        url: r.url,
+      },
+    }).catch(() => {});
+  }
+
+  return c.json({ data: serializeBooking(updated) });
 });
 
 // GET /api/bookings — list bookings
@@ -423,15 +496,15 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
   }
 
-  const { lessonTypeId, lessonCategoryId, coachId, startsAt: startsAtStr, frequency, endsOn: endsOnStr, mode, studentNote } = parsed.data;
+  const { categoryId, skillTreeId, nodeId, coachId, startsAt: startsAtStr, frequency, endsOn: endsOnStr, mode, studentNote } = parsed.data;
   const db = getDb();
 
-  // Verify lesson type and coach
-  const lessonType = await db.lessonType.findUnique({ where: { id: lessonTypeId } });
-  if (!lessonType) return c.json({ error: "Lesson type not found" }, 404);
+  // Verify category and coach
+  const category = await db.category.findUnique({ where: { id: categoryId } });
+  if (!category) return c.json({ error: "Category not found" }, 404);
 
-  const coachTeaches = await db.coachLessonType.findFirst({ where: { coachId, lessonTypeId } });
-  if (!coachTeaches) return c.json({ error: "Coach does not teach this lesson type" }, 400);
+  const coachTeaches = await db.coachCategory.findFirst({ where: { coachId, categoryId } });
+  if (!coachTeaches) return c.json({ error: "Coach does not teach this category" }, 400);
 
   const firstStart = new Date(startsAtStr);
   const endsOn = new Date(endsOnStr + "T23:59:59Z");
@@ -476,8 +549,10 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     data: {
       userId: user.id,
       coachId,
-      lessonTypeId,
-      lessonCategoryId: lessonCategoryId ?? null,
+      lessonTypeId: "legacy",
+      categoryId,
+      skillTreeId: skillTreeId ?? null,
+      nodeId: nodeId ?? null,
       dayOfWeek,
       startTime: timeStr,
       frequency,
@@ -506,7 +581,7 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
         const zoom = createZoomClient(clientId, clientSecret, redirectUri);
         const zoomService = createZoomService(db, zoom);
         const meeting = await zoomService.createMeeting(coachId, {
-          topic: `Sunbird: ${lessonType.title} lesson`,
+          topic: `Sunbird: ${category.title} lesson`,
           startTime: date.toISOString(),
           duration: LESSON_DURATION_MINS,
           inviteeEmail: user.email,
@@ -521,8 +596,10 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
       data: {
         userId: user.id,
         coachId,
-        lessonTypeId,
-        lessonCategoryId: lessonCategoryId ?? null,
+        lessonTypeId: "legacy",
+        categoryId,
+        skillTreeId: skillTreeId ?? null,
+        nodeId: nodeId ?? null,
         startsAt: date,
         endsAt,
         mode,
@@ -545,7 +622,7 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
     const email = createEmailService(apiKey, from);
     email.sendBookingConfirmation(
-      user.email, user.name, lessonType.title,
+      user.email, user.name, category.title,
       `${dates.length} ${frequency.toLowerCase()} sessions starting ${formatDateTime(dates[0])}`,
     ).catch(console.error);
   } catch {}

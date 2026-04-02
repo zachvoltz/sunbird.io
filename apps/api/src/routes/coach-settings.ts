@@ -30,6 +30,15 @@ coachSettingsRoutes.get("/", requireAuth, requireRole("COACH", "ADMIN"), async (
     select: { id: true, title: true },
   });
 
+  const coachCats = await db.coachCategory.findMany({
+    where: { coachId: user.id },
+  });
+
+  const allCategories = await db.category.findMany({
+    orderBy: { sortOrder: "asc" },
+    select: { id: true, title: true, slug: true },
+  });
+
   // Fetch full user for profile fields
   const fullUser = await db.user.findUnique({ where: { id: user.id } }) as any;
 
@@ -53,6 +62,8 @@ coachSettingsRoutes.get("/", requireAuth, requireRole("COACH", "ADMIN"), async (
       })),
       lessonTypeIds: coachLessonTypes.map((ct: any) => ct.lessonTypeId),
       allLessonTypes,
+      categoryIds: coachCats.map((cc: any) => cc.categoryId),
+      allCategories,
     },
   });
 });
@@ -186,6 +197,28 @@ coachSettingsRoutes.put("/lesson-types", requireAuth, requireRole("COACH", "ADMI
   for (const lessonTypeId of parsed.data.lessonTypeIds) {
     await db.coachLessonType.create({
       data: { coachId: user.id, lessonTypeId },
+    });
+  }
+
+  return c.json({ data: { ok: true } });
+});
+
+// PUT /api/coach-settings/categories — bulk replace category assignments
+coachSettingsRoutes.put("/categories", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const { updateCoachCategoriesSchema } = await import("@sunbird/shared");
+  const parsed = updateCoachCategoriesSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+  await db.coachCategory.deleteMany({ where: { coachId: user.id } });
+
+  for (const categoryId of parsed.data.categoryIds) {
+    await db.coachCategory.create({
+      data: { coachId: user.id, categoryId },
     });
   }
 
