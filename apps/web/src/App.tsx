@@ -27,6 +27,8 @@ export function App() {
         <Route index element={<Home />} />
         <Route path="lessons" element={<Lessons />} />
         <Route path="lessons/:slug" element={<LessonDetail />} />
+        <Route path="categories" element={<Lessons />} />
+        <Route path="categories/:slug" element={<LessonDetail />} />
         <Route path="workshops" element={<Workshops />} />
         <Route path="coaches" element={<Coaches />} />
         <Route path="coaches/:slug" element={<CoachProfile />} />

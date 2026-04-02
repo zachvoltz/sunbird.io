@@ -99,8 +99,43 @@ export function CoachProfile() {
             </section>
           )}
 
-          {/* Courses */}
-          {coach.lessonTypes.length > 0 && (
+          {/* Categories (new) */}
+          {coach.categories && coach.categories.length > 0 && (
+            <section className="mb-16">
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
+                Courses
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {coach.categories.map((cat) => (
+                  <div key={cat.id} className="bg-surface rounded-card shadow-card p-6">
+                    <h3 className="font-display text-lg font-semibold mb-1">{cat.title}</h3>
+                    {cat.subtitle && (
+                      <p className="font-handwritten text-gold mb-2">{cat.subtitle}</p>
+                    )}
+                    <p className="text-sm text-text-secondary leading-relaxed mb-4">
+                      {cat.description}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="text-sm text-text-secondary">
+                        {cat.skillTreeCount > 0 && (
+                          <span className="text-iris">{cat.skillTreeCount} skill trees</span>
+                        )}
+                      </div>
+                      <Link
+                        to={`/book?coachId=${coach.id}&categoryId=${cat.id}`}
+                        className="text-[13px] font-medium text-charcoal border border-charcoal px-4 py-1.5 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
+                      >
+                        Book
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Courses (legacy lesson types) */}
+          {(!coach.categories || coach.categories.length === 0) && coach.lessonTypes.length > 0 && (
             <section className="mb-16">
               <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
                 Courses

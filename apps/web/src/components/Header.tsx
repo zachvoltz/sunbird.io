@@ -4,7 +4,7 @@ import { Wordmark } from "./Wordmark";
 import { useAuth } from "@/context/AuthContext";
 
 const navLinks = [
-  { to: "/lessons", label: "Lessons" },
+  { to: "/categories", label: "Lessons" },
   { to: "/workshops", label: "Workshops" },
   { to: "/events", label: "Events" },
   { to: "/pricing", label: "Pricing" },
@@ -13,7 +13,7 @@ const navLinks = [
 ];
 
 const heroNavLinks = [
-  { to: "/lessons", label: "lessons" },
+  { to: "/categories", label: "lessons" },
   { to: "/coaches", label: "coaches" },
   { to: "/workshops", label: "workshops" },
   { to: "/events", label: "events" },

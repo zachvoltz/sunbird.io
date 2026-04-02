@@ -1,4 +1,5 @@
 import type { BookingState } from "./BookPage";
+import type { CategoryPublic } from "@sunbird/shared";
 
 type Props = {
   state: BookingState;
@@ -6,64 +7,60 @@ type Props = {
 };
 
 export function StepCategory({ state, update }: Props) {
-  const type = state.selectedType!;
-
-  const select = (categoryId: string) => {
+  const select = (cat: CategoryPublic) => {
     update({
-      selectedCategoryId: categoryId,
+      selectedCategory: cat,
       notSureCategory: false,
-      step: 3,
+      step: 2,
     });
   };
 
   const selectNotSure = () => {
     update({
-      selectedCategoryId: null,
+      selectedCategory: null,
       notSureCategory: true,
+      notSureSkillTree: true,
       step: 3,
     });
   };
 
   return (
     <>
-      <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-iris mb-4">
-        {type.title}
-      </p>
-      <h2 className="font-display text-3xl md:text-4xl font-bold mb-3">
-        What's your focus?
+      <h2 className="font-display text-3xl md:text-4xl font-bold mb-3 text-center">
+        What would you like to work on?
       </h2>
-      <p className="text-text-secondary mb-10">
-        Pick the area you'd like to work on, or keep it open.
+      <p className="text-text-secondary mb-10 text-center">
+        Pick a category, or choose "not sure" and we'll figure it out together.
       </p>
 
-      <div className="space-y-3">
-        {type.categories.map((cat) => (
+      <div className={`grid grid-cols-1 ${state.categories.length <= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2"} gap-4`}>
+        {state.categories.map((cat) => (
           <button
             key={cat.id}
-            onClick={() => select(cat.id)}
-            className="group w-full text-left p-5 bg-surface rounded-card shadow-card hover:shadow-elevated transition-all duration-300"
+            onClick={() => select(cat)}
+            className="group text-left p-6 bg-surface rounded-card shadow-card hover:shadow-elevated transition-all duration-300"
           >
             <h3 className="font-display text-lg font-semibold group-hover:text-gold transition-colors mb-1">
               {cat.title}
             </h3>
-            {cat.description && (
-              <p className="text-sm text-text-secondary">{cat.description}</p>
+            {cat.subtitle && (
+              <p className="text-sm text-text-secondary">{cat.subtitle}</p>
             )}
           </button>
         ))}
-
-        <button
-          onClick={selectNotSure}
-          className="w-full p-5 text-left border border-charcoal/10 rounded-card hover:border-charcoal/25 transition-colors"
-        >
-          <h3 className="font-display text-lg font-semibold mb-1">
-            Not sure / Open
-          </h3>
-          <p className="text-sm text-text-secondary">
-            We'll figure out what you need when we meet.
-          </p>
-        </button>
       </div>
+
+      <button
+        onClick={selectNotSure}
+        className="mt-4 w-full p-5 text-left border border-charcoal/10 rounded-card hover:border-charcoal/25 transition-colors"
+      >
+        <h3 className="font-display text-lg font-semibold mb-1">
+          Not sure / Open
+        </h3>
+        <p className="text-sm text-text-secondary">
+          No worries — we'll talk through it and find the right fit.
+        </p>
+      </button>
     </>
   );
 }

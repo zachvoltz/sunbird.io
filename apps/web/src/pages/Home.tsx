@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { Mic, PenLine, Music, Theater, BookOpen, Flower2, Guitar } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import type { LessonTypePublic } from "@sunbird/shared";
+import type { LessonTypePublic, CategoryPublic } from "@sunbird/shared";
 
 const lessonIcons: Record<string, LucideIcon> = {
   voice: Mic,
@@ -17,7 +17,7 @@ const lessonIcons: Record<string, LucideIcon> = {
 };
 
 const navLinks = [
-  { to: "/lessons", label: "lessons", primary: true },
+  { to: "/categories", label: "lessons", primary: true },
   { to: "/workshops", label: "workshops", primary: false },
   { to: "/events", label: "events", primary: false },
 ];
@@ -47,10 +47,14 @@ function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 
 export function Home() {
   const [lessonTypes, setLessonTypes] = useState<LessonTypePublic[]>([]);
+  const [categories, setCategories] = useState<CategoryPublic[]>([]);
 
   useEffect(() => {
     apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
       .then((res) => setLessonTypes(res.data))
+      .catch(() => {});
+    apiFetch<{ data: CategoryPublic[] }>("/api/categories")
+      .then((res) => setCategories(res.data))
       .catch(() => {});
   }, []);
 
@@ -108,7 +112,7 @@ export function Home() {
               What I teach
             </h2>
             <Link
-              to="/lessons"
+              to={categories.length > 0 ? "/categories" : "/lessons"}
               className="hidden sm:block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
             >
               View all &rarr;
@@ -116,20 +120,21 @@ export function Home() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {lessonTypes.map((lesson) => {
-              const Icon = lessonIcons[lesson.slug] || Music;
+            {(categories.length > 0 ? categories : lessonTypes).map((item) => {
+              const Icon = lessonIcons[item.slug] || Music;
+              const href = categories.length > 0 ? `/categories/${item.slug}` : `/lessons/${item.slug}`;
               return (
               <Link
-                key={lesson.slug}
-                to={`/lessons/${lesson.slug}`}
+                key={item.slug}
+                to={href}
                 className="group text-center px-4 py-8 bg-surface rounded-card shadow-card hover:shadow-elevated transition-all duration-300"
               >
                 <Icon className="w-6 h-6 text-text-secondary group-hover:text-gold transition-colors mx-auto mb-4" strokeWidth={1.5} />
                 <h3 className="font-display text-lg font-semibold group-hover:text-gold transition-colors mb-2">
-                  {lesson.title}
+                  {item.title}
                 </h3>
                 <p className="text-sm text-text-secondary italic">
-                  {lesson.subtitle}
+                  {item.subtitle}
                 </p>
               </Link>
               );

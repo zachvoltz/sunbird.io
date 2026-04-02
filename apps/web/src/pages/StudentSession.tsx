@@ -186,15 +186,15 @@ export function StudentSession() {
               </h2>
               <div className="bg-surface rounded-card shadow-card p-6">
                 <h3 className="font-display text-lg font-semibold mb-1">
-                  {booking.lessonType.title}
+                  {booking.category?.title ?? booking.lessonType?.title ?? "Open"}
                 </h3>
-                {booking.lessonCategory && (
+                {(booking.skillTree || booking.lessonCategory) && (
                   <p className="text-sm text-gold font-medium mb-2">
-                    {booking.lessonCategory.title}
+                    {booking.skillTree?.title ?? booking.lessonCategory?.title}
                   </p>
                 )}
                 <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                  {booking.lessonType.description}
+                  {booking.category?.description ?? booking.lessonType?.description ?? ""}
                 </p>
                 <p className="text-[12px] text-text-secondary">
                   {formatDate(booking.startsAt)}<br />
@@ -253,10 +253,10 @@ export function StudentSession() {
             </section>
 
             {/* Curriculum link */}
-            {booking.lessonType.slug && (
+            {(booking.category?.slug || booking.lessonType?.slug) && (
               <div className="mb-8">
                 <Link
-                  to={`/my-curriculum/${booking.lessonType.slug}`}
+                  to={`/my-curriculum/${booking.category?.slug ?? booking.lessonType?.slug}`}
                   className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors"
                 >
                   View your learning roadmap &rarr;

@@ -142,7 +142,7 @@ describe("contactSchema", () => {
 // ─── createBookingSchema ───
 
 describe("createBookingSchema", () => {
-  const valid = { lessonTypeId: "lt_1", startsAt: "2026-04-01T10:00:00Z" };
+  const valid = { categoryId: "cat_1", startsAt: "2026-04-01T10:00:00Z" };
 
   it("accepts valid input", () => {
     expect(createBookingSchema.safeParse(valid).success).toBe(true);
@@ -151,13 +151,14 @@ describe("createBookingSchema", () => {
   it("accepts optional fields", () => {
     expect(createBookingSchema.safeParse({
       ...valid,
-      lessonCategoryId: "cat_1",
+      skillTreeId: "st_1",
+      nodeId: "node_1",
       coachId: "coach_1",
       studentNote: "I want to work on breathing",
     }).success).toBe(true);
   });
 
-  it("rejects missing lessonTypeId", () => {
+  it("rejects missing categoryId", () => {
     expect(createBookingSchema.safeParse({ startsAt: "2026-04-01T10:00:00Z" }).success).toBe(false);
   });
 

@@ -1,16 +1,27 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
-import type { LessonTypePublic } from "@sunbird/shared";
+import type { LessonTypePublic, CategoryPublic } from "@sunbird/shared";
 
 export function Lessons() {
-  const [lessons, setLessons] = useState<LessonTypePublic[]>([]);
+  const [lessons, setLessons] = useState<(LessonTypePublic | CategoryPublic)[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
-      .then((res) => setLessons(res.data))
-      .catch(() => {})
+    // Try categories first, fall back to legacy lesson types
+    apiFetch<{ data: CategoryPublic[] }>("/api/categories")
+      .then((res) => {
+        if (res.data.length > 0) {
+          setLessons(res.data);
+        } else {
+          return apiFetch<{ data: LessonTypePublic[] }>("/api/lessons").then((r) => setLessons(r.data));
+        }
+      })
+      .catch(() => {
+        apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
+          .then((res) => setLessons(res.data))
+          .catch(() => {});
+      })
       .finally(() => setLoading(false));
   }, []);
 
@@ -55,7 +66,7 @@ export function Lessons() {
             : lessons.map((lesson, i) => (
                 <Link
                   key={lesson.slug}
-                  to={`/lessons/${lesson.slug}`}
+                  to={`/categories/${lesson.slug}`}
                   className="group block py-10 border-b border-charcoal/10 hover:border-charcoal/25 transition-colors"
                 >
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-6 md:gap-10">

@@ -20,6 +20,7 @@ import { SkillNode, type SkillNodeData } from "@/components/curriculum/SkillNode
 import type { CurriculumPublic, CoachResourcePublic, PracticeDrillPublic, SessionResourceType } from "@sunbird/shared";
 
 type LessonTypeOption = { id: string; title: string };
+type CategoryOption = { id: string; title: string };
 
 let nodeCounter = 0;
 function newNodeId() {
@@ -40,7 +41,9 @@ const COLORS = [
 
 export function CurriculumEditor() {
   const [lessonTypes, setLessonTypes] = useState<LessonTypeOption[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [selectedLessonTypeId, setSelectedLessonTypeId] = useState<string>("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [curriculumId, setCurriculumId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -68,24 +71,37 @@ export function CurriculumEditor() {
   const [drillDesc, setDrillDesc] = useState("");
   const [drillResourceId, setDrillResourceId] = useState("");
 
-  // Load coach's lesson types
+  // Load coach's lesson types and categories
   useEffect(() => {
-    apiFetch<{ data: { lessonTypeIds: string[]; allLessonTypes: LessonTypeOption[] } }>("/api/coach-settings")
+    apiFetch<{ data: { lessonTypeIds: string[]; allLessonTypes: LessonTypeOption[]; categoryIds?: string[]; allCategories?: CategoryOption[] } }>("/api/coach-settings")
       .then((res) => {
         const teaching = res.data.allLessonTypes.filter((lt) =>
           res.data.lessonTypeIds.includes(lt.id),
         );
         setLessonTypes(teaching);
         if (teaching.length > 0) setSelectedLessonTypeId(teaching[0].id);
+
+        // Load categories if available
+        if (res.data.allCategories && res.data.categoryIds) {
+          const teachingCats = res.data.allCategories.filter((c) =>
+            res.data.categoryIds!.includes(c.id),
+          );
+          setCategories(teachingCats);
+          if (teachingCats.length > 0) setSelectedCategoryId(teachingCats[0].id);
+        }
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  // Load curriculum when lesson type changes
+  // Load curriculum when lesson type or category changes
   useEffect(() => {
-    if (!selectedLessonTypeId) return;
-    apiFetch<{ data: CurriculumPublic }>(`/api/curriculum/${selectedLessonTypeId}`)
+    const id = selectedCategoryId || selectedLessonTypeId;
+    if (!id) return;
+    const url = selectedCategoryId
+      ? `/api/skill-trees/by-category/${selectedCategoryId}`
+      : `/api/curriculum/${selectedLessonTypeId}`;
+    apiFetch<{ data: CurriculumPublic }>(url)
       .then((res) => {
         const c = res.data;
         setCurriculumId(c.id);
@@ -111,7 +127,7 @@ export function CurriculumEditor() {
         setNodes([]);
         setEdges([]);
       });
-  }, [selectedLessonTypeId]);
+  }, [selectedCategoryId, selectedLessonTypeId]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -141,9 +157,13 @@ export function CurriculumEditor() {
 
   const createCurriculum = async () => {
     try {
-      const res = await apiFetch<{ data: CurriculumPublic }>("/api/curriculum", {
+      const body = selectedCategoryId
+        ? { categoryId: selectedCategoryId }
+        : { lessonTypeId: selectedLessonTypeId };
+      const endpoint = selectedCategoryId ? "/api/skill-trees" : "/api/curriculum";
+      const res = await apiFetch<{ data: CurriculumPublic }>(endpoint, {
         method: "POST",
-        body: JSON.stringify({ lessonTypeId: selectedLessonTypeId }),
+        body: JSON.stringify(body),
       });
       setCurriculumId(res.data.id);
       setNodes([]);
@@ -327,15 +347,27 @@ export function CurriculumEditor() {
         </Link>
         <h1 className="font-display text-lg font-bold">Curriculum</h1>
 
-        <select
-          value={selectedLessonTypeId}
-          onChange={(e) => setSelectedLessonTypeId(e.target.value)}
-          className="ml-4 px-3 py-1.5 text-sm border border-charcoal/10 rounded-card bg-cream"
-        >
-          {lessonTypes.map((lt) => (
-            <option key={lt.id} value={lt.id}>{lt.title}</option>
-          ))}
-        </select>
+        {categories.length > 0 ? (
+          <select
+            value={selectedCategoryId}
+            onChange={(e) => setSelectedCategoryId(e.target.value)}
+            className="ml-4 px-3 py-1.5 text-sm border border-charcoal/10 rounded-card bg-cream"
+          >
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>{c.title}</option>
+            ))}
+          </select>
+        ) : (
+          <select
+            value={selectedLessonTypeId}
+            onChange={(e) => setSelectedLessonTypeId(e.target.value)}
+            className="ml-4 px-3 py-1.5 text-sm border border-charcoal/10 rounded-card bg-cream"
+          >
+            {lessonTypes.map((lt) => (
+              <option key={lt.id} value={lt.id}>{lt.title}</option>
+            ))}
+          </select>
+        )}
 
         <div className="ml-auto flex items-center gap-3">
           {status && (
@@ -398,8 +430,8 @@ export function CurriculumEditor() {
             </ReactFlow>
           ) : (
             <div className="flex items-center justify-center h-full text-text-secondary">
-              {lessonTypes.length === 0
-                ? "Set up your lesson types in Settings first."
+              {lessonTypes.length === 0 && categories.length === 0
+                ? "Set up your categories or lesson types in Settings first."
                 : "Create a curriculum to get started."}
             </div>
           )}

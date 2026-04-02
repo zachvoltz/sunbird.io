@@ -29,13 +29,10 @@ export function StepConfirm({ state, update }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const typeName = state.selectedType?.title ?? "Open";
-  const categoryName =
-    state.notSureCategory
-      ? "Open"
-      : state.selectedType?.categories.find(
-          (c: any) => c.id === state.selectedCategoryId,
-        )?.title ?? "Open";
+  const typeName = state.selectedCategory?.title ?? "Open";
+  const skillTreeName = state.notSureSkillTree
+    ? "Open"
+    : state.skillTrees?.find((st: any) => st.id === state.selectedSkillTreeId)?.title ?? "Open";
   const selectedCoach = state.coaches.find((c) => c.id === state.selectedCoachId);
   const coachName = selectedCoach?.name;
   const coachHasZoom = selectedCoach?.hasZoomConnected ?? false;
@@ -72,8 +69,9 @@ export function StepConfirm({ state, update }: Props) {
         await apiFetch("/api/bookings/recurring", {
           method: "POST",
           body: JSON.stringify({
-            lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
-            lessonCategoryId: state.selectedCategoryId,
+            categoryId: state.selectedCategory?.id ?? state.categories[0]?.id,
+            skillTreeId: state.selectedSkillTreeId || undefined,
+            nodeId: state.selectedNodeId || undefined,
             coachId: state.selectedCoachId,
             mode,
             frequency,
@@ -87,8 +85,9 @@ export function StepConfirm({ state, update }: Props) {
         await apiFetch<{ data: BookingPublic }>("/api/bookings", {
           method: "POST",
           body: JSON.stringify({
-            lessonTypeId: state.selectedType?.id ?? state.lessonTypes[0]?.id,
-            lessonCategoryId: state.selectedCategoryId,
+            categoryId: state.selectedCategory?.id ?? state.categories[0]?.id,
+            skillTreeId: state.selectedSkillTreeId || undefined,
+            nodeId: state.selectedNodeId || undefined,
             coachId: state.selectedCoachId || undefined,
             mode,
             startsAt: slot.startsAt,
@@ -211,16 +210,16 @@ export function StepConfirm({ state, update }: Props) {
         <div className="space-y-4">
           <div className="flex justify-between items-baseline">
             <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary">
-              Lesson
+              Category
             </span>
             <span className="font-display font-semibold">{typeName}</span>
           </div>
           <hr className="editorial-rule" />
           <div className="flex justify-between items-baseline">
             <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary">
-              Focus
+              Skill Tree
             </span>
-            <span className="font-medium">{categoryName}</span>
+            <span className="font-medium">{skillTreeName}</span>
           </div>
           {coachName && (
             <>

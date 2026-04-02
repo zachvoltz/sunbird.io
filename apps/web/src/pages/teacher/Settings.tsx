@@ -7,6 +7,7 @@ const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
 
 type LessonTypeOption = { id: string; title: string };
+type CategoryOption = { id: string; title: string };
 
 type CoachSettingsData = {
   slug: string | null;
@@ -21,6 +22,8 @@ type CoachSettingsData = {
   availability: CoachAvailabilitySlot[];
   lessonTypeIds: string[];
   allLessonTypes: LessonTypeOption[];
+  categoryIds?: string[];
+  allCategories?: CategoryOption[];
 };
 
 export function CoachSettings() {
@@ -36,6 +39,7 @@ export function CoachSettings() {
   const [socialLinks, setSocialLinks] = useState("");
   const [isPublished, setIsPublished] = useState(false);
   const [selectedLessonTypeIds, setSelectedLessonTypeIds] = useState<string[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [availabilityByDay, setAvailabilityByDay] = useState<Record<number, Set<string>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<string | null>(null);
@@ -59,6 +63,7 @@ export function CoachSettings() {
         setSocialLinks(res.data.socialLinks ?? "");
         setIsPublished(res.data.isPublished ?? false);
         setSelectedLessonTypeIds(res.data.lessonTypeIds);
+        if (res.data.categoryIds) setSelectedCategoryIds(res.data.categoryIds);
 
         // Build availability map: dayOfWeek -> Set of startTime strings
         const byDay: Record<number, Set<string>> = {};
@@ -103,6 +108,23 @@ export function CoachSettings() {
     setSelectedLessonTypeIds((prev) =>
       prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
     );
+  };
+
+  const toggleCategory = (id: string) => {
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+  };
+
+  const saveCategories = async () => {
+    setSaving("categories");
+    try {
+      await apiFetch("/api/coach-settings/categories", {
+        method: "PUT",
+        body: JSON.stringify({ categoryIds: selectedCategoryIds }),
+      });
+      showSaved("categories");
+    } catch {} finally { setSaving(null); }
   };
 
   const toggleHour = (day: number, hour: string) => {
@@ -344,6 +366,43 @@ export function CoachSettings() {
             </div>
           </div>
         </section>
+
+        {/* Categories */}
+        {settings?.allCategories && settings.allCategories.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
+              Categories I Teach
+            </h2>
+            <div className="bg-surface rounded-card shadow-card p-6">
+              <p className="text-sm text-text-secondary mb-4">
+                Select the categories you offer. These replace lesson types for the new booking flow.
+              </p>
+              <div className="space-y-2 mb-4">
+                {settings.allCategories.map((cat) => (
+                  <label key={cat.id} className="flex items-center gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={selectedCategoryIds.includes(cat.id)}
+                      onChange={() => toggleCategory(cat.id)}
+                      className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
+                    />
+                    <span className="text-sm font-medium">{cat.title}</span>
+                  </label>
+                ))}
+              </div>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={saveCategories}
+                  disabled={saving === "categories"}
+                  className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+                >
+                  {saving === "categories" ? "Saving..." : "Save"}
+                </button>
+                {savedSection === "categories" && <span className="text-[12px] text-sage">Saved</span>}
+              </div>
+            </div>
+          </section>
+        )}
 
         {/* Weekly Availability */}
         <section className="mb-12">

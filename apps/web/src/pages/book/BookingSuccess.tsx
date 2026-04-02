@@ -18,7 +18,7 @@ function formatTime(isoStr: string): string {
 
 export function BookingSuccess({ state }: { state: BookingState }) {
   const slot = state.selectedSlot!;
-  const typeName = state.selectedType?.title ?? "Open";
+  const typeName = state.selectedCategory?.title ?? "Open";
 
   return (
     <div className="text-center py-12">

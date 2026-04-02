@@ -48,8 +48,8 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     if (!selectedDate) return;
     setLoadingSlots(true);
     setError(null);
-    const ltParam = state.selectedType?.id ? `&lessonTypeId=${state.selectedType.id}` : "";
-    apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}${ltParam}`)
+    const catParam = state.selectedCategory?.id ? `&categoryId=${state.selectedCategory.id}` : "";
+    apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}${catParam}`)
       .then((res) => {
             // Sort by local hour (12AM first, 11PM last)
             const sorted = res.data.sort((a, b) => {
@@ -75,12 +75,12 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     });
   };
 
-  const typeName = state.selectedType?.title ?? "Open";
+  const typeName = state.selectedCategory?.title ?? "Open";
   const categoryName =
-    state.notSureCategory
+    state.notSureSkillTree
       ? "Open"
-      : state.selectedType?.categories.find(
-          (c) => c.id === state.selectedCategoryId,
+      : state.skillTrees?.find(
+          (st: any) => st.id === state.selectedSkillTreeId,
         )?.title ?? "Open";
 
   return (

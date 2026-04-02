@@ -97,7 +97,9 @@ export function CoachSession() {
   // Load curriculum + student progress once booking is loaded
   useEffect(() => {
     if (!booking) return;
-    apiFetch<{ data: CurriculumPublic }>(`/api/curriculum/${booking.lessonType.id}`)
+    const curriculumKey = booking.category?.id ?? booking.lessonType?.id;
+    if (!curriculumKey) return;
+    apiFetch<{ data: CurriculumPublic }>(`/api/curriculum/${curriculumKey}`)
       .then((res) => {
         setCurriculum(res.data);
         if (booking.user?.id) {
@@ -283,15 +285,15 @@ export function CoachSession() {
               </h2>
               <div className="bg-surface rounded-card shadow-card p-6">
                 <h3 className="font-display text-lg font-semibold mb-1">
-                  {booking.lessonType.title}
+                  {booking.category?.title ?? booking.lessonType?.title ?? "Open"}
                 </h3>
-                {booking.lessonCategory && (
+                {(booking.skillTree || booking.lessonCategory) && (
                   <p className="text-sm text-gold font-medium mb-2">
-                    {booking.lessonCategory.title}
+                    {booking.skillTree?.title ?? booking.lessonCategory?.title}
                   </p>
                 )}
                 <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                  {booking.lessonType.description}
+                  {booking.category?.description ?? booking.lessonType?.description ?? ""}
                 </p>
                 <p className="text-[12px] text-text-secondary">
                   {formatDate(booking.startsAt)}<br />

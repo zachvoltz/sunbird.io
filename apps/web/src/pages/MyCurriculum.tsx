@@ -58,13 +58,21 @@ export function MyCurriculum() {
 
   useEffect(() => {
     if (!slug) return;
-    // First resolve slug to lesson type ID
-    apiFetch<{ data: { id: string; title: string } }>(`/api/lessons/${slug}`)
+    // Try resolving via category first, then fall back to lesson type
+    apiFetch<{ data: { id: string; title: string } }>(`/api/categories/${slug}`)
       .then((res) =>
-        apiFetch<{ data: CurriculumWithProgress }>(`/api/curriculum/for-student/${res.data.id}`),
+        apiFetch<{ data: CurriculumWithProgress }>(`/api/skill-trees/for-student/${res.data.id}`),
       )
       .then((res) => setCurriculum(res.data))
-      .catch((err: any) => setError(err?.body?.error ?? "Curriculum not available"))
+      .catch(() => {
+        // Fall back to legacy lesson type -> curriculum path
+        apiFetch<{ data: { id: string; title: string } }>(`/api/lessons/${slug}`)
+          .then((res) =>
+            apiFetch<{ data: CurriculumWithProgress }>(`/api/curriculum/for-student/${res.data.id}`),
+          )
+          .then((res) => setCurriculum(res.data))
+          .catch((err: any) => setError(err?.body?.error ?? "Curriculum not available"));
+      })
       .finally(() => setLoading(false));
   }, [slug]);
 
