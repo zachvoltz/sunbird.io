@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   ReactFlow,
   Background,
@@ -82,10 +82,11 @@ export function CurriculumEditor() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Load skill tree when category changes
-  useEffect(() => {
-    if (!selectedCategoryId) return;
-    apiFetch<{ data: SkillTreeFull }>(`/api/skill-trees/by-category/${selectedCategoryId}`)
+  const [searchParams] = useSearchParams();
+
+  // Load a specific skill tree by ID
+  const loadSkillTree = (id: string) => {
+    apiFetch<{ data: SkillTreeFull }>(`/api/skill-trees/${id}`)
       .then((res) => {
         const c = res.data;
         setCurriculumId(c.id);
@@ -111,7 +112,35 @@ export function CurriculumEditor() {
         setNodes([]);
         setEdges([]);
       });
-  }, [selectedCategoryId]);
+  };
+
+  // Load skill tree from URL param or first one in category
+  useEffect(() => {
+    const qSkillTreeId = searchParams.get("skillTreeId");
+    if (qSkillTreeId) {
+      loadSkillTree(qSkillTreeId);
+      return;
+    }
+
+    if (!selectedCategoryId) return;
+
+    // Fetch list of trees in this category, then load the first one
+    apiFetch<{ data: { id: string; title: string; nodeCount: number }[] }>(`/api/skill-trees/by-category/${selectedCategoryId}`)
+      .then((res) => {
+        if (res.data.length > 0) {
+          loadSkillTree(res.data[0].id);
+        } else {
+          setCurriculumId(null);
+          setNodes([]);
+          setEdges([]);
+        }
+      })
+      .catch(() => {
+        setCurriculumId(null);
+        setNodes([]);
+        setEdges([]);
+      });
+  }, [selectedCategoryId, searchParams.get("skillTreeId")]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
