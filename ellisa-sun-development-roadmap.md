@@ -829,9 +829,9 @@ A polished, production-hardened platform with strong SEO, analytics, social proo
 
 ### 6D — MIDI Player in Video Calls (Week 23)
 
-- [ ] **6D.1 — Add Tone.js dependencies**
-  Install `tone` and `@tonejs/midi` in `apps/web`. Tone.js provides Web Audio synthesis; `@tonejs/midi` parses standard MIDI files into note events.
-  _AC: Packages installed. Import and basic synth initialization works._
+- [ ] **6D.1 — Add Tone.js dependencies & piano samples**
+  Install `tone` and `@tonejs/midi` in `apps/web`. Tone.js provides Web Audio synthesis; `@tonejs/midi` parses standard MIDI files into note events. Source a high-quality piano sample set (~3-5MB) and store in R2. Use `Tone.Sampler` (realistic piano sound) rather than `Tone.PolySynth` (basic synth). Samples lazy-loaded — only downloaded when the MIDI player initializes in a session. More instruments can be added later.
+  _AC: Packages installed. Piano sampler loads and plays notes with realistic sound. Samples served from R2._
 
 - [ ] **6D.2 — MIDI player hook**
   Create `apps/web/src/hooks/useMidiPlayer.ts` — accepts `dataChannel` ref from `useCallsSession`. Manages `Tone.PolySynth` instance. Data channel protocol: `midi:load` (sends snippet ID + title + base64 MIDI data), `midi:play` (with loop flag), `midi:pause`, `midi:stop`. On load: parses MIDI via `@tonejs/midi`, prepares note schedule. On play: schedules notes on `Tone.Transport`, starts playback **on both clients** (coach plays locally AND sends command; student receives and plays locally). Exposes: `currentSnippet`, `isPlaying`, `isLooping`, `position`, `duration`, and coach-only controls: `loadSnippet()`, `play()`, `pause()`, `stop()`, `setLoop()`.
@@ -863,12 +863,21 @@ A polished, production-hardened platform with strong SEO, analytics, social proo
 
 ### Phase 6 Key Decisions
 
-- **Cloudflare Realtime over Zoom**: Native in-app video eliminates third-party dependency, removes OAuth complexity, and enables the data channel that powers MIDI sync and metronome sync.
-- **MIDI stored in R2**: MIDI files are small (1–50KB) but using R2 establishes file upload infrastructure for future audio features (community songs, lesson recordings).
-- **MIDI synthesized on both clients**: Coach and student both hear identical audio locally via Tone.js. MIDI data + playback commands sent over WebRTC data channel as JSON — never as audio through the call. This eliminates the audio quality degradation that plagues Zoom for music.
+- **Cloudflare Realtime over Zoom**: Native in-app video eliminates third-party dependency, removes OAuth complexity, and enables the data channel that powers MIDI sync and metronome sync. Zoom removal is safe — only test data exists currently.
+- **MIDI stored in R2**: MIDI files are small (1–50KB) but using R2 establishes file upload infrastructure for future audio features (community songs, lesson recordings). Session recordings also stored in R2.
+- **MIDI synthesized on both clients**: Coach and student both hear identical audio locally via `Tone.Sampler` (piano samples, ~3-5MB, lazy-loaded). MIDI data + playback commands sent over WebRTC data channel as JSON — never as audio through the call. This eliminates the audio quality degradation that plagues Zoom for music.
 - **Metronome synced via data channel**: Coach controls BPM/time signature; both clients generate clicks locally via Web Audio API with `audioContext.currentTime` scheduling for sample-accurate timing.
 - **Tuner is independent**: No sync needed — each participant toggles their own tuner. Analyzes their own mic input client-side.
 - **Data channel protocol**: All tool sync uses a single reliable, ordered WebRTC data channel with JSON messages typed by a `type` field prefix (`midi:*`, `metro:*`).
+- **Mobile is first-class**: Video call UI must work on mobile Safari and Chrome. Controls thumb-friendly, tiles stack vertically. Screen share button hidden on mobile (not supported).
+- **Screen sharing**: Coach (or student) can share screen for sheet music, tabs, etc.
+- **Session recording**: Native Cloudflare Realtime recording, stored in R2, playable from session page.
+
+### Phase 6 Future Extensions (not in scope)
+
+- **Standalone tuner/metronome**: Make tuner and metronome available to students outside of sessions as practice tools (separate page or widget).
+- **In-app MIDI editor**: Piano roll sequencer for creating MIDI snippets in-browser. Support Web MIDI API for connecting physical MIDI keyboards.
+- **Additional instrument samples**: Guitar, strings, drums, etc. for MIDI playback — add to R2 and let coaches select instrument per snippet.
 
 ### Phase 6 New Dependencies
 
