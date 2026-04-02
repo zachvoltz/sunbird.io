@@ -52,6 +52,7 @@ export function useCallsSession(bookingId: string) {
   const pulledScreenRef = useRef(false);
   const remoteStreamRef = useRef(new MediaStream());
   const screenTrackSenderRef = useRef<RTCRtpSender | null>(null);
+  const recvTransceiversRef = useRef<{ audio: RTCRtpTransceiver; video: RTCRtpTransceiver } | null>(null);
 
   const apiBase = `/api/bookings/${bookingId}/call`;
 
@@ -73,6 +74,7 @@ export function useCallsSession(bookingId: string) {
     mySessionIdRef.current = null;
     peerSessionIdRef.current = null;
     pulledRef.current = false;
+    recvTransceiversRef.current = null;
     pulledScreenRef.current = false;
     screenTrackSenderRef.current = null;
     setLocalStream(null);
@@ -150,9 +152,15 @@ export function useCallsSession(bookingId: string) {
       }
     }
 
-    // Add receive-only transceivers for the remote tracks
-    const audioTransceiver = pc.addTransceiver("audio", { direction: "recvonly" });
-    const videoTransceiver = pc.addTransceiver("video", { direction: "recvonly" });
+    // Add receive-only transceivers ONCE — reuse on retries
+    if (!recvTransceiversRef.current) {
+      recvTransceiversRef.current = {
+        audio: pc.addTransceiver("audio", { direction: "recvonly" }),
+        video: pc.addTransceiver("video", { direction: "recvonly" }),
+      };
+    }
+
+    const { audio: audioTransceiver, video: videoTransceiver } = recvTransceiversRef.current;
 
     // Create a new offer with the recv transceivers
     const offer = await pc.createOffer();
@@ -189,7 +197,7 @@ export function useCallsSession(bookingId: string) {
         );
       }
 
-      // Check if any tracks had errors (peer hasn't joined yet)
+      // Check if any tracks had errors (peer hasn't published yet)
       const hasErrors = result.data.tracks.some((t) => t.errorCode);
       if (!hasErrors) {
         pulledRef.current = true;
