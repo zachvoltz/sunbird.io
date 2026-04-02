@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Settings, GitBranch } from "lucide-react";
+import { Settings, GitBranch, LayoutGrid } from "lucide-react";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BookingPublic } from "@sunbird/shared";
 
@@ -192,9 +192,16 @@ export function TeacherDashboard() {
         </h1>
         <div className="flex items-center gap-3">
           <Link
+            to="/coach/manage"
+            className="text-text-secondary hover:text-charcoal transition-colors"
+            title="Manage Categories & Skills"
+          >
+            <LayoutGrid className="w-5 h-5" strokeWidth={1.5} />
+          </Link>
+          <Link
             to="/coach/curriculum"
             className="text-text-secondary hover:text-charcoal transition-colors"
-            title="Curriculum"
+            title="Skill Tree Editor"
           >
             <GitBranch className="w-5 h-5" strokeWidth={1.5} />
           </Link>

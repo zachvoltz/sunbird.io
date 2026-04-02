@@ -12,6 +12,7 @@ import { TeacherDashboard } from "@/pages/teacher/Dashboard";
 import { CoachSession } from "@/pages/teacher/Session";
 import { CoachSettings } from "@/pages/teacher/Settings";
 import { CurriculumEditor } from "@/pages/teacher/CurriculumEditor";
+import { CoachManage } from "@/pages/teacher/Manage";
 import { StudentSession } from "@/pages/StudentSession";
 import { MyCurriculum } from "@/pages/MyCurriculum";
 import { AuthGate } from "@/components/AuthGate";
@@ -39,6 +40,7 @@ export function App() {
         <Route path="coach" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
         <Route path="coach/session/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSession /></RoleGate></AuthGate>} />
         <Route path="coach/settings" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSettings /></RoleGate></AuthGate>} />
+        <Route path="coach/manage" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachManage /></RoleGate></AuthGate>} />
         <Route path="coach/curriculum" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CurriculumEditor /></RoleGate></AuthGate>} />
         <Route path="login" element={<Login />} />
         <Route path="reset-password" element={<ResetPassword />} />

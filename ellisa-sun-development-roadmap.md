@@ -753,6 +753,119 @@ A polished, production-hardened platform with strong SEO, analytics, social proo
 
 ---
 
+## Phase 6 — In-App Video Calls & Music Session Tools (Weeks 20–24)
+
+**Goal:** Replace the Zoom integration with Cloudflare Realtime for native in-app video calls, and add music-specific session tools: a MIDI snippet library, in-session MIDI player, synced metronome, and pitch tuner. These tools transform the platform from "book a Zoom call" to a purpose-built music lesson environment.
+
+### 6A — Remove Zoom Integration (Week 20)
+
+- [ ] **6A.1 — Remove Zoom backend code**
+  Delete `apps/api/src/services/zoom.service.ts`. Remove Zoom OAuth routes from `coach-settings.ts` (connect, callback, disconnect). Remove Zoom meeting creation/deletion from `bookings.ts` (single + recurring). Remove `createZoomClient` from `oauth.ts`. Remove Zoom env vars from `Bindings` type and `wrangler.toml`.
+  _AC: `grep -r "zoom" apps/api/` returns zero results (excluding migration files). Clean compile._
+
+- [ ] **6A.2 — Remove Zoom frontend code**
+  Remove Zoom connect/disconnect UI from `teacher/Settings.tsx`. Remove "Join Zoom Meeting" link from `StudentSession.tsx` and `teacher/Session.tsx`. Remove Zoom-connected check from `StepConfirm.tsx` (online mode now always available). Remove `hasZoomConnected` and `MeetingProvider` from shared types.
+  _AC: No Zoom references in frontend. Online booking option always shown for all coaches._
+
+  > Note: `meetingUrl`, `meetingId`, `meetingProvider` columns remain in schema for historical data. They go unused for new bookings.
+
+### 6B — Cloudflare Realtime Video Calls (Weeks 20–21)
+
+- [ ] **6B.1 — Cloudflare Calls backend service**
+  Create `apps/api/src/services/calls.service.ts` — wraps Cloudflare Calls REST API (`POST https://rtc.live.cloudflare.com/v1/apps/{appId}/sessions/new`). Add `CF_CALLS_APP_ID` and `CF_CALLS_APP_TOKEN` to `Bindings` and `wrangler.toml`. Add `callSessionId String?` to `Booking` model in Prisma schema + D1 migration.
+  _AC: Service can create Cloudflare Calls sessions. Schema migrated._
+
+- [ ] **6B.2 — Call join API endpoint**
+  Add `POST /api/bookings/:id/call/join` to `bookings.ts`. Requires auth, verifies user is coach or student of the booking, verifies booking is ONLINE + CONFIRMED. Creates Calls session on first join (lazy — stored as `callSessionId` on booking). Returns `{ sessionId, appId }`.
+  _AC: Both coach and student can call the endpoint. Same session ID returned for both. Non-participants get 403._
+
+- [ ] **6B.3 — WebRTC client hook**
+  Create `apps/web/src/hooks/useCallsSession.ts` — manages full WebRTC lifecycle against Cloudflare's SFU. Handles `getUserMedia`, `RTCPeerConnection`, WHIP (push local tracks) and WHEP (pull remote tracks). Opens a **reliable, ordered data channel** for tool synchronization (MIDI + metronome commands). Exposes: `localStream`, `remoteStreams`, `isConnected`, `isMuted`, `isVideoOff`, `toggleMute()`, `toggleVideo()`, `disconnect()`, `dataChannel`.
+  _AC: Two browser tabs can establish a bidirectional video/audio call within a session page. Data channel sends/receives messages._
+
+- [ ] **6B.4 — Video call UI components**
+  Create `apps/web/src/components/session/` — `VideoCall.tsx` (main container), `VideoTile.tsx` (single video element with name overlay), `CallControls.tsx` (bottom bar: mute, camera, tools panel toggle, tuner toggle, end call), `ToolsPanel.tsx` (slide-out right sidebar for MIDI player + metronome).
+  _AC: Components render correctly. Controls toggle mute/camera/tools. Styled with existing design system (iris, gold, cream palette)._
+
+- [ ] **6B.5 — Restructure session pages for video**
+  Modify `StudentSession.tsx` and `teacher/Session.tsx` — for ONLINE bookings, render `VideoCall` at the top with existing chat/resources/curriculum reorganized into a tabbed panel below. Extract shared sections into `ChatPanel.tsx`, `ResourcesPanel.tsx`, `CurriculumPanel.tsx`. IN_PERSON layout unchanged.
+  _AC: Online sessions show video + tabbed content. In-person sessions unchanged. Existing chat/resources functionality preserved._
+
+### 6C — MIDI Snippet Library (Week 22)
+
+- [ ] **6C.1 — Enable R2 for MIDI storage**
+  Uncomment/add R2 bucket in `wrangler.toml` (`binding = "MIDI_BUCKET"`, `bucket_name = "sunbird-midi"`). Add `MIDI_BUCKET: R2Bucket` to `Bindings`.
+  _AC: R2 bucket accessible from Workers runtime._
+
+- [ ] **6C.2 — MIDI snippet schema & types**
+  Add `MidiSnippet` model to Prisma schema: `id`, `coachId`, `title`, `description?`, `r2Key` (R2 object key), `fileSize` (bytes), `durationMs?`, `tags?` (comma-separated), `createdAt`, `updatedAt`. Add `midiSnippets` relation to `User`. Add `MidiSnippetPublic` type and `createMidiSnippetSchema`/`updateMidiSnippetSchema` validators to shared package. D1 migration.
+  _AC: Schema generated. Types importable from `@sunbird/shared`._
+
+- [ ] **6C.3 — MIDI CRUD API routes**
+  Create `apps/api/src/routes/midi.ts` — `POST /api/midi` (multipart upload: `.mid` file + metadata, stores in R2 at `midi/{coachId}/{id}.mid`), `GET /api/midi` (list coach's snippets, paginated, searchable), `GET /api/midi/:id` (metadata), `GET /api/midi/:id/file` (stream MIDI file from R2), `PATCH /api/midi/:id` (update title/description/tags), `DELETE /api/midi/:id` (delete row + R2 object). All routes require COACH/ADMIN role. Max file size 1MB.
+  _AC: Full CRUD works. Files persist in R2. Coach can only access their own snippets._
+
+- [ ] **6C.4 — MIDI library page**
+  Create `apps/web/src/pages/teacher/MidiLibrary.tsx` — grid of MIDI snippet cards with search/filter by tags. Upload button (file input for `.mid`/`.midi` files). Each card: title, duration, tags, edit/delete actions, preview play button. Add route at `/coach/midi` with `AuthGate` + `RoleGate`. Add nav link in coach dashboard/header.
+  _AC: Coach can upload, browse, edit, delete, and preview-play MIDI snippets._
+
+### 6D — MIDI Player in Video Calls (Week 23)
+
+- [ ] **6D.1 — Add Tone.js dependencies**
+  Install `tone` and `@tonejs/midi` in `apps/web`. Tone.js provides Web Audio synthesis; `@tonejs/midi` parses standard MIDI files into note events.
+  _AC: Packages installed. Import and basic synth initialization works._
+
+- [ ] **6D.2 — MIDI player hook**
+  Create `apps/web/src/hooks/useMidiPlayer.ts` — accepts `dataChannel` ref from `useCallsSession`. Manages `Tone.PolySynth` instance. Data channel protocol: `midi:load` (sends snippet ID + title + base64 MIDI data), `midi:play` (with loop flag), `midi:pause`, `midi:stop`. On load: parses MIDI via `@tonejs/midi`, prepares note schedule. On play: schedules notes on `Tone.Transport`, starts playback **on both clients** (coach plays locally AND sends command; student receives and plays locally). Exposes: `currentSnippet`, `isPlaying`, `isLooping`, `position`, `duration`, and coach-only controls: `loadSnippet()`, `play()`, `pause()`, `stop()`, `setLoop()`.
+  _AC: Coach loads a snippet, presses play — both clients synthesize identical MIDI audio locally. No audio sent through WebRTC._
+
+- [ ] **6D.3 — MIDI player UI component**
+  Create `apps/web/src/components/session/MidiPlayer.tsx` — rendered inside `ToolsPanel`. Coach view: snippet selector (dropdown fetching from `/api/midi`), play/pause/stop buttons, loop toggle, progress bar. Student view: read-only display of snippet title, playback progress, loop indicator.
+  _AC: Coach can select, play, pause, stop, and loop MIDI snippets. Student sees playback state and hears synthesized audio._
+
+### 6E — Metronome (Week 23–24)
+
+- [ ] **6E.1 — Metronome hook**
+  Create `apps/web/src/hooks/useMetronome.ts` — uses `AudioContext` with `OscillatorNode` for click sounds (1000Hz downbeat, 800Hz other beats, short sine bursts). Scheduling via `audioContext.currentTime` lookahead (NOT setTimeout) for sample-accurate timing. Accepts `dataChannel` ref. Data channel protocol: `metro:start` (bpm + beatsPerMeasure), `metro:stop`, `metro:update` (bpm/time sig changes). Coach sends commands + starts locally; student receives and starts locally. Exposes: `isRunning`, `bpm`, `beatsPerMeasure`, `currentBeat`, and coach-only controls: `start()`, `stop()`, `setBpm()`, `setBeatsPerMeasure()`.
+  _AC: Coach starts metronome — both clients click in time. BPM/time signature changes sync instantly._
+
+- [ ] **6E.2 — Metronome UI component**
+  Create `apps/web/src/components/session/Metronome.tsx` — rendered inside `ToolsPanel`. Coach view: BPM input (20–300) with ±buttons, time signature selector (2/4, 3/4, 4/4, 5/4, 6/8, 7/8), start/stop button, tap tempo button (tap 4× to set BPM from interval). Student view: read-only BPM/time sig display, start/stop state. Both: visual beat indicator — row of circles, current beat highlighted (gold for downbeat, iris for others).
+  _AC: Metronome works with accurate timing. Tap tempo calculates correct BPM. Visual indicator syncs with audio._
+
+### 6F — Tuner (Week 24)
+
+- [ ] **6F.1 — Tuner hook**
+  Create `apps/web/src/hooks/useTuner.ts` — taps into existing mic `MediaStream` from `useCallsSession`. Creates `AnalyserNode`, runs autocorrelation pitch detection (YIN algorithm) on each `requestAnimationFrame`. Converts frequency → nearest note via `12 * Math.log2(freq / 440) + 69`. Computes cents deviation from nearest equal-tempered pitch. Entirely client-side, no sync between participants. Exposes: `isActive`, `frequency`, `noteName`, `octave`, `cents`, `toggle()`.
+  _AC: Detects pitched sounds accurately. A440 tuning fork reads "A4" at ~0 cents._
+
+- [ ] **6F.2 — Tuner UI component**
+  Create `apps/web/src/components/session/Tuner.tsx` — floating overlay on the video area, toggled via `CallControls`. Large note name + octave display (e.g., "A4"). Frequency readout in Hz. Horizontal cents gauge (−50 to +50): green center zone (±5 cents = in tune), yellow for moderate deviation, red for large. Close button.
+  _AC: Tuner overlay renders on top of video. Color feedback matches pitch accuracy. Toggle on/off works._
+
+### Phase 6 Key Decisions
+
+- **Cloudflare Realtime over Zoom**: Native in-app video eliminates third-party dependency, removes OAuth complexity, and enables the data channel that powers MIDI sync and metronome sync.
+- **MIDI stored in R2**: MIDI files are small (1–50KB) but using R2 establishes file upload infrastructure for future audio features (community songs, lesson recordings).
+- **MIDI synthesized on both clients**: Coach and student both hear identical audio locally via Tone.js. MIDI data + playback commands sent over WebRTC data channel as JSON — never as audio through the call. This eliminates the audio quality degradation that plagues Zoom for music.
+- **Metronome synced via data channel**: Coach controls BPM/time signature; both clients generate clicks locally via Web Audio API with `audioContext.currentTime` scheduling for sample-accurate timing.
+- **Tuner is independent**: No sync needed — each participant toggles their own tuner. Analyzes their own mic input client-side.
+- **Data channel protocol**: All tool sync uses a single reliable, ordered WebRTC data channel with JSON messages typed by a `type` field prefix (`midi:*`, `metro:*`).
+
+### Phase 6 New Dependencies
+
+| Package | Location | Purpose |
+|---------|----------|---------|
+| `tone` | `apps/web` | Web Audio synthesis for MIDI playback and metronome |
+| `@tonejs/midi` | `apps/web` | MIDI file parsing |
+
+No new API dependencies — Cloudflare Calls uses `fetch` (already available in Workers).
+
+### Phase 6 Deliverable
+A purpose-built music lesson environment with native in-app video calls, a coach MIDI library, in-session MIDI playback (synthesized locally on both sides for perfect audio quality), a synced metronome, and an individual pitch tuner. The platform is no longer "book a Zoom call" — it's a dedicated tool designed for music education.
+
+---
+
 ## Dependency Map
 
 ```
@@ -775,6 +888,14 @@ Phase 4 (Community) <----+  (R2 setup can start during Phase 2 if needed)
   |
   v
 Phase 5 (Polish + Growth)
+  |
+  v
+Phase 6 (Video Calls + Music Tools)
+  Depends on: Phase 2 (bookings, sessions, auth)
+  Internal order: 6A/6B (video) → 6C (MIDI library) → 6D (MIDI player)
+                  6B (video) → 6E (metronome)
+                  6B (video) → 6F (tuner)
+                  6E and 6F are independent of each other
 ```
 
 Phases are sequential because each depends on the prior phase's infrastructure (especially auth + roles from Phase 2). However, within each phase, front-end and back-end tasks can be parallelized between developers.
@@ -791,6 +912,8 @@ Phases are sequential because each depends on the prior phase's infrastructure (
 | Scope creep in community features | High | Medium | Strict MVP scope per phase. Defer features like real-time chat, playlists, collaborative songwriting to post-launch. |
 | Multi-teacher scheduling conflicts | Medium | Medium | Teacher availability is per-teacher. DB constraints prevent double-booking. Clear UI shows only available slots. |
 | Role escalation vulnerabilities | Low | High | Role checks in middleware (not just UI). E2E tests cover role boundaries. Security audit in Phase 5. |
+| Cloudflare Realtime is still in beta | Medium | Medium | Build a thin abstraction over the WebRTC layer so the SFU provider can be swapped. Test thoroughly before launch. Zoom integration code preserved in git history if rollback needed. |
+| WebRTC audio processing degrades music | Medium | Medium | Disable `noiseSuppression`, `echoCancellation`, `autoGainControl` on music-carrying tracks. MIDI/metronome synthesized locally (never sent as audio). Test with real instruments. |
 
 ---
 
