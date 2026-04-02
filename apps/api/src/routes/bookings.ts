@@ -661,19 +661,20 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
   }
 
   // Create a new CF session if one doesn't exist for this role
+  // Pass the SDP offer from the client to establish the PeerConnection immediately
   if (!mySessionId) {
-    const newSession = await callsService.createSession();
+    const newSession = await callsService.createSession(body.sessionDescription);
     mySessionId = newSession.sessionId;
     await saveSession(sessionKey, mySessionId);
   }
 
-  // Try tracks negotiation; if session is stale (410), create fresh and retry
+  // Try tracks negotiation; if session is stale (410/425), create fresh and retry
   let result;
   try {
     result = await callsService.newTracks(mySessionId, body);
   } catch (err: any) {
-    if (err.message?.includes("410")) {
-      const freshSession = await callsService.createSession();
+    if (err.message?.includes("410") || err.message?.includes("425")) {
+      const freshSession = await callsService.createSession(body.sessionDescription);
       mySessionId = freshSession.sessionId;
       await saveSession(sessionKey, mySessionId);
       result = await callsService.newTracks(mySessionId, body);

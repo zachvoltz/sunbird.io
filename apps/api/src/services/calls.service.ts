@@ -31,10 +31,12 @@ export function createCallsService(appId: string, appToken: string) {
     "Content-Type": "application/json",
   };
 
-  async function createSession(): Promise<CallsSession> {
+  async function createSession(sdp?: { type: string; sdp: string }): Promise<CallsSession & { sessionDescription?: { type: string; sdp: string } }> {
+    const body = sdp ? { sessionDescription: sdp } : undefined;
     const res = await fetch(`${baseUrl}/sessions/new`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${appToken}` },
+      headers: body ? headers : { Authorization: `Bearer ${appToken}` },
+      body: body ? JSON.stringify(body) : undefined,
     });
 
     if (!res.ok) {
@@ -42,8 +44,8 @@ export function createCallsService(appId: string, appToken: string) {
       throw new Error(`Cloudflare Calls API error: ${res.status} ${text}`);
     }
 
-    const data = (await res.json()) as { sessionId: string };
-    return { sessionId: data.sessionId };
+    const data = (await res.json()) as { sessionId: string; sessionDescription?: { type: string; sdp: string } };
+    return { sessionId: data.sessionId, sessionDescription: data.sessionDescription };
   }
 
   async function newTracks(sessionId: string, request: TrackRequest): Promise<TrackResponse> {
