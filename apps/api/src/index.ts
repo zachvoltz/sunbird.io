@@ -71,8 +71,12 @@ app.route("/api/skill-trees", skillTreeRoutes);
 
 // Serve frontend assets for all non-API routes (SPA fallback)
 app.get("*", async (c) => {
-  if (c.env?.ASSETS) {
-    return c.env.ASSETS.fetch(c.req.raw);
+  try {
+    if (c.env?.ASSETS) {
+      return c.env.ASSETS.fetch(c.req.raw);
+    }
+  } catch (err: any) {
+    console.error("Asset fetch error:", err.message);
   }
   return c.notFound();
 });

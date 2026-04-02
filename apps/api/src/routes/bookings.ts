@@ -738,17 +738,22 @@ async function requireBookingParticipant(c: any): Promise<{ booking: any } | Res
 
 // GET /api/bookings/:id/messages
 bookingRoutes.get("/:id/messages", requireAuth, async (c) => {
-  const check = await requireBookingParticipant(c);
-  if (check instanceof Response) return check;
+  try {
+    const check = await requireBookingParticipant(c);
+    if (check instanceof Response) return check;
 
-  const db = getDb();
-  const messages = await db.sessionMessage.findMany({
-    where: { bookingId: check.booking.id },
-    include: { sender: { select: senderSelect } },
-    orderBy: { createdAt: "asc" },
-  });
+    const db = getDb();
+    const messages = await db.sessionMessage.findMany({
+      where: { bookingId: check.booking.id },
+      include: { sender: { select: senderSelect } },
+      orderBy: { createdAt: "asc" },
+    });
 
-  return c.json({ data: messages.map(serializeMessage) });
+    return c.json({ data: messages.map(serializeMessage) });
+  } catch (err: any) {
+    console.error("Messages error:", err.message, err.stack);
+    return c.json({ error: err.message, stack: err.stack }, 500);
+  }
 });
 
 // POST /api/bookings/:id/messages
