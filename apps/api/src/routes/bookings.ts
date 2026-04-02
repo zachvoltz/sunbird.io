@@ -25,23 +25,6 @@ function formatDateTime(date: Date): string {
 function serializeBooking(b: any) {
   return {
     id: b.id,
-    lessonType: {
-      id: b.lessonType.id,
-      slug: b.lessonType.slug,
-      title: b.lessonType.title,
-      subtitle: b.lessonType.subtitle,
-      description: b.lessonType.description,
-      imageUrl: b.lessonType.imageUrl,
-      pricePerSession: b.lessonType.pricePerSession,
-    },
-    lessonCategory: b.lessonCategory
-      ? {
-          id: b.lessonCategory.id,
-          slug: b.lessonCategory.slug,
-          title: b.lessonCategory.title,
-          description: b.lessonCategory.description,
-        }
-      : null,
     startsAt: b.startsAt.toISOString(),
     endsAt: b.endsAt.toISOString(),
     status: b.status,
@@ -73,8 +56,6 @@ function serializeBooking(b: any) {
 }
 
 const bookingInclude = {
-  lessonType: true,
-  lessonCategory: true,
   category: true,
   skillTree: { select: { id: true, title: true } },
   node: { select: { id: true, title: true } },
@@ -220,7 +201,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     data: {
       userId: user.id,
       coachId,
-      lessonTypeId: "legacy",
+      lessonTypeId: null,
       categoryId,
       skillTreeId: skillTreeId ?? null,
       nodeId: nodeId ?? null,
@@ -359,7 +340,7 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
 
   const booking = await db.booking.findUnique({
     where: { id },
-    include: { lessonType: true, user: { select: { email: true, name: true } } },
+    include: { category: true, user: { select: { email: true, name: true } } },
   });
 
   if (!booking) {
@@ -398,7 +379,7 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
     const email = createEmailService(apiKey, from);
-    email.sendBookingCancellation(booking.user.email, booking.user.name, booking.lessonType.title, formatDateTime(booking.startsAt)).catch(console.error);
+    email.sendBookingCancellation(booking.user.email, booking.user.name, booking.category?.title ?? "Lesson", formatDateTime(booking.startsAt)).catch(console.error);
   } catch {}
 
   return c.json({ data: serializeBooking(updated) });
@@ -444,8 +425,7 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
   const booking = await db.booking.findUnique({
     where: { id },
     include: {
-      lessonType: true,
-      lessonCategory: true,
+      category: true,
       user: { select: { email: true, name: true } },
     },
   });
@@ -476,8 +456,8 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
     email.sendPracticeNotes(
       booking.user.email,
       booking.user.name,
-      booking.lessonType.title,
-      booking.lessonCategory?.title ?? "Open",
+      booking.category?.title ?? "Lesson",
+      "Open",
       parsed.data.practiceNotes,
     ).catch(console.error);
   } catch {}
@@ -549,7 +529,7 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     data: {
       userId: user.id,
       coachId,
-      lessonTypeId: "legacy",
+      lessonTypeId: null,
       categoryId,
       skillTreeId: skillTreeId ?? null,
       nodeId: nodeId ?? null,
@@ -596,7 +576,7 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
       data: {
         userId: user.id,
         coachId,
-        lessonTypeId: "legacy",
+        lessonTypeId: null,
         categoryId,
         skillTreeId: skillTreeId ?? null,
         nodeId: nodeId ?? null,

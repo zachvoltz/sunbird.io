@@ -14,10 +14,6 @@ import type {
   createSessionResourceSchema,
   updateCoachSettingsSchema,
   updateCoachAvailabilitySchema,
-  updateCoachLessonTypesSchema,
-  createCurriculumSchema,
-  saveCurriculumGraphSchema,
-  markProgressSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -36,11 +32,6 @@ export type CreateSessionMessageInput = z.infer<typeof createSessionMessageSchem
 export type CreateSessionResourceInput = z.infer<typeof createSessionResourceSchema>;
 export type UpdateCoachSettingsInput = z.infer<typeof updateCoachSettingsSchema>;
 export type UpdateCoachAvailabilityInput = z.infer<typeof updateCoachAvailabilitySchema>;
-export type UpdateCoachLessonTypesInput = z.infer<typeof updateCoachLessonTypesSchema>;
-export type CreateCurriculumInput = z.infer<typeof createCurriculumSchema>;
-export type SaveCurriculumGraphInput = z.infer<typeof saveCurriculumGraphSchema>;
-export type MarkProgressInput = z.infer<typeof markProgressSchema>;
-
 // ─── Shared enums (mirroring DB values) ───
 
 export type Role = "STUDENT" | "COACH" | "ADMIN";
@@ -102,7 +93,6 @@ export interface CoachPublic extends UserPublic {
   isPublished: boolean;
   sessionAddress: string | null;
   hasZoomConnected: boolean;
-  lessonTypeIds: string[];
   categoryIds: string[];
 }
 
@@ -167,18 +157,7 @@ export interface CoachProfilePublic {
   socialLinks: Record<string, string> | null;
   sessionAddress: string | null;
   hasZoomConnected: boolean;
-  lessonTypes: (LessonTypePublic & { curriculumNodeCount: number })[];
   categories: (CategoryPublic & { skillTreeCount: number })[];
-}
-
-export interface LessonTypePublic {
-  id: string;
-  slug: string;
-  title: string;
-  subtitle: string | null;
-  description: string;
-  imageUrl: string | null;
-  pricePerSession: number;
 }
 
 export interface WorkshopPublic {
@@ -191,7 +170,7 @@ export interface WorkshopPublic {
   spotsRemaining: number;
   price: number;
   imageUrl: string | null;
-  lessonType: LessonTypePublic | null;
+  category: CategoryPublic | null;
 }
 
 export interface EventPublic {
@@ -218,17 +197,6 @@ export interface SongPublic {
   isLikedByMe: boolean;
 }
 
-export interface LessonCategoryPublic {
-  id: string;
-  slug: string;
-  title: string;
-  description: string | null;
-}
-
-export interface LessonTypeWithCategories extends LessonTypePublic {
-  categories: LessonCategoryPublic[];
-}
-
 export interface AvailableSlot {
   startsAt: string;
   endsAt: string;
@@ -245,8 +213,6 @@ export interface CoachAvailabilitySlot {
 
 export interface BookingPublic {
   id: string;
-  lessonType: LessonTypePublic;
-  lessonCategory: LessonCategoryPublic | null;
   startsAt: string;
   endsAt: string;
   status: BookingStatus;
@@ -276,7 +242,7 @@ export interface RecurringSchedulePublic {
   startsOn: string;
   endsOn: string;
   status: string;
-  lessonType: LessonTypePublic;
+  category: CategoryPublic | null;
   coach: UserPublic;
   bookingCount: number;
 }
@@ -319,33 +285,6 @@ export interface PracticeDrillPublic {
   resourceId: string | null;
 }
 
-export interface CurriculumNodePublic {
-  id: string;
-  title: string;
-  description: string | null;
-  positionX: number;
-  positionY: number;
-  color: string | null;
-  resources: CoachResourcePublic[];
-  drills: PracticeDrillPublic[];
-}
-
-export interface CurriculumEdgePublic {
-  id: string;
-  fromNodeId: string;
-  toNodeId: string;
-}
-
-export interface CurriculumPublic {
-  id: string;
-  coachId: string;
-  lessonTypeId: string;
-  title: string | null;
-  description: string | null;
-  nodes: CurriculumNodePublic[];
-  edges: CurriculumEdgePublic[];
-}
-
 export interface StudentProgressPublic {
   id: string;
   studentId: string;
@@ -355,6 +294,3 @@ export interface StudentProgressPublic {
   notes: string | null;
 }
 
-export interface CurriculumWithProgress extends CurriculumPublic {
-  progress: StudentProgressPublic[];
-}

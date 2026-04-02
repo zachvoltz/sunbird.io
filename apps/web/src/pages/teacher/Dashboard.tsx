@@ -114,7 +114,7 @@ export function TeacherDashboard() {
           to={`/coach/session/${b.id}`}
           className="font-display text-lg font-semibold hover:text-iris transition-colors"
         >
-          {b.category?.title ?? b.lessonType?.title ?? "Open"}
+          {b.category?.title ?? "Open"}
         </Link>
         <span
           className={`text-[11px] uppercase tracking-wider ${
@@ -125,7 +125,7 @@ export function TeacherDashboard() {
         </span>
       </div>
       <p className="text-sm text-text-secondary mb-1">
-        {b.skillTree?.title ?? b.lessonCategory?.title ?? "Open"} &middot;{" "}
+        {b.skillTree?.title ?? "Open"} &middot;{" "}
         {formatDate(b.startsAt)} at {formatTime(b.startsAt)}
       </p>
       <p className="text-sm font-medium">{b.user?.name ?? "Unknown student"}</p>

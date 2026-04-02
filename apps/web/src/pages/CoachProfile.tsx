@@ -38,8 +38,6 @@ export function CoachProfile() {
     );
   }
 
-  const priceDisplay = (cents: number) => `$${(cents / 100).toFixed(0)}`;
-
   return (
     <div>
       {/* Hero */}
@@ -123,42 +121,6 @@ export function CoachProfile() {
                       </div>
                       <Link
                         to={`/book?coachId=${coach.id}&categoryId=${cat.id}`}
-                        className="text-[13px] font-medium text-charcoal border border-charcoal px-4 py-1.5 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
-                      >
-                        Book
-                      </Link>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* Courses (legacy lesson types) */}
-          {(!coach.categories || coach.categories.length === 0) && coach.lessonTypes.length > 0 && (
-            <section className="mb-16">
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
-                Courses
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {coach.lessonTypes.map((lt) => (
-                  <div key={lt.id} className="bg-surface rounded-card shadow-card p-6">
-                    <h3 className="font-display text-lg font-semibold mb-1">{lt.title}</h3>
-                    {lt.subtitle && (
-                      <p className="font-handwritten text-gold mb-2">{lt.subtitle}</p>
-                    )}
-                    <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                      {lt.description}
-                    </p>
-                    <div className="flex items-center justify-between">
-                      <div className="text-sm text-text-secondary">
-                        {priceDisplay(lt.pricePerSession)}/session
-                        {lt.curriculumNodeCount > 0 && (
-                          <span className="ml-2 text-iris">{lt.curriculumNodeCount} skills</span>
-                        )}
-                      </div>
-                      <Link
-                        to={`/book?coachId=${coach.id}&lessonTypeId=${lt.id}`}
                         className="text-[13px] font-medium text-charcoal border border-charcoal px-4 py-1.5 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
                       >
                         Book

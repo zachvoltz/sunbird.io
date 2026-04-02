@@ -7,7 +7,7 @@ import type {
   SessionMessagePublic,
   SessionResourcePublic,
   SessionResourceType,
-  CurriculumPublic,
+  SkillTreeFull,
   StudentProgressPublic,
 } from "@sunbird/shared";
 
@@ -62,7 +62,7 @@ export function CoachSession() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Curriculum state
-  const [curriculum, setCurriculum] = useState<CurriculumPublic | null>(null);
+  const [curriculum, setCurriculum] = useState<SkillTreeFull | null>(null);
   const [progress, setProgress] = useState<StudentProgressPublic[]>([]);
 
   // Resource form state
@@ -94,17 +94,17 @@ export function CoachSession() {
     );
   }, [bookingId]);
 
-  // Load curriculum + student progress once booking is loaded
+  // Load skill tree + student progress once booking is loaded
   useEffect(() => {
     if (!booking) return;
-    const curriculumKey = booking.category?.id ?? booking.lessonType?.id;
-    if (!curriculumKey) return;
-    apiFetch<{ data: CurriculumPublic }>(`/api/curriculum/${curriculumKey}`)
+    const categoryId = booking.category?.id;
+    if (!categoryId) return;
+    apiFetch<{ data: SkillTreeFull }>(`/api/skill-trees/by-category/${categoryId}`)
       .then((res) => {
         setCurriculum(res.data);
         if (booking.user?.id) {
           return apiFetch<{ data: StudentProgressPublic[] }>(
-            `/api/curriculum/${res.data.id}/progress/${booking.user.id}`,
+            `/api/skill-trees/${res.data.id}/progress/${booking.user.id}`,
           );
         }
       })
@@ -197,7 +197,7 @@ export function CoachSession() {
     const isCompleted = completedNodeIds.has(nodeId);
     if (isCompleted) {
       try {
-        await apiFetch(`/api/curriculum/${curriculum.id}/progress`, {
+        await apiFetch(`/api/skill-trees/${curriculum.id}/progress`, {
           method: "DELETE",
           body: JSON.stringify({ nodeId, studentId: booking.user.id }),
         });
@@ -206,7 +206,7 @@ export function CoachSession() {
     } else {
       try {
         const res = await apiFetch<{ data: StudentProgressPublic }>(
-          `/api/curriculum/${curriculum.id}/progress`,
+          `/api/skill-trees/${curriculum.id}/progress`,
           {
             method: "POST",
             body: JSON.stringify({ nodeId, studentId: booking.user.id }),
@@ -285,15 +285,15 @@ export function CoachSession() {
               </h2>
               <div className="bg-surface rounded-card shadow-card p-6">
                 <h3 className="font-display text-lg font-semibold mb-1">
-                  {booking.category?.title ?? booking.lessonType?.title ?? "Open"}
+                  {booking.category?.title ?? "Open"}
                 </h3>
-                {(booking.skillTree || booking.lessonCategory) && (
+                {booking.skillTree && (
                   <p className="text-sm text-gold font-medium mb-2">
-                    {booking.skillTree?.title ?? booking.lessonCategory?.title}
+                    {booking.skillTree.title}
                   </p>
                 )}
                 <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                  {booking.category?.description ?? booking.lessonType?.description ?? ""}
+                  {booking.category?.description ?? ""}
                 </p>
                 <p className="text-[12px] text-text-secondary">
                   {formatDate(booking.startsAt)}<br />

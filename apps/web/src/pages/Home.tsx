@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/Wordmark";
 import { Mic, PenLine, Music, Theater, BookOpen, Flower2, Guitar } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { apiFetch } from "@/lib/api";
-import type { LessonTypePublic, CategoryPublic } from "@sunbird/shared";
+import type { CategoryPublic } from "@sunbird/shared";
 
 const lessonIcons: Record<string, LucideIcon> = {
   voice: Mic,
@@ -46,13 +46,9 @@ function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 }
 
 export function Home() {
-  const [lessonTypes, setLessonTypes] = useState<LessonTypePublic[]>([]);
   const [categories, setCategories] = useState<CategoryPublic[]>([]);
 
   useEffect(() => {
-    apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
-      .then((res) => setLessonTypes(res.data))
-      .catch(() => {});
     apiFetch<{ data: CategoryPublic[] }>("/api/categories")
       .then((res) => setCategories(res.data))
       .catch(() => {});
@@ -112,7 +108,7 @@ export function Home() {
               What I teach
             </h2>
             <Link
-              to={categories.length > 0 ? "/categories" : "/lessons"}
+              to="/categories"
               className="hidden sm:block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
             >
               View all &rarr;
@@ -120,9 +116,9 @@ export function Home() {
           </div>
 
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-            {(categories.length > 0 ? categories : lessonTypes).map((item) => {
+            {categories.map((item) => {
               const Icon = lessonIcons[item.slug] || Music;
-              const href = categories.length > 0 ? `/categories/${item.slug}` : `/lessons/${item.slug}`;
+              const href = `/categories/${item.slug}`;
               return (
               <Link
                 key={item.slug}

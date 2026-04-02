@@ -379,7 +379,7 @@ model Booking {
   id                  String    @id @default(cuid())
   userId              String
   coachId             String?
-  lessonTypeId        String
+  lessonTypeId        String?
   lessonCategoryId    String?
   startsAt            DateTime
   endsAt              DateTime
@@ -402,7 +402,7 @@ model Booking {
 
   user           User               @relation(fields: [userId], references: [id])
   coach          User?              @relation("coachBookings", fields: [coachId], references: [id])
-  lessonType     LessonType         @relation(fields: [lessonTypeId], references: [id])
+  lessonType     LessonType?        @relation(fields: [lessonTypeId], references: [id])
   category       Category?          @relation("bookingCategory", fields: [categoryId], references: [id])
   skillTree      SkillTree?         @relation("bookingSkillTree", fields: [skillTreeId], references: [id])
   node           SkillTreeNode?     @relation("bookingNode", fields: [nodeId], references: [id])
@@ -416,7 +416,7 @@ model RecurringSchedule {
   id               String   @id @default(cuid())
   userId           String
   coachId          String
-  lessonTypeId     String
+  lessonTypeId     String?
   lessonCategoryId String?
   dayOfWeek        Int
   startTime        String

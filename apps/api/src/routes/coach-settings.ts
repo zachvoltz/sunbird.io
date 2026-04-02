@@ -3,7 +3,7 @@ import { generateState, generateCodeVerifier } from "arctic";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createZoomClient } from "../lib/oauth";
-import { updateCoachSettingsSchema, updateCoachAvailabilitySchema, updateCoachLessonTypesSchema, updateCoachProfileSchema } from "@sunbird/shared";
+import { updateCoachSettingsSchema, updateCoachAvailabilitySchema, updateCoachProfileSchema } from "@sunbird/shared";
 
 export const coachSettingsRoutes = new Hono();
 
@@ -19,15 +19,6 @@ coachSettingsRoutes.get("/", requireAuth, requireRole("COACH", "ADMIN"), async (
   const availability = await db.coachAvailability.findMany({
     where: { coachId: user.id },
     orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
-  });
-
-  const coachLessonTypes = await db.coachLessonType.findMany({
-    where: { coachId: user.id },
-  });
-
-  const allLessonTypes = await db.lessonType.findMany({
-    orderBy: { sortOrder: "asc" },
-    select: { id: true, title: true },
   });
 
   const coachCats = await db.coachCategory.findMany({
@@ -60,8 +51,6 @@ coachSettingsRoutes.get("/", requireAuth, requireRole("COACH", "ADMIN"), async (
         endTime: a.endTime,
         isActive: a.isActive,
       })),
-      lessonTypeIds: coachLessonTypes.map((ct: any) => ct.lessonTypeId),
-      allLessonTypes,
       categoryIds: coachCats.map((cc: any) => cc.categoryId),
       allCategories,
     },
@@ -127,10 +116,10 @@ coachSettingsRoutes.post("/publish", requireAuth, requireRole("COACH", "ADMIN"),
   const user = c.get("user")!;
   const db = getDb();
 
-  // Must have at least one curriculum
-  const curriculumCount = await db.curriculum.count({ where: { coachId: user.id } });
-  if (curriculumCount === 0) {
-    return c.json({ error: "You need at least one curriculum before publishing your profile" }, 400);
+  // Must have at least one category assigned
+  const categoryCount = await db.coachCategory.count({ where: { coachId: user.id } });
+  if (categoryCount === 0) {
+    return c.json({ error: "You need at least one category before publishing your profile" }, 400);
   }
 
   // Must have a slug
@@ -174,29 +163,6 @@ coachSettingsRoutes.put("/availability", requireAuth, requireRole("COACH", "ADMI
         endTime: slot.endTime,
         isActive: true,
       },
-    });
-  }
-
-  return c.json({ data: { ok: true } });
-});
-
-// PUT /api/coach-settings/lesson-types — bulk replace lesson type assignments
-coachSettingsRoutes.put("/lesson-types", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
-  const user = c.get("user")!;
-  const body = await c.req.json();
-  const parsed = updateCoachLessonTypesSchema.safeParse(body);
-  if (!parsed.success) {
-    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
-  }
-
-  const db = getDb();
-
-  // Delete existing and re-create
-  await db.coachLessonType.deleteMany({ where: { coachId: user.id } });
-
-  for (const lessonTypeId of parsed.data.lessonTypeIds) {
-    await db.coachLessonType.create({
-      data: { coachId: user.id, lessonTypeId },
     });
   }
 

@@ -8,7 +8,7 @@ export const coachRoutes = new Hono();
 coachRoutes.get("/", async (c) => {
   const db = getDb();
   const all = c.req.query("all"); // ?all=true to include unpublished (for booking flow)
-  const categoryId = c.req.query("categoryId") || c.req.query("lessonTypeId");
+  const categoryId = c.req.query("categoryId");
 
   const where: any = { role: "COACH" };
   if (!all) {
@@ -28,7 +28,6 @@ coachRoutes.get("/", async (c) => {
       isPublished: true,
       sessionAddress: true,
       oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
-      coachLessonTypes: { select: { lessonTypeId: true } },
       coachCategories: { select: { categoryId: true } },
     },
     orderBy: { name: "asc" },
@@ -37,8 +36,7 @@ coachRoutes.get("/", async (c) => {
   let filtered = coaches;
   if (categoryId) {
     filtered = coaches.filter((c: any) =>
-      c.coachCategories.some((cc: any) => cc.categoryId === categoryId) ||
-      c.coachLessonTypes.some((ct: any) => ct.lessonTypeId === categoryId),
+      c.coachCategories.some((cc: any) => cc.categoryId === categoryId),
     );
   }
 
@@ -54,7 +52,6 @@ coachRoutes.get("/", async (c) => {
       isPublished: c.isPublished,
       sessionAddress: c.sessionAddress,
       hasZoomConnected: c.oauthAccounts.length > 0,
-      lessonTypeIds: c.coachLessonTypes.map((ct: any) => ct.lessonTypeId),
       categoryIds: c.coachCategories.map((cc: any) => cc.categoryId),
     })),
   });
@@ -79,12 +76,6 @@ coachRoutes.get("/:slug", async (c) => {
       socialLinks: true,
       sessionAddress: true,
       oauthAccounts: { where: { provider: "zoom" }, select: { id: true } },
-      coachLessonTypes: {
-        include: { lessonType: true },
-      },
-      coachCurricula: {
-        include: { nodes: { select: { id: true } } },
-      },
       coachCategories: {
         include: { category: true },
       },
@@ -104,21 +95,6 @@ coachRoutes.get("/:slug", async (c) => {
     if ((coach as any).socialLinks) socialLinks = JSON.parse((coach as any).socialLinks);
   } catch {}
 
-  // Build lesson types with curriculum node counts
-  const lessonTypes = (coach as any).coachLessonTypes.map((ct: any) => {
-    const curriculum = (coach as any).coachCurricula.find((cur: any) => cur.lessonTypeId === ct.lessonTypeId);
-    return {
-      id: ct.lessonType.id,
-      slug: ct.lessonType.slug,
-      title: ct.lessonType.title,
-      subtitle: ct.lessonType.subtitle,
-      description: ct.lessonType.description,
-      imageUrl: ct.lessonType.imageUrl,
-      pricePerSession: ct.lessonType.pricePerSession,
-      curriculumNodeCount: curriculum?.nodes?.length ?? 0,
-    };
-  });
-
   return c.json({
     data: {
       id: coach.id,
@@ -132,9 +108,8 @@ coachRoutes.get("/:slug", async (c) => {
       socialLinks,
       sessionAddress: (coach as any).sessionAddress,
       hasZoomConnected: coach.oauthAccounts.length > 0,
-      lessonTypes,
       categories: (coach as any).coachCategories.map((cc: any) => {
-        const skillTreeCount = (coach as any).coachSkillTrees.filter((st: any) => st.category?.id === cc.categoryId || true).length;
+        const skillTreeCount = (coach as any).coachSkillTrees.filter((st: any) => st.categoryId === cc.categoryId).length;
         return {
           id: cc.category.id,
           slug: cc.category.slug,

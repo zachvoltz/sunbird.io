@@ -1,27 +1,16 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
-import type { LessonTypePublic, CategoryPublic } from "@sunbird/shared";
+import type { CategoryPublic } from "@sunbird/shared";
 
 export function Lessons() {
-  const [lessons, setLessons] = useState<(LessonTypePublic | CategoryPublic)[]>([]);
+  const [lessons, setLessons] = useState<CategoryPublic[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Try categories first, fall back to legacy lesson types
     apiFetch<{ data: CategoryPublic[] }>("/api/categories")
-      .then((res) => {
-        if (res.data.length > 0) {
-          setLessons(res.data);
-        } else {
-          return apiFetch<{ data: LessonTypePublic[] }>("/api/lessons").then((r) => setLessons(r.data));
-        }
-      })
-      .catch(() => {
-        apiFetch<{ data: LessonTypePublic[] }>("/api/lessons")
-          .then((res) => setLessons(res.data))
-          .catch(() => {});
-      })
+      .then((res) => setLessons(res.data))
+      .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
 

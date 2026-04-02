@@ -32,7 +32,7 @@ availabilityRoutes.get("/", async (c) => {
   }
 
   const dayOfWeek = date.getDay();
-  const categoryId = c.req.query("categoryId") || c.req.query("lessonTypeId");
+  const categoryId = c.req.query("categoryId");
   const db = getDb();
 
   // Get per-coach availability for this day
@@ -48,21 +48,11 @@ availabilityRoutes.get("/", async (c) => {
   // If categoryId provided, filter to coaches who teach it
   let qualifiedCoachIds: Set<string> | null = null;
   if (categoryId) {
-    // Try new CoachCategory first, fall back to old CoachLessonType
     const coachCategories = await db.coachCategory.findMany({
       where: { categoryId },
       select: { coachId: true },
     });
-    if (coachCategories.length > 0) {
-      qualifiedCoachIds = new Set(coachCategories.map((cc: any) => cc.coachId));
-    } else {
-      // Fallback to old CoachLessonType for backwards compat
-      const coachLessonTypes = await db.coachLessonType.findMany({
-        where: { lessonTypeId: categoryId },
-        select: { coachId: true },
-      });
-      qualifiedCoachIds = new Set(coachLessonTypes.map((ct: any) => ct.coachId));
-    }
+    qualifiedCoachIds = new Set(coachCategories.map((cc: any) => cc.coachId));
   }
 
   // Get existing bookings for this date (not cancelled), per coach

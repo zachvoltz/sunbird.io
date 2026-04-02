@@ -166,44 +166,6 @@ export const updateCoachAvailabilitySchema = z.object({
   })),
 });
 
-export const updateCoachLessonTypesSchema = z.object({
-  lessonTypeIds: z.array(z.string().min(1)),
-});
-
-// ─── Curriculum ───
-
-export const createCurriculumSchema = z.object({
-  lessonTypeId: z.string().min(1),
-  title: z.string().max(200).optional(),
-  description: z.string().max(2000).optional(),
-});
-
-export const saveCurriculumGraphSchema = z.object({
-  nodes: z.array(z.object({
-    id: z.string().min(1),
-    title: z.string().min(1).max(200),
-    description: z.string().max(2000).optional(),
-    positionX: z.number(),
-    positionY: z.number(),
-    color: z.string().max(20).optional(),
-  })),
-  edges: z.array(z.object({
-    id: z.string().min(1),
-    fromNodeId: z.string().min(1),
-    toNodeId: z.string().min(1),
-  })),
-});
-
-export const markProgressSchema = z.object({
-  nodeId: z.string().min(1),
-  studentId: z.string().min(1),
-  notes: z.string().max(2000).optional(),
-});
-
-export const unmarkProgressSchema = z.object({
-  nodeId: z.string().min(1),
-  studentId: z.string().min(1),
-});
 
 export const createNodeResourceSchema = z.object({
   type: z.enum(["LINK", "PDF", "AUDIO"]),

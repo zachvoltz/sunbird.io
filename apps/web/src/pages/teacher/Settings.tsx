@@ -6,7 +6,6 @@ import type { CoachAvailabilitySlot } from "@sunbird/shared";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
 
-type LessonTypeOption = { id: string; title: string };
 type CategoryOption = { id: string; title: string };
 
 type CoachSettingsData = {
@@ -20,10 +19,8 @@ type CoachSettingsData = {
   sessionAddress: string | null;
   zoomConnected: boolean;
   availability: CoachAvailabilitySlot[];
-  lessonTypeIds: string[];
-  allLessonTypes: LessonTypeOption[];
-  categoryIds?: string[];
-  allCategories?: CategoryOption[];
+  categoryIds: string[];
+  allCategories: CategoryOption[];
 };
 
 export function CoachSettings() {
@@ -38,7 +35,6 @@ export function CoachSettings() {
   const [credentials, setCredentials] = useState("");
   const [socialLinks, setSocialLinks] = useState("");
   const [isPublished, setIsPublished] = useState(false);
-  const [selectedLessonTypeIds, setSelectedLessonTypeIds] = useState<string[]>([]);
   const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [availabilityByDay, setAvailabilityByDay] = useState<Record<number, Set<string>>>({});
   const [saving, setSaving] = useState<string | null>(null);
@@ -62,8 +58,7 @@ export function CoachSettings() {
         setCredentials(res.data.credentials ?? "");
         setSocialLinks(res.data.socialLinks ?? "");
         setIsPublished(res.data.isPublished ?? false);
-        setSelectedLessonTypeIds(res.data.lessonTypeIds);
-        if (res.data.categoryIds) setSelectedCategoryIds(res.data.categoryIds);
+        setSelectedCategoryIds(res.data.categoryIds);
 
         // Build availability map: dayOfWeek -> Set of startTime strings
         const byDay: Record<number, Set<string>> = {};
@@ -91,23 +86,6 @@ export function CoachSettings() {
       });
       showSaved("address");
     } catch {} finally { setSaving(null); }
-  };
-
-  const saveLessonTypes = async () => {
-    setSaving("lessonTypes");
-    try {
-      await apiFetch("/api/coach-settings/lesson-types", {
-        method: "PUT",
-        body: JSON.stringify({ lessonTypeIds: selectedLessonTypeIds }),
-      });
-      showSaved("lessonTypes");
-    } catch {} finally { setSaving(null); }
-  };
-
-  const toggleLessonType = (id: string) => {
-    setSelectedLessonTypeIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
   };
 
   const toggleCategory = (id: string) => {
@@ -328,41 +306,6 @@ export function CoachSettings() {
                 {saving === "profile" ? "Saving..." : "Save Profile"}
               </button>
               {savedSection === "profile" && <span className="text-[12px] text-sage">Saved</span>}
-            </div>
-          </div>
-        </section>
-
-        {/* Lesson Types */}
-        <section className="mb-12">
-          <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-            Lessons I Teach
-          </h2>
-          <div className="bg-surface rounded-card shadow-card p-6">
-            <p className="text-sm text-text-secondary mb-4">
-              Select the lesson types you offer. Students will only be able to book these with you.
-            </p>
-            <div className="space-y-2 mb-4">
-              {settings?.allLessonTypes.map((lt) => (
-                <label key={lt.id} className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={selectedLessonTypeIds.includes(lt.id)}
-                    onChange={() => toggleLessonType(lt.id)}
-                    className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
-                  />
-                  <span className="text-sm font-medium">{lt.title}</span>
-                </label>
-              ))}
-            </div>
-            <div className="flex items-center gap-3">
-              <button
-                onClick={saveLessonTypes}
-                disabled={saving === "lessonTypes"}
-                className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
-              >
-                {saving === "lessonTypes" ? "Saving..." : "Save"}
-              </button>
-              {savedSection === "lessonTypes" && <span className="text-[12px] text-sage">Saved</span>}
             </div>
           </div>
         </section>

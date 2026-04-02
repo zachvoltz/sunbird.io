@@ -17,9 +17,8 @@ import {
 import "@xyflow/react/dist/style.css";
 import { apiFetch } from "@/lib/api";
 import { SkillNode, type SkillNodeData } from "@/components/curriculum/SkillNode";
-import type { CurriculumPublic, CoachResourcePublic, PracticeDrillPublic, SessionResourceType } from "@sunbird/shared";
+import type { SkillTreeFull, CoachResourcePublic, PracticeDrillPublic, SessionResourceType } from "@sunbird/shared";
 
-type LessonTypeOption = { id: string; title: string };
 type CategoryOption = { id: string; title: string };
 
 let nodeCounter = 0;
@@ -40,9 +39,7 @@ const COLORS = [
 ];
 
 export function CurriculumEditor() {
-  const [lessonTypes, setLessonTypes] = useState<LessonTypeOption[]>([]);
   const [categories, setCategories] = useState<CategoryOption[]>([]);
-  const [selectedLessonTypeId, setSelectedLessonTypeId] = useState<string>("");
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [curriculumId, setCurriculumId] = useState<string | null>(null);
   const [nodes, setNodes] = useState<Node[]>([]);
@@ -71,37 +68,24 @@ export function CurriculumEditor() {
   const [drillDesc, setDrillDesc] = useState("");
   const [drillResourceId, setDrillResourceId] = useState("");
 
-  // Load coach's lesson types and categories
+  // Load coach's categories
   useEffect(() => {
-    apiFetch<{ data: { lessonTypeIds: string[]; allLessonTypes: LessonTypeOption[]; categoryIds?: string[]; allCategories?: CategoryOption[] } }>("/api/coach-settings")
+    apiFetch<{ data: { categoryIds: string[]; allCategories: CategoryOption[] } }>("/api/coach-settings")
       .then((res) => {
-        const teaching = res.data.allLessonTypes.filter((lt) =>
-          res.data.lessonTypeIds.includes(lt.id),
+        const teachingCats = res.data.allCategories.filter((c) =>
+          res.data.categoryIds.includes(c.id),
         );
-        setLessonTypes(teaching);
-        if (teaching.length > 0) setSelectedLessonTypeId(teaching[0].id);
-
-        // Load categories if available
-        if (res.data.allCategories && res.data.categoryIds) {
-          const teachingCats = res.data.allCategories.filter((c) =>
-            res.data.categoryIds!.includes(c.id),
-          );
-          setCategories(teachingCats);
-          if (teachingCats.length > 0) setSelectedCategoryId(teachingCats[0].id);
-        }
+        setCategories(teachingCats);
+        if (teachingCats.length > 0) setSelectedCategoryId(teachingCats[0].id);
       })
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
 
-  // Load curriculum when lesson type or category changes
+  // Load skill tree when category changes
   useEffect(() => {
-    const id = selectedCategoryId || selectedLessonTypeId;
-    if (!id) return;
-    const url = selectedCategoryId
-      ? `/api/skill-trees/by-category/${selectedCategoryId}`
-      : `/api/curriculum/${selectedLessonTypeId}`;
-    apiFetch<{ data: CurriculumPublic }>(url)
+    if (!selectedCategoryId) return;
+    apiFetch<{ data: SkillTreeFull }>(`/api/skill-trees/by-category/${selectedCategoryId}`)
       .then((res) => {
         const c = res.data;
         setCurriculumId(c.id);
@@ -127,7 +111,7 @@ export function CurriculumEditor() {
         setNodes([]);
         setEdges([]);
       });
-  }, [selectedCategoryId, selectedLessonTypeId]);
+  }, [selectedCategoryId]);
 
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => setNodes((nds) => applyNodeChanges(changes, nds)),
@@ -157,13 +141,9 @@ export function CurriculumEditor() {
 
   const createCurriculum = async () => {
     try {
-      const body = selectedCategoryId
-        ? { categoryId: selectedCategoryId }
-        : { lessonTypeId: selectedLessonTypeId };
-      const endpoint = selectedCategoryId ? "/api/skill-trees" : "/api/curriculum";
-      const res = await apiFetch<{ data: CurriculumPublic }>(endpoint, {
+      const res = await apiFetch<{ data: SkillTreeFull }>("/api/skill-trees", {
         method: "POST",
-        body: JSON.stringify(body),
+        body: JSON.stringify({ categoryId: selectedCategoryId }),
       });
       setCurriculumId(res.data.id);
       setNodes([]);
@@ -192,7 +172,7 @@ export function CurriculumEditor() {
           toNodeId: e.target,
         })),
       };
-      await apiFetch(`/api/curriculum/${curriculumId}/graph`, {
+      await apiFetch(`/api/skill-trees/${curriculumId}/graph`, {
         method: "PUT",
         body: JSON.stringify(payload),
       });
@@ -255,7 +235,7 @@ export function CurriculumEditor() {
     if (!curriculumId || !selectedNode) return;
     try {
       await apiFetch(
-        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources`,
+        `/api/skill-trees/${curriculumId}/nodes/${selectedNode.id}/resources`,
         { method: "POST", body: JSON.stringify({ resourceId: resource.id }) },
       );
       setNodeResources((prev) => [...prev, resource]);
@@ -277,7 +257,7 @@ export function CurriculumEditor() {
       );
       // Link to node
       await apiFetch(
-        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources`,
+        `/api/skill-trees/${curriculumId}/nodes/${selectedNode.id}/resources`,
         { method: "POST", body: JSON.stringify({ resourceId: res.data.id }) },
       );
       setNodeResources((prev) => [...prev, res.data]);
@@ -291,7 +271,7 @@ export function CurriculumEditor() {
   const unlinkResource = async (resourceId: string) => {
     if (!curriculumId || !selectedNode) return;
     try {
-      await apiFetch(`/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/resources/${resourceId}`, { method: "DELETE" });
+      await apiFetch(`/api/skill-trees/${curriculumId}/nodes/${selectedNode.id}/resources/${resourceId}`, { method: "DELETE" });
       setNodeResources((prev) => prev.filter((r) => r.id !== resourceId));
       setNodes((nds) => nds.map((n) =>
         n.id === selectedNode.id ? { ...n, data: { ...n.data, resources: ((n.data as SkillNodeData).resources ?? []).filter((r: any) => r.id !== resourceId) } } : n,
@@ -303,7 +283,7 @@ export function CurriculumEditor() {
     if (!curriculumId || !selectedNode || !drillTitle.trim()) return;
     try {
       const res = await apiFetch<{ data: PracticeDrillPublic }>(
-        `/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/drills`,
+        `/api/skill-trees/${curriculumId}/nodes/${selectedNode.id}/drills`,
         { method: "POST", body: JSON.stringify({ title: drillTitle.trim(), description: drillDesc.trim() || undefined, resourceId: drillResourceId || undefined }) },
       );
       setNodeDrills((prev) => [...prev, res.data]);
@@ -317,7 +297,7 @@ export function CurriculumEditor() {
   const deleteDrill = async (drillId: string) => {
     if (!curriculumId || !selectedNode) return;
     try {
-      await apiFetch(`/api/curriculum/${curriculumId}/nodes/${selectedNode.id}/drills/${drillId}`, { method: "DELETE" });
+      await apiFetch(`/api/skill-trees/${curriculumId}/nodes/${selectedNode.id}/drills/${drillId}`, { method: "DELETE" });
       setNodeDrills((prev) => prev.filter((d) => d.id !== drillId));
       setNodes((nds) => nds.map((n) =>
         n.id === selectedNode.id ? { ...n, data: { ...n.data, drills: ((n.data as SkillNodeData).drills ?? []).filter((d: any) => d.id !== drillId) } } : n,
@@ -347,27 +327,15 @@ export function CurriculumEditor() {
         </Link>
         <h1 className="font-display text-lg font-bold">Curriculum</h1>
 
-        {categories.length > 0 ? (
-          <select
-            value={selectedCategoryId}
-            onChange={(e) => setSelectedCategoryId(e.target.value)}
-            className="ml-4 px-3 py-1.5 text-sm border border-charcoal/10 rounded-card bg-cream"
-          >
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>{c.title}</option>
-            ))}
-          </select>
-        ) : (
-          <select
-            value={selectedLessonTypeId}
-            onChange={(e) => setSelectedLessonTypeId(e.target.value)}
-            className="ml-4 px-3 py-1.5 text-sm border border-charcoal/10 rounded-card bg-cream"
-          >
-            {lessonTypes.map((lt) => (
-              <option key={lt.id} value={lt.id}>{lt.title}</option>
-            ))}
-          </select>
-        )}
+        <select
+          value={selectedCategoryId}
+          onChange={(e) => setSelectedCategoryId(e.target.value)}
+          className="ml-4 px-3 py-1.5 text-sm border border-charcoal/10 rounded-card bg-cream"
+        >
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>{c.title}</option>
+          ))}
+        </select>
 
         <div className="ml-auto flex items-center gap-3">
           {status && (
@@ -430,8 +398,8 @@ export function CurriculumEditor() {
             </ReactFlow>
           ) : (
             <div className="flex items-center justify-center h-full text-text-secondary">
-              {lessonTypes.length === 0 && categories.length === 0
-                ? "Set up your categories or lesson types in Settings first."
+              {categories.length === 0
+                ? "Set up your categories in Settings first."
                 : "Create a curriculum to get started."}
             </div>
           )}

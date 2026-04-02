@@ -1,21 +1,16 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
-import type { LessonTypeWithCategories, CategoryPublic, SkillTreeSummary } from "@sunbird/shared";
+import type { CategoryPublic, SkillTreeSummary } from "@sunbird/shared";
 
 type CategoryDetail = CategoryPublic & {
   pricePerSession?: number;
   skillTrees?: SkillTreeSummary[];
-  categories?: never;
-};
-
-type LessonOrCategory = (LessonTypeWithCategories | CategoryDetail) & {
-  pricePerSession?: number;
 };
 
 export function LessonDetail() {
   const { slug } = useParams<{ slug: string }>();
-  const [lesson, setLesson] = useState<LessonOrCategory | null>(null);
+  const [lesson, setLesson] = useState<CategoryDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -23,14 +18,9 @@ export function LessonDetail() {
     if (!slug) return;
     setLoading(true);
     setNotFound(false);
-    // Try category endpoint first, fall back to legacy lessons
     apiFetch<{ data: CategoryDetail }>(`/api/categories/${slug}`)
-      .then((res) => setLesson(res.data as LessonOrCategory))
-      .catch(() =>
-        apiFetch<{ data: LessonTypeWithCategories }>(`/api/lessons/${slug}`)
-          .then((res) => setLesson(res.data))
-          .catch(() => setNotFound(true)),
-      )
+      .then((res) => setLesson(res.data))
+      .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
   }, [slug]);
 
@@ -116,9 +106,8 @@ export function LessonDetail() {
           </div>
         </div>
 
-        {/* Skill Trees (new) or Categories (legacy) */}
-        {(('skillTrees' in lesson && (lesson.skillTrees?.length ?? 0) > 0) ||
-          ('categories' in lesson && (lesson.categories?.length ?? 0) > 1)) && (
+        {/* Skill Trees */}
+        {(lesson.skillTrees?.length ?? 0) > 0 && (
           <>
             <section className="mb-24">
               <div className="grid grid-cols-1 md:grid-cols-12 gap-10">
@@ -129,7 +118,7 @@ export function LessonDetail() {
                 </div>
                 <div className="md:col-span-8">
                   <div className="border-t border-charcoal/10">
-                    {'skillTrees' in lesson && lesson.skillTrees?.map((st) => (
+                    {lesson.skillTrees?.map((st) => (
                       <div
                         key={st.id}
                         className="py-5 border-b border-charcoal/10"
@@ -144,21 +133,6 @@ export function LessonDetail() {
                         )}
                         {st.nodeCount > 0 && (
                           <p className="text-xs text-iris mt-1">{st.nodeCount} skills</p>
-                        )}
-                      </div>
-                    ))}
-                    {'categories' in lesson && !('skillTrees' in lesson) && lesson.categories?.map((cat) => (
-                      <div
-                        key={cat.id}
-                        className="py-5 border-b border-charcoal/10"
-                      >
-                        <h3 className="font-display text-lg font-semibold mb-1">
-                          {cat.title}
-                        </h3>
-                        {cat.description && (
-                          <p className="text-sm text-text-secondary leading-relaxed">
-                            {cat.description}
-                          </p>
                         )}
                       </div>
                     ))}

@@ -9,7 +9,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { apiFetch } from "@/lib/api";
-import type { CurriculumWithProgress } from "@sunbird/shared";
+import type { SkillTreeWithProgress } from "@sunbird/shared";
 import { SkillNode } from "@/components/curriculum/SkillNode";
 
 const nodeTypes = { skill: SkillNode };
@@ -52,27 +52,18 @@ const progressNodeTypes = { skill: ProgressNode };
 
 export function MyCurriculum() {
   const { slug } = useParams<{ slug: string }>();
-  const [curriculum, setCurriculum] = useState<CurriculumWithProgress | null>(null);
+  const [curriculum, setCurriculum] = useState<SkillTreeWithProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!slug) return;
-    // Try resolving via category first, then fall back to lesson type
     apiFetch<{ data: { id: string; title: string } }>(`/api/categories/${slug}`)
       .then((res) =>
-        apiFetch<{ data: CurriculumWithProgress }>(`/api/skill-trees/for-student/${res.data.id}`),
+        apiFetch<{ data: SkillTreeWithProgress }>(`/api/skill-trees/for-student/${res.data.id}`),
       )
       .then((res) => setCurriculum(res.data))
-      .catch(() => {
-        // Fall back to legacy lesson type -> curriculum path
-        apiFetch<{ data: { id: string; title: string } }>(`/api/lessons/${slug}`)
-          .then((res) =>
-            apiFetch<{ data: CurriculumWithProgress }>(`/api/curriculum/for-student/${res.data.id}`),
-          )
-          .then((res) => setCurriculum(res.data))
-          .catch((err: any) => setError(err?.body?.error ?? "Curriculum not available"));
-      })
+      .catch((err: any) => setError(err?.body?.error ?? "Curriculum not available"))
       .finally(() => setLoading(false));
   }, [slug]);
 

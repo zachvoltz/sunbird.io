@@ -784,12 +784,30 @@ A polished, production-hardened platform with strong SEO, analytics, social proo
   _AC: Two browser tabs can establish a bidirectional video/audio call within a session page. Data channel sends/receives messages._
 
 - [ ] **6B.4 — Video call UI components**
-  Create `apps/web/src/components/session/` — `VideoCall.tsx` (main container), `VideoTile.tsx` (single video element with name overlay), `CallControls.tsx` (bottom bar: mute, camera, tools panel toggle, tuner toggle, end call), `ToolsPanel.tsx` (slide-out right sidebar for MIDI player + metronome).
-  _AC: Components render correctly. Controls toggle mute/camera/tools. Styled with existing design system (iris, gold, cream palette)._
+  Create `apps/web/src/components/session/` — `VideoCall.tsx` (main container), `VideoTile.tsx` (single video element with name overlay), `CallControls.tsx` (bottom bar: mute, camera, screen share, tools panel toggle, tuner toggle, end call), `ToolsPanel.tsx` (slide-out right sidebar for MIDI player + metronome). Mobile-first responsive design — controls must be thumb-friendly, video tiles stack vertically on small screens.
+  _AC: Components render correctly on desktop and mobile. Controls toggle mute/camera/screen share/tools. Styled with existing design system (iris, gold, cream palette)._
 
-- [ ] **6B.5 — Restructure session pages for video**
+- [ ] **6B.5 — Screen sharing**
+  Add screen share toggle to `CallControls`. Uses `getDisplayMedia()` to capture screen, pushes as a separate track via WHIP. Remote participant sees screen share replacing or alongside the camera feed. Coach can share sheet music, tabs, or other visual material.
+  _AC: Coach (or student) can share screen. Remote participant sees the shared screen. Toggle on/off works. Mobile: share button hidden (not supported on mobile browsers)._
+
+- [ ] **6B.6 — Restructure session pages for video**
   Modify `StudentSession.tsx` and `teacher/Session.tsx` — for ONLINE bookings, render `VideoCall` at the top with existing chat/resources/curriculum reorganized into a tabbed panel below. Extract shared sections into `ChatPanel.tsx`, `ResourcesPanel.tsx`, `CurriculumPanel.tsx`. IN_PERSON layout unchanged.
   _AC: Online sessions show video + tabbed content. In-person sessions unchanged. Existing chat/resources functionality preserved._
+
+### 6B+ — Session Recording (Week 21–22)
+
+- [ ] **6B+.1 — Recording API integration**
+  Extend `calls.service.ts` to support Cloudflare Realtime's native recording — start/stop recording via API (virtual bot participant captures multi-user video/audio). Add `POST /api/bookings/:id/call/record/start` and `POST /api/bookings/:id/call/record/stop` endpoints (coach-only). Store recording metadata on the booking.
+  _AC: Coach can start/stop recording during a session. Recording captured server-side by Cloudflare._
+
+- [ ] **6B+.2 — Recording storage & playback**
+  On recording completion (webhook), transfer recording from Cloudflare's temporary storage to R2 for permanent retention. Add `SessionRecording` model (bookingId, r2Key, durationMs, createdAt). Add `GET /api/bookings/:id/recordings` endpoint. Stream playback from R2.
+  _AC: Recordings persist in R2. Both coach and student can play back past session recordings from the session page._
+
+- [ ] **6B+.3 — Recording UI**
+  Add record button to `CallControls` (coach-only, red dot indicator when active). Add "Recordings" tab to the session page tabbed panel for completed sessions. Simple audio/video player for playback.
+  _AC: Coach sees record button. Recording indicator visible to both participants. Past recordings browsable and playable._
 
 ### 6C — MIDI Snippet Library (Week 22)
 

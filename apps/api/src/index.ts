@@ -4,12 +4,10 @@ import { logger } from "hono/logger";
 import { sessionMiddleware } from "./middleware/auth";
 import { authRoutes } from "./routes/auth";
 import { meRoutes } from "./routes/me";
-import { lessonRoutes } from "./routes/lessons";
 import { availabilityRoutes } from "./routes/availability";
 import { bookingRoutes } from "./routes/bookings";
 import { coachRoutes } from "./routes/coaches";
 import { coachSettingsRoutes } from "./routes/coach-settings";
-import { curriculumRoutes } from "./routes/curriculum";
 import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
 import { initDb, initDbD1 } from "./lib/db";
@@ -65,12 +63,10 @@ app.get("/api/health", (c) => {
 
 app.route("/api/auth", authRoutes);
 app.route("/api/me", meRoutes);
-app.route("/api/lessons", lessonRoutes);
 app.route("/api/availability", availabilityRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/coaches", coachRoutes);
 app.route("/api/coach-settings", coachSettingsRoutes);
-app.route("/api/curriculum", curriculumRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/skill-trees", skillTreeRoutes);
 
