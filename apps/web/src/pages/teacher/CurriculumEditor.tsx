@@ -143,7 +143,7 @@ export function CurriculumEditor() {
     try {
       const res = await apiFetch<{ data: SkillTreeFull }>("/api/skill-trees", {
         method: "POST",
-        body: JSON.stringify({ categoryId: selectedCategoryId }),
+        body: JSON.stringify({ categoryId: selectedCategoryId, title: "New Skill Tree" }),
       });
       setCurriculumId(res.data.id);
       setNodes([]);
