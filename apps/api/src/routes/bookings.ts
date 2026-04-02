@@ -612,12 +612,14 @@ bookingRoutes.post("/:id/call/join", requireAuth, async (c) => {
   const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
   const sessions = parseCallSessions(booking.callSessionId);
 
+  // The peer's PUSH session is what we pull from
+  const peerPushKey = peerId ? `${peerId}:push` : null;
+
   return c.json({
     data: {
       userId: user.id,
       peerId,
-      // Return peer's CF session ID if they've already joined (for pulling tracks)
-      peerSessionId: peerId ? (sessions[peerId] ?? null) : null,
+      peerSessionId: peerPushKey ? (sessions[peerPushKey] ?? null) : null,
     },
   });
 });
@@ -639,30 +641,33 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
   const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
   const callsService = createCallsService(appId, appToken);
 
-  let mySessionId = parseCallSessions(booking.callSessionId)[user.id];
+  // role=push or role=pull — each gets its own CF session
+  const role = c.req.query("role") || "push";
+  const sessionKey = `${user.id}:${role}`;
+
+  let mySessionId = parseCallSessions(booking.callSessionId)[sessionKey];
 
   const body = await c.req.json();
 
   // Helper: atomically read-modify-write the session map
-  async function saveMySession(sessionId: string) {
-    // Re-read from DB to avoid overwriting peer's concurrent write
+  async function saveSession(key: string, sessionId: string) {
     const latest = await db.booking.findUnique({ where: { id } });
     const map = parseCallSessions(latest?.callSessionId ?? null);
-    map[user.id] = sessionId;
+    map[key] = sessionId;
     await db.booking.update({
       where: { id },
       data: { callSessionId: JSON.stringify(map) },
     });
   }
 
-  // Create a new CF session if user doesn't have one yet
+  // Create a new CF session if one doesn't exist for this role
   if (!mySessionId) {
     const newSession = await callsService.createSession();
     mySessionId = newSession.sessionId;
-    await saveMySession(mySessionId);
+    await saveSession(sessionKey, mySessionId);
   }
 
-  // Try to push/pull tracks; if session is stale (410), create a fresh one and retry
+  // Try tracks negotiation; if session is stale (410), create fresh and retry
   let result;
   try {
     result = await callsService.newTracks(mySessionId, body);
@@ -670,18 +675,19 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
     if (err.message?.includes("410")) {
       const freshSession = await callsService.createSession();
       mySessionId = freshSession.sessionId;
-      await saveMySession(mySessionId);
+      await saveSession(sessionKey, mySessionId);
       result = await callsService.newTracks(mySessionId, body);
     } else {
       throw err;
     }
   }
 
-  // Return the peer's session ID from latest DB state
+  // Return the peer's PUSH session ID (what we pull from)
   const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
+  const peerPushKey = peerId ? `${peerId}:push` : null;
   const latestBooking = await db.booking.findUnique({ where: { id } });
   const latestSessions = parseCallSessions(latestBooking?.callSessionId ?? null);
-  const peerSessionId = peerId ? (latestSessions[peerId] ?? null) : null;
+  const peerSessionId = peerPushKey ? (latestSessions[peerPushKey] ?? null) : null;
 
   return c.json({ data: { ...result, mySessionId, peerSessionId } });
 });
@@ -699,8 +705,10 @@ bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
+  const role = c.req.query("role") || "push";
+  const sessionKey = `${user.id}:${role}`;
   const sessions = parseCallSessions(booking.callSessionId);
-  const mySessionId = sessions[user.id];
+  const mySessionId = sessions[sessionKey];
   if (!mySessionId) {
     return c.json({ error: "No active session for this user" }, 400);
   }
