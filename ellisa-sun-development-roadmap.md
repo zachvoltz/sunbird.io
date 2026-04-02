@@ -686,6 +686,32 @@ A functioning community where students share songs, listen to each other's work,
   Simplified read-only skill tree preview on lesson detail pages. "View full roadmap" CTA for authenticated users.
   _AC: Visitors see a preview of the curriculum on lesson pages. CTA links to full view._
 
+### 5D+ — Category > Skill Tree Restructure (Cross-cutting)
+
+- [ ] **5D+.1 — New data models**
+  Add Category (global, coach-created), SkillTree (per-coach, under category, replaces Curriculum), SkillTreeNode/Edge (replaces CurriculumNode/Edge), CoachCategory (replaces CoachLessonType). Nullable new FKs on Booking/RecurringSchedule (categoryId, skillTreeId, nodeId). Archive old LessonType/LessonCategory models.
+  _AC: Migration runs. New models coexist with old. Booking can reference either old or new structure._
+
+- [ ] **5D+.2 — Categories API + skill trees API**
+  `GET/POST /api/categories` replaces `/api/lessons`. `/api/skill-trees` replaces `/api/curriculum` with multi-tree-per-category support. `GET /api/skill-trees/by-coach/:coachId/:categoryId` for booking flow.
+  _AC: Categories and skill trees CRUD works. Old lesson/curriculum endpoints still functional._
+
+- [ ] **5D+.3 — Booking flow restructure**
+  New flow: Category > SkillTree > optionally Node > DateTime > Coach > Confirm. When a node is selected, its resources and drills auto-copy to the session. `PATCH /api/bookings/:id/node` for selecting/changing nodes from session page.
+  _AC: Full booking flow works with new hierarchy. Resources auto-copy on node selection._
+
+- [ ] **5D+.4 — Update all existing routes and pages**
+  Migrate bookings, coaches, coach-settings, availability, email, session pages, dashboard, MyBookings, settings, public pages to use new Category/SkillTree models instead of LessonType/LessonCategory.
+  _AC: All pages display categories/skill trees. No references to old lesson types in the UI._
+
+- [ ] **5D+.5 — Skill tree editor update**
+  Category dropdown instead of lesson type. Support multiple skill trees per category. Create/select/delete skill trees within a category.
+  _AC: Coach can manage multiple skill trees per category from the editor._
+
+- [ ] **5D+.6 — Cleanup**
+  Remove old API routes, old types, old validators. Make categoryId non-nullable on Booking. Seed production categories.
+  _AC: No dead code. Clean schema. All tests pass._
+
 ### 5E — Newsletter & Outreach (Week 18)
 
 - [ ] **5E.1 — Newsletter signup**

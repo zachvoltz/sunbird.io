@@ -54,6 +54,10 @@ model User {
   coachSchedules     RecurringSchedule[] @relation("coachSchedules")
   coachResources     CoachResource[]     @relation("coachResources")
   coachCurricula     Curriculum[]        @relation("coachCurricula")
+  coachCategories    CoachCategory[]
+  coachSkillTrees    SkillTree[]         @relation("coachSkillTrees")
+  stStudentProgress  STNodeProgress[]    @relation("stStudentProgress")
+  stCoachProgress    STNodeProgress[]    @relation("stCoachProgress")
   studentProgress    StudentProgress[]   @relation("studentProgress")
   coachProgressMarks StudentProgress[]   @relation("coachProgress")
 }
@@ -201,7 +205,8 @@ model CoachResource {
   createdAt DateTime @default(now())
 
   coach     User               @relation("coachResources", fields: [coachId], references: [id], onDelete: Cascade)
-  nodeLinks NodeResourceLink[]
+  nodeLinks       NodeResourceLink[]
+  stResourceLinks STNodeResourceLink[] @relation("stResourceLinks")
 }
 
 model NodeResourceLink {
@@ -254,6 +259,122 @@ model StudentProgress {
   @@unique([studentId, nodeId])
 }
 
+// ─── Categories & Skill Trees (New Hierarchy) ───
+
+model Category {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  title       String
+  subtitle    String?
+  description String
+  imageUrl    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+
+  coachCategories    CoachCategory[]
+  skillTrees         SkillTree[]
+  bookings           Booking[]           @relation("bookingCategory")
+  recurringSchedules RecurringSchedule[] @relation("scheduleCategory")
+}
+
+model CoachCategory {
+  id         String @id @default(cuid())
+  coachId    String
+  categoryId String
+
+  coach    User     @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@unique([coachId, categoryId])
+}
+
+model SkillTree {
+  id          String   @id @default(cuid())
+  coachId     String
+  categoryId  String
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  coach              User                @relation("coachSkillTrees", fields: [coachId], references: [id], onDelete: Cascade)
+  category           Category            @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  nodes              SkillTreeNode[]
+  edges              SkillTreeEdge[]
+  bookings           Booking[]           @relation("bookingSkillTree")
+  recurringSchedules RecurringSchedule[] @relation("scheduleSkillTree")
+}
+
+model SkillTreeNode {
+  id          String  @id @default(cuid())
+  skillTreeId String
+  title       String
+  description String?
+  positionX   Float   @default(0)
+  positionY   Float   @default(0)
+  color       String?
+  sortOrder   Int     @default(0)
+
+  skillTree     SkillTree          @relation(fields: [skillTreeId], references: [id], onDelete: Cascade)
+  edgesFrom     SkillTreeEdge[]    @relation("stEdgeFrom")
+  edgesTo       SkillTreeEdge[]    @relation("stEdgeTo")
+  progress      STNodeProgress[]
+  resourceLinks STNodeResourceLink[]
+  drills        STDrill[]
+  bookings      Booking[]           @relation("bookingNode")
+  recurringSchedules RecurringSchedule[] @relation("scheduleNode")
+}
+
+model SkillTreeEdge {
+  id          String @id @default(cuid())
+  skillTreeId String
+  fromNodeId  String
+  toNodeId    String
+
+  skillTree SkillTree     @relation(fields: [skillTreeId], references: [id], onDelete: Cascade)
+  fromNode  SkillTreeNode @relation("stEdgeFrom", fields: [fromNodeId], references: [id], onDelete: Cascade)
+  toNode    SkillTreeNode @relation("stEdgeTo", fields: [toNodeId], references: [id], onDelete: Cascade)
+
+  @@unique([fromNodeId, toNodeId])
+}
+
+model STNodeProgress {
+  id          String   @id @default(cuid())
+  studentId   String
+  nodeId      String
+  coachId     String
+  completedAt DateTime @default(now())
+  notes       String?
+
+  student User          @relation("stStudentProgress", fields: [studentId], references: [id], onDelete: Cascade)
+  node    SkillTreeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  coach   User          @relation("stCoachProgress", fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([studentId, nodeId])
+}
+
+model STNodeResourceLink {
+  id         String @id @default(cuid())
+  nodeId     String
+  resourceId String
+
+  node     SkillTreeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  resource CoachResource @relation("stResourceLinks", fields: [resourceId], references: [id], onDelete: Cascade)
+
+  @@unique([nodeId, resourceId])
+}
+
+model STDrill {
+  id          String  @id @default(cuid())
+  nodeId      String
+  title       String
+  description String?
+  resourceId  String?
+  sortOrder   Int     @default(0)
+
+  node SkillTreeNode @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+}
+
 model Booking {
   id                  String    @id @default(cuid())
   userId              String
@@ -274,11 +395,17 @@ model Booking {
   stripePaymentId     String?
   usedSubscription    Boolean   @default(false)
   scheduleId          String?
+  categoryId          String?
+  skillTreeId         String?
+  nodeId              String?
   createdAt           DateTime  @default(now())
 
   user           User               @relation(fields: [userId], references: [id])
   coach          User?              @relation("coachBookings", fields: [coachId], references: [id])
   lessonType     LessonType         @relation(fields: [lessonTypeId], references: [id])
+  category       Category?          @relation("bookingCategory", fields: [categoryId], references: [id])
+  skillTree      SkillTree?         @relation("bookingSkillTree", fields: [skillTreeId], references: [id])
+  node           SkillTreeNode?     @relation("bookingNode", fields: [nodeId], references: [id])
   lessonCategory LessonCategory?    @relation(fields: [lessonCategoryId], references: [id])
   schedule       RecurringSchedule? @relation(fields: [scheduleId], references: [id])
   messages       SessionMessage[]
@@ -298,11 +425,17 @@ model RecurringSchedule {
   startsOn         DateTime
   endsOn           DateTime
   status           String   @default("ACTIVE")
+  categoryId       String?
+  skillTreeId      String?
+  nodeId           String?
   createdAt        DateTime @default(now())
 
-  user     User      @relation("studentSchedules", fields: [userId], references: [id])
-  coach    User      @relation("coachSchedules", fields: [coachId], references: [id])
-  bookings Booking[]
+  user      User           @relation("studentSchedules", fields: [userId], references: [id])
+  coach     User           @relation("coachSchedules", fields: [coachId], references: [id])
+  category  Category?      @relation("scheduleCategory", fields: [categoryId], references: [id])
+  skillTree SkillTree?     @relation("scheduleSkillTree", fields: [skillTreeId], references: [id])
+  node      SkillTreeNode? @relation("scheduleNode", fields: [nodeId], references: [id])
+  bookings  Booking[]
 }
 
 model SessionMessage {
