@@ -82,16 +82,16 @@ export function useCallsSession(bookingId: string) {
   // Push local tracks to Cloudflare via our backend
   async function pushLocalTracks(pc: RTCPeerConnection, stream: MediaStream) {
     // Add tracks to PeerConnection
-    const transceivers: Array<{ trackName: string; mid: string }> = [];
+    const trackTransceivers: Array<{ trackName: string; transceiver: RTCRtpTransceiver }> = [];
     for (const track of stream.getTracks()) {
       const transceiver = pc.addTransceiver(track, { direction: "sendonly" });
-      transceivers.push({
+      trackTransceivers.push({
         trackName: `${userIdRef.current}-${track.kind}`,
-        mid: transceiver.mid!,
+        transceiver,
       });
     }
 
-    // Create offer
+    // Create offer — mids are assigned after setLocalDescription
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
@@ -103,10 +103,10 @@ export function useCallsSession(bookingId: string) {
           type: offer.type,
           sdp: offer.sdp,
         },
-        tracks: transceivers.map((t) => ({
+        tracks: trackTransceivers.map((t) => ({
           location: "local",
           trackName: t.trackName,
-          mid: t.mid,
+          mid: t.transceiver.mid,
         })),
       }),
     });
@@ -145,13 +145,13 @@ export function useCallsSession(bookingId: string) {
             {
               location: "remote",
               trackName: `${peerIdRef.current}-audio`,
-              mid: audioTransceiver.mid,
+              mid: audioTransceiver.mid!,
               sessionId: sessionIdRef.current,
             },
             {
               location: "remote",
               trackName: `${peerIdRef.current}-video`,
-              mid: videoTransceiver.mid,
+              mid: videoTransceiver.mid!,
               sessionId: sessionIdRef.current,
             },
           ],
