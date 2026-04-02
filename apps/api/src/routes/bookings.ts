@@ -580,8 +580,15 @@ bookingRoutes.post("/recurring/:scheduleId/cancel", requireAuth, async (c) => {
 });
 
 // ─── Video Call ───
+// Each participant gets their own Cloudflare Calls session (1 session = 1 PeerConnection).
+// callSessionId stores a JSON map: { "userId1": "cfSessionId1", "userId2": "cfSessionId2" }
 
-// POST /api/bookings/:id/call/join — get or create a Cloudflare Calls session for this booking
+function parseCallSessions(raw: string | null): Record<string, string> {
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+// POST /api/bookings/:id/call/join — returns peer info (no session created yet)
 bookingRoutes.post("/:id/call/join", requireAuth, async (c) => {
   const { id } = c.req.param();
   const user = c.get("user")!;
@@ -602,37 +609,20 @@ bookingRoutes.post("/:id/call/join", requireAuth, async (c) => {
     return c.json({ error: "This session is not active" }, 400);
   }
 
-  const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
-  const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
-
-  let sessionId = booking.callSessionId;
-
-  // Create a new Calls session on first join
-  if (!sessionId) {
-    const callsService = createCallsService(appId, appToken);
-    const session = await callsService.createSession();
-    sessionId = session.sessionId;
-
-    await db.booking.update({
-      where: { id },
-      data: { callSessionId: sessionId },
-    });
-  }
-
-  // Return session info + the peer's user ID so client knows which tracks to pull
   const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
+  const sessions = parseCallSessions(booking.callSessionId);
 
   return c.json({
     data: {
-      sessionId,
-      appId,
       userId: user.id,
       peerId,
+      // Return peer's CF session ID if they've already joined (for pulling tracks)
+      peerSessionId: peerId ? (sessions[peerId] ?? null) : null,
     },
   });
 });
 
-// POST /api/bookings/:id/call/tracks — proxy SDP negotiation to Cloudflare Calls
+// POST /api/bookings/:id/call/tracks — create CF session (if needed) and proxy track negotiation
 bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
   const { id } = c.req.param();
   const user = c.get("user")!;
@@ -645,21 +635,38 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  if (!booking.callSessionId) {
-    return c.json({ error: "Call session not started" }, 400);
-  }
-
   const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
   const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
   const callsService = createCallsService(appId, appToken);
 
-  const body = await c.req.json();
-  const result = await callsService.newTracks(booking.callSessionId, body);
+  const sessions = parseCallSessions(booking.callSessionId);
+  let mySessionId = sessions[user.id];
 
-  return c.json({ data: result });
+  const body = await c.req.json();
+
+  // First tracks call for this user — create a new CF session with the SDP
+  if (!mySessionId) {
+    const newSession = await callsService.createSession();
+    mySessionId = newSession.sessionId;
+
+    // Store this user's session ID
+    sessions[user.id] = mySessionId;
+    await db.booking.update({
+      where: { id },
+      data: { callSessionId: JSON.stringify(sessions) },
+    });
+  }
+
+  const result = await callsService.newTracks(mySessionId, body);
+
+  // Return the peer's session ID alongside the track result so client can pull
+  const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
+  const peerSessionId = peerId ? (sessions[peerId] ?? null) : null;
+
+  return c.json({ data: { ...result, mySessionId, peerSessionId } });
 });
 
-// PUT /api/bookings/:id/call/renegotiate — proxy SDP renegotiation to Cloudflare Calls
+// PUT /api/bookings/:id/call/renegotiate — proxy SDP renegotiation
 bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
   const { id } = c.req.param();
   const user = c.get("user")!;
@@ -672,8 +679,10 @@ bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  if (!booking.callSessionId) {
-    return c.json({ error: "Call session not started" }, 400);
+  const sessions = parseCallSessions(booking.callSessionId);
+  const mySessionId = sessions[user.id];
+  if (!mySessionId) {
+    return c.json({ error: "No active session for this user" }, 400);
   }
 
   const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
@@ -681,7 +690,7 @@ bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
   const callsService = createCallsService(appId, appToken);
 
   const body = await c.req.json();
-  const result = await callsService.renegotiate(booking.callSessionId, body.sessionDescription);
+  const result = await callsService.renegotiate(mySessionId, body.sessionDescription);
 
   return c.json({ data: result });
 });

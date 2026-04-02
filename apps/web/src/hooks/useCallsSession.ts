@@ -5,10 +5,9 @@ type CallState = "idle" | "joining" | "connected" | "error";
 
 type JoinResponse = {
   data: {
-    sessionId: string;
-    appId: string;
     userId: string;
     peerId: string | null;
+    peerSessionId: string | null;
   };
 };
 
@@ -22,6 +21,8 @@ type TracksResponse = {
       errorDescription?: string;
     }>;
     requiresImmediateRenegotiation?: boolean;
+    mySessionId?: string;
+    peerSessionId?: string | null;
   };
 };
 
@@ -42,7 +43,8 @@ export function useCallsSession(bookingId: string) {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
   const pcRef = useRef<RTCPeerConnection | null>(null);
-  const sessionIdRef = useRef<string | null>(null);
+  const mySessionIdRef = useRef<string | null>(null);
+  const peerSessionIdRef = useRef<string | null>(null);
   const userIdRef = useRef<string | null>(null);
   const peerIdRef = useRef<string | null>(null);
   const pullIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -68,7 +70,8 @@ export function useCallsSession(bookingId: string) {
     if (screenStream) {
       screenStream.getTracks().forEach((t) => t.stop());
     }
-    sessionIdRef.current = null;
+    mySessionIdRef.current = null;
+    peerSessionIdRef.current = null;
     pulledRef.current = false;
     pulledScreenRef.current = false;
     screenTrackSenderRef.current = null;
@@ -111,6 +114,14 @@ export function useCallsSession(bookingId: string) {
       }),
     });
 
+    // Store session IDs returned from backend
+    if (result.data.mySessionId) {
+      mySessionIdRef.current = result.data.mySessionId;
+    }
+    if (result.data.peerSessionId) {
+      peerSessionIdRef.current = result.data.peerSessionId;
+    }
+
     // Set the answer
     if (result.data.sessionDescription) {
       await pc.setRemoteDescription(
@@ -123,7 +134,21 @@ export function useCallsSession(bookingId: string) {
 
   // Pull remote tracks from the peer
   async function pullRemoteTracks(pc: RTCPeerConnection) {
-    if (!peerIdRef.current || !sessionIdRef.current) return;
+    if (!peerIdRef.current) return;
+
+    // We need the peer's CF session ID — re-fetch from /join to get latest
+    if (!peerSessionIdRef.current) {
+      try {
+        const joinResult = await apiFetch<JoinResponse>(`${apiBase}/join`, { method: "POST" });
+        if (joinResult.data.peerSessionId) {
+          peerSessionIdRef.current = joinResult.data.peerSessionId;
+        } else {
+          return; // Peer hasn't joined yet
+        }
+      } catch {
+        return;
+      }
+    }
 
     // Add receive-only transceivers for the remote tracks
     const audioTransceiver = pc.addTransceiver("audio", { direction: "recvonly" });
@@ -146,13 +171,13 @@ export function useCallsSession(bookingId: string) {
               location: "remote",
               trackName: `${peerIdRef.current}-audio`,
               mid: audioTransceiver.mid!,
-              sessionId: sessionIdRef.current,
+              sessionId: peerSessionIdRef.current,
             },
             {
               location: "remote",
               trackName: `${peerIdRef.current}-video`,
               mid: videoTransceiver.mid!,
-              sessionId: sessionIdRef.current,
+              sessionId: peerSessionIdRef.current,
             },
           ],
         }),
@@ -207,9 +232,9 @@ export function useCallsSession(bookingId: string) {
         method: "POST",
       });
 
-      sessionIdRef.current = joinResult.data.sessionId;
       userIdRef.current = joinResult.data.userId;
       peerIdRef.current = joinResult.data.peerId;
+      peerSessionIdRef.current = joinResult.data.peerSessionId;
 
       // 2. Get local media
       const stream = await navigator.mediaDevices.getUserMedia({
