@@ -31,8 +31,8 @@ type Bindings = {
 const app = new Hono<{ Bindings: Bindings }>();
 
 app.onError((err, c) => {
-  console.error("Unhandled error:", err);
-  return c.json({ error: err.message }, 500);
+  console.error("Unhandled error:", err.message, err.stack);
+  return c.json({ error: err.message, stack: err.stack }, 500);
 });
 
 app.use("*", logger());
