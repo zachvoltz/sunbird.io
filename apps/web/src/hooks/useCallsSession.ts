@@ -137,7 +137,7 @@ export function useCallsSession(bookingId: string) {
     return result;
   }
 
-  // Pull remote tracks — adds recv transceivers and renegotiates
+  // Pull remote tracks — renegotiate to add recv transceivers, then pull in a separate call
   async function pullRemoteTracks() {
     if (!peerIdRef.current) return;
 
@@ -158,7 +158,7 @@ export function useCallsSession(bookingId: string) {
     const pc = pcRef.current;
     if (!pc) return;
 
-    // Add recv transceivers if not yet created
+    // Step 1: Add recv transceivers and renegotiate so Cloudflare knows about them
     if (!recvMidsRef.current) {
       const audioRecv = pc.addTransceiver("audio", { direction: "recvonly" });
       const videoRecv = pc.addTransceiver("video", { direction: "recvonly" });
@@ -168,18 +168,32 @@ export function useCallsSession(bookingId: string) {
         audio: audioRecv.mid!,
         video: videoRecv.mid!,
       };
-    } else {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+
+      // Renegotiate to register the new recv transceivers with Cloudflare
+      const renegResult = await apiFetch<RenegotiateResponse>(`${apiBase}/renegotiate`, {
+        method: "PUT",
+        body: JSON.stringify({
+          sessionDescription: { type: offer.type, sdp: offer.sdp },
+        }),
+      });
+      if (renegResult.data.sessionDescription) {
+        await pc.setRemoteDescription(
+          new RTCSessionDescription(renegResult.data.sessionDescription as RTCSessionDescriptionInit),
+        );
+      }
     }
 
+    // Step 2: Pull remote tracks (Cloudflare already knows about the recv mids)
     try {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+
       const result = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
         method: "POST",
         body: JSON.stringify({
           sessionDescription: {
-            type: pc.localDescription!.type,
-            sdp: pc.localDescription!.sdp,
+            type: offer.type,
+            sdp: offer.sdp,
           },
           tracks: [
             {
