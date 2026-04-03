@@ -148,18 +148,16 @@ export function useCallsSession(bookingId: string) {
   async function pullRemoteTracks() {
     if (!peerIdRef.current) return;
 
-    // Discover peer's push session ID
-    if (!peerSessionIdRef.current) {
-      try {
-        const joinResult = await apiFetch<JoinResponse>(`${apiBase}/join`, { method: "POST" });
-        if (joinResult.data.peerSessionId) {
-          peerSessionIdRef.current = joinResult.data.peerSessionId;
-        } else {
-          return; // Peer hasn't joined yet
-        }
-      } catch {
-        return;
+    // Always refresh peer's push session ID (it may have changed due to retry)
+    try {
+      const joinResult = await apiFetch<JoinResponse>(`${apiBase}/join`, { method: "POST" });
+      if (joinResult.data.peerSessionId) {
+        peerSessionIdRef.current = joinResult.data.peerSessionId;
+      } else {
+        return; // Peer hasn't joined yet
       }
+    } catch {
+      return;
     }
 
     // Always start fresh — each attempt gets a new PC and a new CF session

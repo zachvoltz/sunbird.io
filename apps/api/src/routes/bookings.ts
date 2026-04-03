@@ -588,6 +588,18 @@ function parseCallSessions(raw: string | null): Record<string, string> {
   try { return JSON.parse(raw); } catch { return {}; }
 }
 
+// Atomically set a single key in the callSessionId JSON map using SQLite json_set.
+// This avoids the race condition where two concurrent read-modify-write operations
+// overwrite each other's keys.
+async function atomicSaveSession(db: ReturnType<typeof getDb>, bookingId: string, key: string, sessionId: string) {
+  await db.$executeRawUnsafe(
+    `UPDATE "Booking" SET "callSessionId" = json_set(COALESCE("callSessionId", '{}'), '$.' || ?, ?) WHERE "id" = ?`,
+    key,
+    sessionId,
+    bookingId,
+  );
+}
+
 // POST /api/bookings/:id/call/join — returns peer info (no session created yet)
 bookingRoutes.post("/:id/call/join", requireAuth, async (c) => {
   const { id } = c.req.param();
@@ -643,23 +655,11 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
 
   const body = await c.req.json();
 
-  // Helper: atomically read-modify-write the session map
-  async function saveSession(key: string, sessionId: string) {
-    const latest = await db.booking.findUnique({ where: { id } });
-    const map = parseCallSessions(latest?.callSessionId ?? null);
-    map[key] = sessionId;
-    await db.booking.update({
-      where: { id },
-      data: { callSessionId: JSON.stringify(map) },
-    });
-  }
-
   // Create a new CF session if one doesn't exist for this role
-  // Don't pass SDP here — let tracks/new handle the SDP exchange
   if (!mySessionId) {
     const newSession = await callsService.createSession();
     mySessionId = newSession.sessionId;
-    await saveSession(sessionKey, mySessionId);
+    await atomicSaveSession(db, id, sessionKey, mySessionId);
   }
 
   // Try tracks negotiation; if session is stale (410/425), create fresh and retry
@@ -670,7 +670,7 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
     if (err.message?.includes("410") || err.message?.includes("425")) {
       const freshSession = await callsService.createSession();
       mySessionId = freshSession.sessionId;
-      await saveSession(sessionKey, mySessionId);
+      await atomicSaveSession(db, id, sessionKey, mySessionId);
       result = await callsService.newTracks(mySessionId, body);
     } else {
       throw err;
@@ -703,26 +703,12 @@ bookingRoutes.post("/:id/call/pull", requireAuth, async (c) => {
   const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
   const callsService = createCallsService(appId, appToken);
 
-  const pullKey = `${user.id}:pull`;
-  const sessions = parseCallSessions(booking.callSessionId);
-  let pullSessionId = sessions[pullKey];
-
   const body = await c.req.json();
-
-  async function saveSession(key: string, sessionId: string) {
-    const latest = await db.booking.findUnique({ where: { id } });
-    const map = parseCallSessions(latest?.callSessionId ?? null);
-    map[key] = sessionId;
-    await db.booking.update({
-      where: { id },
-      data: { callSessionId: JSON.stringify(map) },
-    });
-  }
 
   // Always create a fresh pull session — each pull attempt uses a new PeerConnection
   const newSession = await callsService.createSession();
-  pullSessionId = newSession.sessionId;
-  await saveSession(pullKey, pullSessionId);
+  const pullSessionId = newSession.sessionId;
+  await atomicSaveSession(db, id, `${user.id}:pull`, pullSessionId);
 
   const result = await callsService.newTracks(pullSessionId, body);
 
