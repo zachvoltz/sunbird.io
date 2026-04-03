@@ -171,12 +171,18 @@ export function useCallsSession(bookingId: string) {
     const pc = pcRef.current;
     if (!pc) return;
 
+    // Create a new offer (renegotiation) to send with the pull request
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
     try {
-      // No new SDP — the session already has recv transceivers from the push call.
-      // Just tell Cloudflare which remote tracks to route to those mids.
       const result = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
         method: "POST",
         body: JSON.stringify({
+          sessionDescription: {
+            type: offer.type,
+            sdp: offer.sdp,
+          },
           tracks: [
             {
               location: "remote",
