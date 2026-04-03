@@ -79,9 +79,8 @@ export function useCallsSession(bookingId: string) {
     setCallState("idle");
   }, [localStream, screenStream]);
 
-  // Initial push: create PC with BOTH send and recv transceivers, push local tracks
+  // Push local tracks only — recv transceivers are added later during pull
   async function pushLocalTracks(pc: RTCPeerConnection, stream: MediaStream) {
-    // Add send transceivers for local media
     const sendTransceivers: Array<{ trackName: string; transceiver: RTCRtpTransceiver }> = [];
     for (const track of stream.getTracks()) {
       const transceiver = pc.addTransceiver(track, { direction: "sendonly" });
@@ -91,21 +90,9 @@ export function useCallsSession(bookingId: string) {
       });
     }
 
-    // Also add recv transceivers now — they'll be used later for pulling
-    const audioRecv = pc.addTransceiver("audio", { direction: "recvonly" });
-    const videoRecv = pc.addTransceiver("video", { direction: "recvonly" });
-
-    // Create offer with all 4 transceivers
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
 
-    // Store recv mids for pull call later
-    recvMidsRef.current = {
-      audio: audioRecv.mid!,
-      video: videoRecv.mid!,
-    };
-
-    // Push only local tracks — recv transceivers are in the SDP but not listed as tracks
     const result = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
       method: "POST",
       body: JSON.stringify({
@@ -150,9 +137,9 @@ export function useCallsSession(bookingId: string) {
     return result;
   }
 
-  // Pull remote tracks — uses the SAME session, no new SDP, just registers remote tracks
+  // Pull remote tracks — adds recv transceivers and renegotiates
   async function pullRemoteTracks() {
-    if (!peerIdRef.current || !recvMidsRef.current) return;
+    if (!peerIdRef.current) return;
 
     // Discover peer's push session ID
     if (!peerSessionIdRef.current) {
@@ -171,17 +158,28 @@ export function useCallsSession(bookingId: string) {
     const pc = pcRef.current;
     if (!pc) return;
 
-    // Create a new offer (renegotiation) to send with the pull request
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
+    // Add recv transceivers if not yet created
+    if (!recvMidsRef.current) {
+      const audioRecv = pc.addTransceiver("audio", { direction: "recvonly" });
+      const videoRecv = pc.addTransceiver("video", { direction: "recvonly" });
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      recvMidsRef.current = {
+        audio: audioRecv.mid!,
+        video: videoRecv.mid!,
+      };
+    } else {
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+    }
 
     try {
       const result = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
         method: "POST",
         body: JSON.stringify({
           sessionDescription: {
-            type: offer.type,
-            sdp: offer.sdp,
+            type: pc.localDescription!.type,
+            sdp: pc.localDescription!.sdp,
           },
           tracks: [
             {
