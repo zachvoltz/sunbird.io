@@ -82,6 +82,23 @@ export function useCallsSession(bookingId: string) {
     });
   }
 
+  // Wait for PeerConnection ICE to connect (or fail)
+  function waitForConnection(pc: RTCPeerConnection, timeout = 10000): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (pc.connectionState === "connected") return resolve();
+      const timer = setTimeout(() => reject(new Error("ICE connection timeout")), timeout);
+      pc.onconnectionstatechange = () => {
+        if (pc.connectionState === "connected") {
+          clearTimeout(timer);
+          resolve();
+        } else if (pc.connectionState === "failed" || pc.connectionState === "closed") {
+          clearTimeout(timer);
+          reject(new Error(`ICE connection ${pc.connectionState}`));
+        }
+      };
+    });
+  }
+
   // Push local tracks on the push PeerConnection/session
   async function pushLocalTracks(pc: RTCPeerConnection, stream: MediaStream) {
     const sendTransceivers: Array<{ trackName: string; transceiver: RTCRtpTransceiver }> = [];
@@ -120,6 +137,9 @@ export function useCallsSession(bookingId: string) {
         new RTCSessionDescription(result.data.sessionDescription as RTCSessionDescriptionInit),
       );
     }
+
+    // Wait for ICE to connect so tracks are actually deliverable to pullers
+    await waitForConnection(pc);
 
     return result;
   }
