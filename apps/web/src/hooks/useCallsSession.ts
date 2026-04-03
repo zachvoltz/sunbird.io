@@ -26,12 +26,6 @@ type TracksResponse = {
   };
 };
 
-type RenegotiateResponse = {
-  data: {
-    sessionDescription: { type: string; sdp: string };
-  };
-};
-
 export function useCallsSession(bookingId: string) {
   const [callState, setCallState] = useState<CallState>("idle");
   const [error, setError] = useState<string | null>(null);
@@ -42,15 +36,14 @@ export function useCallsSession(bookingId: string) {
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null);
 
-  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const pushPcRef = useRef<RTCPeerConnection | null>(null);
+  const pullPcRef = useRef<RTCPeerConnection | null>(null);
   const userIdRef = useRef<string | null>(null);
   const peerIdRef = useRef<string | null>(null);
   const peerSessionIdRef = useRef<string | null>(null);
   const pullIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulledRef = useRef(false);
   const remoteStreamRef = useRef(new MediaStream());
-  // Whether recv transceivers have been added to the PeerConnection
-  const recvAddedRef = useRef(false);
 
   const apiBase = `/api/bookings/${bookingId}/call`;
 
@@ -59,9 +52,13 @@ export function useCallsSession(bookingId: string) {
       clearInterval(pullIntervalRef.current);
       pullIntervalRef.current = null;
     }
-    if (pcRef.current) {
-      pcRef.current.close();
-      pcRef.current = null;
+    if (pushPcRef.current) {
+      pushPcRef.current.close();
+      pushPcRef.current = null;
+    }
+    if (pullPcRef.current) {
+      pullPcRef.current.close();
+      pullPcRef.current = null;
     }
     if (localStream) {
       localStream.getTracks().forEach((t) => t.stop());
@@ -71,7 +68,6 @@ export function useCallsSession(bookingId: string) {
     }
     peerSessionIdRef.current = null;
     pulledRef.current = false;
-    recvAddedRef.current = false;
     setLocalStream(null);
     setRemoteStream(null);
     setScreenStream(null);
@@ -79,7 +75,14 @@ export function useCallsSession(bookingId: string) {
     setCallState("idle");
   }, [localStream, screenStream]);
 
-  // Push local tracks only — recv transceivers are added later during pull
+  function newPc() {
+    return new RTCPeerConnection({
+      iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
+      bundlePolicy: "max-bundle",
+    });
+  }
+
+  // Push local tracks on the push PeerConnection/session
   async function pushLocalTracks(pc: RTCPeerConnection, stream: MediaStream) {
     const sendTransceivers: Array<{ trackName: string; transceiver: RTCRtpTransceiver }> = [];
     for (const track of stream.getTracks()) {
@@ -118,27 +121,10 @@ export function useCallsSession(bookingId: string) {
       );
     }
 
-    if (result.data.requiresImmediateRenegotiation) {
-      const renegOffer = await pc.createOffer();
-      await pc.setLocalDescription(renegOffer);
-      const renegResult = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
-        method: "POST",
-        body: JSON.stringify({
-          sessionDescription: { type: renegOffer.type, sdp: renegOffer.sdp },
-          tracks: [],
-        }),
-      });
-      if (renegResult.data.sessionDescription) {
-        await pc.setRemoteDescription(
-          new RTCSessionDescription(renegResult.data.sessionDescription as RTCSessionDescriptionInit),
-        );
-      }
-    }
-
     return result;
   }
 
-  // Pull remote tracks — add recv transceivers and pull in a single tracks/new call
+  // Pull remote tracks on a dedicated pull PeerConnection/session
   async function pullRemoteTracks() {
     if (!peerIdRef.current) return;
 
@@ -156,22 +142,34 @@ export function useCallsSession(bookingId: string) {
       }
     }
 
-    const pc = pcRef.current;
-    if (!pc) return;
+    // Create a dedicated pull PeerConnection if needed
+    if (!pullPcRef.current) {
+      const pc = newPc();
+      pullPcRef.current = pc;
 
-    // Add recv transceivers if not yet created
-    if (!recvAddedRef.current) {
-      pc.addTransceiver("audio", { direction: "recvonly" });
-      pc.addTransceiver("video", { direction: "recvonly" });
-      recvAddedRef.current = true;
+      pc.ontrack = (event) => {
+        const rs = remoteStreamRef.current;
+        for (const existing of rs.getTracks()) {
+          if (existing.kind === event.track.kind) {
+            rs.removeTrack(existing);
+          }
+        }
+        rs.addTrack(event.track);
+        setRemoteStream(new MediaStream(rs.getTracks()));
+      };
     }
 
-    try {
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
+    const pc = pullPcRef.current;
 
-      // Don't specify mid for remote tracks — Cloudflare auto-assigns from recv m-sections
-      const result = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
+    // Add recvonly transceivers for the tracks we want to receive
+    const audioRecv = pc.addTransceiver("audio", { direction: "recvonly" });
+    const videoRecv = pc.addTransceiver("video", { direction: "recvonly" });
+
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+
+    try {
+      const result = await apiFetch<TracksResponse>(`${apiBase}/pull`, {
         method: "POST",
         body: JSON.stringify({
           sessionDescription: {
@@ -203,26 +201,10 @@ export function useCallsSession(bookingId: string) {
       if (!hasErrors) {
         pulledRef.current = true;
       }
-
-      if (result.data.requiresImmediateRenegotiation) {
-        // Cloudflare-initiated renegotiation: create new offer, get answer via tracks/new
-        const renegOffer = await pc.createOffer();
-        await pc.setLocalDescription(renegOffer);
-        const renegResult = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
-          method: "POST",
-          body: JSON.stringify({
-            sessionDescription: { type: renegOffer.type, sdp: renegOffer.sdp },
-            tracks: [],
-          }),
-        });
-        if (renegResult.data.sessionDescription) {
-          await pc.setRemoteDescription(
-            new RTCSessionDescription(renegResult.data.sessionDescription as RTCSessionDescriptionInit),
-          );
-        }
-      }
     } catch {
-      // Will retry on next poll
+      // Close the pull PC so next retry creates a fresh one
+      pc.close();
+      pullPcRef.current = null;
     }
   }
 
@@ -243,25 +225,10 @@ export function useCallsSession(bookingId: string) {
       });
       setLocalStream(stream);
 
-      const pc = new RTCPeerConnection({
-        iceServers: [{ urls: "stun:stun.cloudflare.com:3478" }],
-        bundlePolicy: "max-bundle",
-      });
-      pcRef.current = pc;
+      const pushPc = newPc();
+      pushPcRef.current = pushPc;
 
-      pc.ontrack = (event) => {
-        const rs = remoteStreamRef.current;
-        for (const existing of rs.getTracks()) {
-          if (existing.kind === event.track.kind) {
-            rs.removeTrack(existing);
-          }
-        }
-        rs.addTrack(event.track);
-        setRemoteStream(new MediaStream(rs.getTracks()));
-      };
-
-      // Push local tracks (also sets up recv transceivers for later pull)
-      await pushLocalTracks(pc, stream);
+      await pushLocalTracks(pushPc, stream);
       setCallState("connected");
 
       // Poll to pull remote tracks
@@ -306,7 +273,7 @@ export function useCallsSession(bookingId: string) {
   }, [localStream]);
 
   const toggleScreenShare = useCallback(async () => {
-    const pc = pcRef.current;
+    const pc = pushPcRef.current;
     if (!pc || callState !== "connected") return;
 
     if (isScreenSharing) {
@@ -356,7 +323,8 @@ export function useCallsSession(bookingId: string) {
   useEffect(() => {
     return () => {
       if (pullIntervalRef.current) clearInterval(pullIntervalRef.current);
-      if (pcRef.current) pcRef.current.close();
+      if (pushPcRef.current) pushPcRef.current.close();
+      if (pullPcRef.current) pullPcRef.current.close();
     };
   }, []);
 

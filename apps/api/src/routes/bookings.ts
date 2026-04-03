@@ -686,6 +686,49 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
   return c.json({ data: { ...result, mySessionId, peerSessionId } });
 });
 
+// POST /api/bookings/:id/call/pull — dedicated pull session for receiving remote tracks
+bookingRoutes.post("/:id/call/pull", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const booking = await db.booking.findUnique({ where: { id } });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+
+  if (user.role !== "ADMIN" && booking.userId !== user.id && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const appId = (c.env as any)?.CF_CALLS_APP_ID || process.env.CF_CALLS_APP_ID || "";
+  const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
+  const callsService = createCallsService(appId, appToken);
+
+  const pullKey = `${user.id}:pull`;
+  const sessions = parseCallSessions(booking.callSessionId);
+  let pullSessionId = sessions[pullKey];
+
+  const body = await c.req.json();
+
+  async function saveSession(key: string, sessionId: string) {
+    const latest = await db.booking.findUnique({ where: { id } });
+    const map = parseCallSessions(latest?.callSessionId ?? null);
+    map[key] = sessionId;
+    await db.booking.update({
+      where: { id },
+      data: { callSessionId: JSON.stringify(map) },
+    });
+  }
+
+  // Always create a fresh pull session — each pull attempt uses a new PeerConnection
+  const newSession = await callsService.createSession();
+  pullSessionId = newSession.sessionId;
+  await saveSession(pullKey, pullSessionId);
+
+  const result = await callsService.newTracks(pullSessionId, body);
+
+  return c.json({ data: { ...result } });
+});
+
 // PUT /api/bookings/:id/call/renegotiate — proxy SDP renegotiation
 bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
   const { id } = c.req.param();
