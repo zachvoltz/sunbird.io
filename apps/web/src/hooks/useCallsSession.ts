@@ -49,8 +49,8 @@ export function useCallsSession(bookingId: string) {
   const pullIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulledRef = useRef(false);
   const remoteStreamRef = useRef(new MediaStream());
-  // Store recv transceiver mids for the pull call
-  const recvMidsRef = useRef<{ audio: string; video: string } | null>(null);
+  // Whether recv transceivers have been added to the PeerConnection
+  const recvAddedRef = useRef(false);
 
   const apiBase = `/api/bookings/${bookingId}/call`;
 
@@ -71,7 +71,7 @@ export function useCallsSession(bookingId: string) {
     }
     peerSessionIdRef.current = null;
     pulledRef.current = false;
-    recvMidsRef.current = null;
+    recvAddedRef.current = false;
     setLocalStream(null);
     setRemoteStream(null);
     setScreenStream(null);
@@ -121,10 +121,11 @@ export function useCallsSession(bookingId: string) {
     if (result.data.requiresImmediateRenegotiation) {
       const renegOffer = await pc.createOffer();
       await pc.setLocalDescription(renegOffer);
-      const renegResult = await apiFetch<RenegotiateResponse>(`${apiBase}/renegotiate`, {
-        method: "PUT",
+      const renegResult = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
+        method: "POST",
         body: JSON.stringify({
           sessionDescription: { type: renegOffer.type, sdp: renegOffer.sdp },
+          tracks: [],
         }),
       });
       if (renegResult.data.sessionDescription) {
@@ -137,7 +138,7 @@ export function useCallsSession(bookingId: string) {
     return result;
   }
 
-  // Pull remote tracks — renegotiate to add recv transceivers, then pull in a separate call
+  // Pull remote tracks — add recv transceivers and pull in a single tracks/new call
   async function pullRemoteTracks() {
     if (!peerIdRef.current) return;
 
@@ -158,36 +159,18 @@ export function useCallsSession(bookingId: string) {
     const pc = pcRef.current;
     if (!pc) return;
 
-    // Step 1: Add recv transceivers and renegotiate so Cloudflare knows about them
-    if (!recvMidsRef.current) {
-      const audioRecv = pc.addTransceiver("audio", { direction: "recvonly" });
-      const videoRecv = pc.addTransceiver("video", { direction: "recvonly" });
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      recvMidsRef.current = {
-        audio: audioRecv.mid!,
-        video: videoRecv.mid!,
-      };
-
-      // Renegotiate to register the new recv transceivers with Cloudflare
-      const renegResult = await apiFetch<RenegotiateResponse>(`${apiBase}/renegotiate`, {
-        method: "PUT",
-        body: JSON.stringify({
-          sessionDescription: { type: offer.type, sdp: offer.sdp },
-        }),
-      });
-      if (renegResult.data.sessionDescription) {
-        await pc.setRemoteDescription(
-          new RTCSessionDescription(renegResult.data.sessionDescription as RTCSessionDescriptionInit),
-        );
-      }
+    // Add recv transceivers if not yet created
+    if (!recvAddedRef.current) {
+      pc.addTransceiver("audio", { direction: "recvonly" });
+      pc.addTransceiver("video", { direction: "recvonly" });
+      recvAddedRef.current = true;
     }
 
-    // Step 2: Pull remote tracks (Cloudflare already knows about the recv mids)
     try {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
+      // Don't specify mid for remote tracks — Cloudflare auto-assigns from recv m-sections
       const result = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
         method: "POST",
         body: JSON.stringify({
@@ -199,13 +182,11 @@ export function useCallsSession(bookingId: string) {
             {
               location: "remote",
               trackName: `${peerIdRef.current}-audio`,
-              mid: recvMidsRef.current.audio,
               sessionId: peerSessionIdRef.current,
             },
             {
               location: "remote",
               trackName: `${peerIdRef.current}-video`,
-              mid: recvMidsRef.current.video,
               sessionId: peerSessionIdRef.current,
             },
           ],
@@ -224,12 +205,14 @@ export function useCallsSession(bookingId: string) {
       }
 
       if (result.data.requiresImmediateRenegotiation) {
+        // Cloudflare-initiated renegotiation: create new offer, get answer via tracks/new
         const renegOffer = await pc.createOffer();
         await pc.setLocalDescription(renegOffer);
-        const renegResult = await apiFetch<RenegotiateResponse>(`${apiBase}/renegotiate`, {
-          method: "PUT",
+        const renegResult = await apiFetch<TracksResponse>(`${apiBase}/tracks`, {
+          method: "POST",
           body: JSON.stringify({
             sessionDescription: { type: renegOffer.type, sdp: renegOffer.sdp },
+            tracks: [],
           }),
         });
         if (renegResult.data.sessionDescription) {
