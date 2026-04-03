@@ -142,28 +142,28 @@ export function useCallsSession(bookingId: string) {
       }
     }
 
-    // Create a dedicated pull PeerConnection if needed
-    if (!pullPcRef.current) {
-      const pc = newPc();
-      pullPcRef.current = pc;
-
-      pc.ontrack = (event) => {
-        const rs = remoteStreamRef.current;
-        for (const existing of rs.getTracks()) {
-          if (existing.kind === event.track.kind) {
-            rs.removeTrack(existing);
-          }
-        }
-        rs.addTrack(event.track);
-        setRemoteStream(new MediaStream(rs.getTracks()));
-      };
+    // Always start fresh — each attempt gets a new PC and a new CF session
+    if (pullPcRef.current) {
+      pullPcRef.current.close();
+      pullPcRef.current = null;
     }
 
-    const pc = pullPcRef.current;
+    const pc = newPc();
+    pullPcRef.current = pc;
 
-    // Add recvonly transceivers for the tracks we want to receive
-    const audioRecv = pc.addTransceiver("audio", { direction: "recvonly" });
-    const videoRecv = pc.addTransceiver("video", { direction: "recvonly" });
+    pc.ontrack = (event) => {
+      const rs = remoteStreamRef.current;
+      for (const existing of rs.getTracks()) {
+        if (existing.kind === event.track.kind) {
+          rs.removeTrack(existing);
+        }
+      }
+      rs.addTrack(event.track);
+      setRemoteStream(new MediaStream(rs.getTracks()));
+    };
+
+    pc.addTransceiver("audio", { direction: "recvonly" });
+    pc.addTransceiver("video", { direction: "recvonly" });
 
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
@@ -200,9 +200,13 @@ export function useCallsSession(bookingId: string) {
       const hasErrors = result.data.tracks.some((t) => t.errorCode);
       if (!hasErrors) {
         pulledRef.current = true;
+      } else {
+        console.warn("Pull tracks had errors:", result.data.tracks);
+        pc.close();
+        pullPcRef.current = null;
       }
-    } catch {
-      // Close the pull PC so next retry creates a fresh one
+    } catch (err) {
+      console.warn("Pull failed, will retry:", err);
       pc.close();
       pullPcRef.current = null;
     }
