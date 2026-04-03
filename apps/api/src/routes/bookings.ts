@@ -612,14 +612,11 @@ bookingRoutes.post("/:id/call/join", requireAuth, async (c) => {
   const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
   const sessions = parseCallSessions(booking.callSessionId);
 
-  // The peer's PUSH session is what we pull from
-  const peerPushKey = peerId ? `${peerId}:push` : null;
-
   return c.json({
     data: {
       userId: user.id,
       peerId,
-      peerSessionId: peerPushKey ? (sessions[peerPushKey] ?? null) : null,
+      peerSessionId: peerId ? (sessions[peerId] ?? null) : null,
     },
   });
 });
@@ -641,10 +638,7 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
   const appToken = (c.env as any)?.CF_CALLS_APP_TOKEN || process.env.CF_CALLS_APP_TOKEN || "";
   const callsService = createCallsService(appId, appToken);
 
-  // role=push or role=pull — each gets its own CF session
-  const role = c.req.query("role") || "push";
-  const sessionKey = `${user.id}:${role}`;
-
+  const sessionKey = user.id;
   let mySessionId = parseCallSessions(booking.callSessionId)[sessionKey];
 
   const body = await c.req.json();
@@ -683,12 +677,11 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
     }
   }
 
-  // Return the peer's PUSH session ID (what we pull from)
+  // Return the peer's session ID (what we pull from)
   const peerId = booking.userId === user.id ? booking.coachId : booking.userId;
-  const peerPushKey = peerId ? `${peerId}:push` : null;
   const latestBooking = await db.booking.findUnique({ where: { id } });
   const latestSessions = parseCallSessions(latestBooking?.callSessionId ?? null);
-  const peerSessionId = peerPushKey ? (latestSessions[peerPushKey] ?? null) : null;
+  const peerSessionId = peerId ? (latestSessions[peerId] ?? null) : null;
 
   return c.json({ data: { ...result, mySessionId, peerSessionId } });
 });
@@ -706,10 +699,8 @@ bookingRoutes.put("/:id/call/renegotiate", requireAuth, async (c) => {
     return c.json({ error: "Forbidden" }, 403);
   }
 
-  const role = c.req.query("role") || "push";
-  const sessionKey = `${user.id}:${role}`;
   const sessions = parseCallSessions(booking.callSessionId);
-  const mySessionId = sessions[sessionKey];
+  const mySessionId = sessions[user.id];
   if (!mySessionId) {
     return c.json({ error: "No active session for this user" }, 400);
   }
