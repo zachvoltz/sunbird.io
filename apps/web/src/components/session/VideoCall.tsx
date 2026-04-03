@@ -67,9 +67,9 @@ export function VideoCall({ bookingId, localUserName, remoteUserName }: Props) {
   }
 
   return (
-    <div className="bg-charcoal overflow-hidden relative h-full flex flex-col">
+    <div className="bg-charcoal rounded-card overflow-hidden relative">
       {/* Video area */}
-      <div className="relative flex-1 min-h-0">
+      <div className="relative">
         {/* Remote video (main) */}
         <VideoTile
           stream={remoteStream}

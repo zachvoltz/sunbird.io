@@ -18,7 +18,7 @@ export function VideoTile({ stream, name, muted = false, mirrored = false, isLoc
   }, [stream]);
 
   return (
-    <div className={`relative bg-charcoal overflow-hidden ${isLocal ? "w-36 h-28 md:w-48 md:h-36 rounded-card" : "w-full h-full"}`}>
+    <div className={`relative bg-charcoal rounded-card overflow-hidden ${isLocal ? "w-36 h-28 md:w-48 md:h-36" : "w-full aspect-video"}`}>
       {stream ? (
         <video
           ref={videoRef}
