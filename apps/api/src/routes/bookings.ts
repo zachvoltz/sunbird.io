@@ -655,9 +655,9 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
   }
 
   // Create a new CF session if one doesn't exist for this role
-  // Pass the SDP offer from the client to establish the PeerConnection immediately
+  // Don't pass SDP here — let tracks/new handle the SDP exchange
   if (!mySessionId) {
-    const newSession = await callsService.createSession(body.sessionDescription);
+    const newSession = await callsService.createSession();
     mySessionId = newSession.sessionId;
     await saveSession(sessionKey, mySessionId);
   }
@@ -668,7 +668,7 @@ bookingRoutes.post("/:id/call/tracks", requireAuth, async (c) => {
     result = await callsService.newTracks(mySessionId, body);
   } catch (err: any) {
     if (err.message?.includes("410") || err.message?.includes("425")) {
-      const freshSession = await callsService.createSession(body.sessionDescription);
+      const freshSession = await callsService.createSession();
       mySessionId = freshSession.sessionId;
       await saveSession(sessionKey, mySessionId);
       result = await callsService.newTracks(mySessionId, body);
