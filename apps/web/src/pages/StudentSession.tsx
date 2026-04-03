@@ -147,47 +147,59 @@ export function StudentSession() {
 
   const coach = booking.coach;
 
-  return (
-    <div className="py-16 px-6 md:px-10">
-      <div className="mx-auto max-w-[1200px]">
-        {/* Breadcrumb */}
-        <Link
-          to="/my-bookings"
-          className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-charcoal transition-colors"
-        >
-          &larr; My Bookings
-        </Link>
+  const showVideo = booking.mode === "ONLINE" && booking.status === "CONFIRMED";
 
-        {/* Header */}
-        <div className="mt-8 mb-10 flex items-baseline justify-between">
-          <h1 className="font-display text-3xl md:text-4xl font-bold">
-            Session
-          </h1>
-          <span
-            className={`text-[11px] uppercase tracking-wider font-medium ${
-              booking.status === "COMPLETED"
-                ? "text-sage"
-                : booking.status === "CANCELLED"
-                  ? "text-coral"
-                  : "text-iris"
-            }`}
-          >
-            {booking.status}
-          </span>
+  return (
+    <div>
+      {/* Sticky video background */}
+      {showVideo && (
+        <div className="sticky top-0 z-0 h-screen">
+          <VideoCall
+            bookingId={bookingId!}
+            localUserName={user?.name ?? "You"}
+            remoteUserName={coach?.name ?? "Coach"}
+          />
+        </div>
+      )}
+
+      {/* Content that scrolls over the video */}
+      <div className={`relative z-10 ${showVideo ? "-mt-[100vh]" : ""}`}>
+        <div className="py-16 px-6 md:px-10">
+          <div className="mx-auto max-w-[1200px]">
+            {/* Breadcrumb */}
+            <Link
+              to="/my-bookings"
+              className={`text-[11px] font-medium uppercase tracking-[0.15em] transition-colors ${showVideo ? "text-cream/70 hover:text-cream" : "text-text-secondary hover:text-charcoal"}`}
+            >
+              &larr; My Bookings
+            </Link>
+
+            {/* Header */}
+            <div className="mt-8 mb-10 flex items-baseline justify-between">
+              <h1 className={`font-display text-3xl md:text-4xl font-bold ${showVideo ? "text-cream" : ""}`}>
+                Session
+              </h1>
+              <span
+                className={`text-[11px] uppercase tracking-wider font-medium ${
+                  booking.status === "COMPLETED"
+                    ? "text-sage"
+                    : booking.status === "CANCELLED"
+                      ? "text-coral"
+                      : "text-iris"
+                }`}
+              >
+                {booking.status}
+              </span>
+            </div>
+
+            {/* Spacer to push content below the video initially */}
+            {showVideo && <div className="h-[60vh]" />}
+          </div>
         </div>
 
-        {/* Video call for online sessions */}
-        {booking.mode === "ONLINE" && booking.status === "CONFIRMED" && (
-          <div className="mb-8">
-            <VideoCall
-              bookingId={bookingId!}
-              localUserName={user?.name ?? "You"}
-              remoteUserName={coach?.name ?? "Coach"}
-            />
-          </div>
-        )}
-
-        {/* Two-column layout */}
+        {/* Two-column layout — transparent backgrounds when video is active */}
+        <div className={`px-6 md:px-10 pb-16 ${showVideo ? "backdrop-blur-sm bg-cream/80" : ""}`}>
+          <div className="mx-auto max-w-[1200px]">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
           {/* Left column — Lesson, Coach, Resources */}
           <div className="md:col-span-4 space-y-8">
@@ -376,6 +388,8 @@ export function StudentSession() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
           </div>
         </div>
       </div>
