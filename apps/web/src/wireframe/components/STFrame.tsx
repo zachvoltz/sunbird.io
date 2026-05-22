@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 type NavId = "home" | "practice" | "lessons" | "notes" | "takes" | "curriculum" | "profile";
 
 const NAV: Array<{ id: NavId; label: string; icon: string; to: string }> = [
-  { id: "home", label: "Today", icon: "⌂", to: "/my-bookings" },
+  { id: "home", label: "Today", icon: "⌂", to: "/today" },
   { id: "practice", label: "Practice", icon: "♪", to: "/practice" },
   { id: "lessons", label: "Lessons", icon: "♬", to: "/my-bookings" },
   { id: "notes", label: "Journal", icon: "✎", to: "/my-notes" },
@@ -88,6 +88,8 @@ export function STFrame({
   const inferred: NavId =
     side !== "home"
       ? side
+      : loc.pathname.startsWith("/today")
+      ? "home"
       : loc.pathname.startsWith("/practice")
       ? "practice"
       : loc.pathname.startsWith("/my-notes")

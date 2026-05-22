@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Home } from "@/pages/Home";
+import { Pricing } from "@/pages/Pricing";
 import { Lessons } from "@/pages/Lessons";
 import { LessonDetail } from "@/pages/LessonDetail";
 import { Workshops } from "@/pages/Workshops";
@@ -37,12 +38,15 @@ import { MyProfilePage } from "@/wireframe/pages/MyProfile";
 import { PracticePathPage } from "@/wireframe/pages/PracticePath";
 import { ExercisePlayerPage } from "@/wireframe/pages/ExercisePlayer";
 import { RecordTakePage } from "@/wireframe/pages/RecordTake";
+import { TodayPage } from "@/wireframe/pages/TodayPage";
+import { AccountPage } from "@/wireframe/pages/Account";
 
 export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<Home />} />
+        <Route path="pricing" element={<Pricing />} />
         <Route path="lessons" element={<Lessons />} />
         <Route path="lessons/:slug" element={<LessonDetail />} />
         <Route path="categories" element={<Lessons />} />
@@ -75,8 +79,10 @@ export function App() {
       <Route path="/coach/library" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LibraryPage /></RoleGate></AuthGate>} />
       <Route path="/coach/midi/:mode" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><MidiEditorPage /></RoleGate></AuthGate>} />
       <Route path="/coach/live/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LessonLivePage /></RoleGate></AuthGate>} />
+      <Route path="/coach/account" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><AccountPage /></RoleGate></AuthGate>} />
 
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
+      <Route path="/today" element={<AuthGate><TodayPage /></AuthGate>} />
       <Route path="/my-bookings" element={<AuthGate><MyBookingsPage /></AuthGate>} />
       <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />
       <Route path="/my-notes/:bookingId" element={<AuthGate><MyNoteExpandedPage /></AuthGate>} />
