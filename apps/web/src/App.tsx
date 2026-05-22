@@ -29,6 +29,11 @@ import { LessonLivePage } from "@/wireframe/pages/LessonLive";
 import { VoiceRangePage } from "@/wireframe/pages/VoiceRange";
 import { InboxPage } from "@/wireframe/pages/Inbox";
 import { CalendarPage } from "@/wireframe/pages/Calendar";
+import { MyBookingsPage } from "@/wireframe/pages/MyBookingsPage";
+import { MyNotesPage } from "@/wireframe/pages/MyNotes";
+import { MyTakesPage } from "@/wireframe/pages/MyTakes";
+import { MyCurriculumHub } from "@/wireframe/pages/MyCurriculumHub";
+import { MyProfilePage } from "@/wireframe/pages/MyProfile";
 
 export function App() {
   return (
@@ -43,7 +48,7 @@ export function App() {
         <Route path="coaches" element={<Coaches />} />
         <Route path="coaches/:slug" element={<CoachProfile />} />
         <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
-        <Route path="my-bookings" element={<AuthGate><MyBookings /></AuthGate>} />
+        <Route path="my-bookings-legacy" element={<AuthGate><MyBookings /></AuthGate>} />
         <Route path="my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
         <Route path="my-curriculum/:slug" element={<AuthGate><MyCurriculum /></AuthGate>} />
         <Route path="coach/dashboard-legacy" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
@@ -67,6 +72,13 @@ export function App() {
       <Route path="/coach/library" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LibraryPage /></RoleGate></AuthGate>} />
       <Route path="/coach/midi/:mode" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><MidiEditorPage /></RoleGate></AuthGate>} />
       <Route path="/coach/live/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LessonLivePage /></RoleGate></AuthGate>} />
+
+      {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
+      <Route path="/my-bookings" element={<AuthGate><MyBookingsPage /></AuthGate>} />
+      <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />
+      <Route path="/my-takes" element={<AuthGate><MyTakesPage /></AuthGate>} />
+      <Route path="/my-curriculum" element={<AuthGate><MyCurriculumHub /></AuthGate>} />
+      <Route path="/my-profile" element={<AuthGate><MyProfilePage /></AuthGate>} />
     </Routes>
   );
 }
