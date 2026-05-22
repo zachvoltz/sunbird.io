@@ -102,6 +102,10 @@ function DTSidebar({
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>▦</span>
         {!collapsed && <span>Calendar</span>}
       </Link>
+      <Link to="/coach/account" className={"item" + (on === "account" ? " on" : "")} title="Account">
+        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⌥</span>
+        {!collapsed && <span>Account</span>}
+      </Link>
 
       {!collapsed && <div className="sec-label">STUDENTS · {students.length}</div>}
       {collapsed && (
