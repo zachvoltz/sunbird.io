@@ -290,3 +290,152 @@ export interface StudentProgressPublic {
   notes: string | null;
 }
 
+// ─── Coach UI (Practice / Assignments / Takes / Notes) ───
+
+export type AssignmentType = "WARMUP" | "EXERCISE" | "SONG";
+export type AssignmentStatus = "ASSIGNED" | "IN_PROGRESS" | "COMPLETED";
+
+export interface AssignmentPublic {
+  id: string;
+  studentId: string;
+  coachId: string;
+  type: AssignmentType;
+  title: string;
+  subtitle: string | null;
+  bars: string | null;
+  weekStartsOn: string;
+  tempoBpmStart: number | null;
+  tempoBpmEnd: number | null;
+  durationMin: number | null;
+  status: AssignmentStatus;
+  completionCount: number;
+  noteText: string | null;
+  sortOrder: number;
+  hasMidi: boolean;
+  hasNotePinned: boolean;
+  dueAt: string | null;
+  bookingId: string | null;
+  resourceId: string | null;
+  createdAt: string;
+}
+
+export type TakeStatus = "UNREVIEWED" | "REVIEWING" | "REPLIED";
+export type TakeAnnotationKind = "LOVE" | "WATCH" | "TRY_THIS";
+export type TakeAnnotationTarget = "SCORE_BAR" | "TIMELINE";
+
+export interface TakeAnnotationPublic {
+  id: string;
+  takeId: string;
+  kind: TakeAnnotationKind;
+  targetType: TakeAnnotationTarget;
+  targetBar: number | null;
+  targetTimeSec: number | null;
+  text: string | null;
+  voiceUrl: string | null;
+  voiceDurSec: number | null;
+  createdAt: string;
+  author: UserPublic;
+}
+
+export interface TakeReplyPublic {
+  id: string;
+  takeId: string;
+  text: string | null;
+  voiceUrl: string | null;
+  voiceDurSec: number | null;
+  starRating: number | null;
+  summaryText: string | null;
+  createdAt: string;
+  author: UserPublic;
+}
+
+export interface TakePublic {
+  id: string;
+  studentId: string;
+  coachId: string;
+  assignmentId: string | null;
+  pieceTitle: string;
+  bars: string | null;
+  takeNumber: number;
+  durationSec: number;
+  audioUrl: string | null;
+  selfRating: number | null;
+  selfNote: string | null;
+  status: TakeStatus;
+  reviewedAt: string | null;
+  createdAt: string;
+  annotations: TakeAnnotationPublic[];
+  replies: TakeReplyPublic[];
+}
+
+export interface NoteSections {
+  intro?: string;
+  scalesExercises?: string;
+  topics?: string;
+  songWork?: string;
+  otherSongs?: string;
+  nextTime?: string;
+}
+
+export type LessonSummaryStatus = "PENDING" | "READY" | "EDITED";
+
+export interface LessonSummaryPublic {
+  id: string;
+  bookingId: string;
+  bullets: string[];
+  status: LessonSummaryStatus;
+  durationMin: number | null;
+  recordingUrl: string | null;
+  editedBy: UserPublic | null;
+  generatedAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+}
+
+export interface PracticeStreakPublic {
+  currentDays: number;
+  longestDays: number;
+  lastPracticedAt: string | null;
+}
+
+export interface NoteReadReceiptPublic {
+  id: string;
+  bookingId: string;
+  user: UserPublic;
+  readAt: string;
+}
+
+export interface NoteVoiceMemoPublic {
+  id: string;
+  bookingId: string;
+  audioUrl: string;
+  durationSec: number;
+  createdAt: string;
+  addedBy: UserPublic;
+}
+
+/** Aggregate for the Student page. */
+export interface StudentDetailPublic {
+  id: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  bio: string | null;
+  age: number | null;
+  instrument: string | null;
+  bookingCount: number;
+  firstLessonAt: string | null;
+  lastLessonAt: string | null;
+  streak: PracticeStreakPublic | null;
+  assignments: AssignmentPublic[];
+  takes: TakePublic[];
+  latestNoteBookingId: string | null;
+  latestNoteSections: NoteSections | null;
+  latestNotePracticeNotes: string | null;
+  latestNoteStartsAt: string | null;
+  latestNoteSentAt: string | null;
+  latestNoteReadCount: number;
+  latestLessonSummary: LessonSummaryPublic | null;
+  latestNoteVoiceMemos: NoteVoiceMemoPublic[];
+}
+

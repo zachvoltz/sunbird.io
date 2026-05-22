@@ -20,6 +20,15 @@ import { RoleGate } from "@/components/RoleGate";
 import { Login } from "@/pages/Login";
 import { ResetPassword } from "@/pages/ResetPassword";
 import { NotFound } from "@/pages/NotFound";
+import { RosterPage } from "@/wireframe/pages/Roster";
+import { StudentPage } from "@/wireframe/pages/StudentPage";
+import { TakeReviewPage } from "@/wireframe/pages/TakeReview";
+import { MidiEditorPage } from "@/wireframe/pages/MidiEditor";
+import { LibraryPage } from "@/wireframe/pages/Library";
+import { LessonLivePage } from "@/wireframe/pages/LessonLive";
+import { VoiceRangePage } from "@/wireframe/pages/VoiceRange";
+import { InboxPage } from "@/wireframe/pages/Inbox";
+import { CalendarPage } from "@/wireframe/pages/Calendar";
 
 export function App() {
   return (
@@ -37,7 +46,7 @@ export function App() {
         <Route path="my-bookings" element={<AuthGate><MyBookings /></AuthGate>} />
         <Route path="my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
         <Route path="my-curriculum/:slug" element={<AuthGate><MyCurriculum /></AuthGate>} />
-        <Route path="coach" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
+        <Route path="coach/dashboard-legacy" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
         <Route path="coach/session/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSession /></RoleGate></AuthGate>} />
         <Route path="coach/settings" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSettings /></RoleGate></AuthGate>} />
         <Route path="coach/manage" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachManage /></RoleGate></AuthGate>} />
@@ -46,6 +55,18 @@ export function App() {
         <Route path="reset-password" element={<ResetPassword />} />
         <Route path="*" element={<NotFound />} />
       </Route>
+
+      {/* Sketchy teacher wireframes — render outside the main Layout so the
+          full-bleed desktop chrome (topbar/sidebar) owns the viewport. */}
+      <Route path="/coach" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><RosterPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/inbox" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><InboxPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/calendar" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CalendarPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/student/:studentId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><StudentPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/student/:studentId/voice" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><VoiceRangePage /></RoleGate></AuthGate>} />
+      <Route path="/coach/takes/:takeId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TakeReviewPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/library" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LibraryPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/midi/:mode" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><MidiEditorPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/live/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LessonLivePage /></RoleGate></AuthGate>} />
     </Routes>
   );
 }

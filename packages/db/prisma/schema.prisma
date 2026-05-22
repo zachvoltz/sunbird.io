@@ -32,6 +32,8 @@ model User {
   isPublished    Boolean  @default(false)
   sessionAddress String?
   referralSource String?
+  age            Int?
+  instrument     String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -60,6 +62,18 @@ model User {
   stCoachProgress    STNodeProgress[]    @relation("stCoachProgress")
   studentProgress    StudentProgress[]   @relation("studentProgress")
   coachProgressMarks StudentProgress[]   @relation("coachProgress")
+
+  // Practice / coach UI additions
+  practiceStreak        PracticeStreak?
+  studentAssignments    Assignment[]        @relation("studentAssignments")
+  coachAssignments      Assignment[]        @relation("coachAssignments")
+  studentTakes          Take[]              @relation("studentTakes")
+  coachTakes            Take[]              @relation("coachTakes")
+  takeAnnotations       TakeAnnotation[]
+  takeReplies           TakeReply[]
+  noteReadReceipts      NoteReadReceipt[]
+  noteVoiceMemos        NoteVoiceMemo[]
+  lessonSummariesEdited LessonSummary[]     @relation("summaryEditor")
 }
 
 model Session {
@@ -207,6 +221,7 @@ model CoachResource {
   coach     User               @relation("coachResources", fields: [coachId], references: [id], onDelete: Cascade)
   nodeLinks       NodeResourceLink[]
   stResourceLinks STNodeResourceLink[] @relation("stResourceLinks")
+  assignments     Assignment[]
 }
 
 model NodeResourceLink {
@@ -399,6 +414,10 @@ model Booking {
   categoryId          String?
   skillTreeId         String?
   nodeId              String?
+  // JSON-stringified { intro, scalesExercises, topics, songWork, otherSongs, nextTime }.
+  // When practiceNotesSentAt is null the sections are still a draft; once set they
+  // represent the sent note. Kept alongside practiceNotes for back-compat.
+  noteSections        String?
   createdAt           DateTime  @default(now())
 
   user           User               @relation(fields: [userId], references: [id])
@@ -411,6 +430,11 @@ model Booking {
   schedule       RecurringSchedule? @relation(fields: [scheduleId], references: [id])
   messages       SessionMessage[]
   resources      SessionResource[]
+
+  lessonSummary    LessonSummary?
+  noteReadReceipts NoteReadReceipt[]
+  noteVoiceMemos   NoteVoiceMemo[]
+  assignments      Assignment[]
 }
 
 model RecurringSchedule {
@@ -602,4 +626,150 @@ model ContactMessage {
   createdAt DateTime @default(now())
 
   user User? @relation(fields: [userId], references: [id])
+}
+
+// ─── Practice / Coach UI ───
+
+model PracticeStreak {
+  id              String    @id @default(cuid())
+  userId          String    @unique
+  currentDays     Int       @default(0)
+  longestDays     Int       @default(0)
+  lastPracticedAt DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Per-week assignment of a warmup / exercise / song to a student.
+model Assignment {
+  id              String    @id @default(cuid())
+  studentId       String
+  coachId         String
+  type            String    // "WARMUP" | "EXERCISE" | "SONG"
+  title           String
+  subtitle        String?
+  bars            String?
+  weekStartsOn    DateTime  // Monday of the week it applies to (UTC midnight)
+  tempoBpmStart   Int?
+  tempoBpmEnd     Int?
+  durationMin     Int?
+  status          String    @default("ASSIGNED")  // "ASSIGNED" | "IN_PROGRESS" | "COMPLETED"
+  completionCount Int       @default(0)
+  noteText        String?
+  sortOrder       Int       @default(0)
+  hasMidi         Boolean   @default(false)
+  hasNotePinned   Boolean   @default(false)
+  dueAt           DateTime?
+  bookingId       String?
+  resourceId      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  student User           @relation("studentAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+  coach   User           @relation("coachAssignments", fields: [coachId], references: [id])
+  booking Booking?       @relation(fields: [bookingId], references: [id])
+  resource CoachResource? @relation(fields: [resourceId], references: [id])
+  takes   Take[]
+
+  @@index([studentId, weekStartsOn])
+}
+
+// Audio submission from a student.
+model Take {
+  id          String    @id @default(cuid())
+  studentId   String
+  coachId     String
+  assignmentId String?
+  pieceTitle  String
+  bars        String?
+  takeNumber  Int       @default(1)
+  durationSec Int
+  audioUrl    String?
+  selfRating  Int?      // 1-5
+  selfNote    String?
+  status      String    @default("UNREVIEWED")  // "UNREVIEWED" | "REVIEWING" | "REPLIED"
+  reviewedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  student     User        @relation("studentTakes", fields: [studentId], references: [id], onDelete: Cascade)
+  coach       User        @relation("coachTakes", fields: [coachId], references: [id])
+  assignment  Assignment? @relation(fields: [assignmentId], references: [id])
+  annotations TakeAnnotation[]
+  replies     TakeReply[]
+
+  @@index([studentId, createdAt])
+}
+
+model TakeAnnotation {
+  id             String    @id @default(cuid())
+  takeId         String
+  authorId       String
+  kind           String    // "LOVE" | "WATCH" | "TRY_THIS"
+  targetType     String    // "SCORE_BAR" | "TIMELINE"
+  targetBar      Int?
+  targetTimeSec  Float?
+  text           String?
+  voiceUrl       String?
+  voiceDurSec    Int?
+  createdAt      DateTime  @default(now())
+
+  take   Take @relation(fields: [takeId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+}
+
+model TakeReply {
+  id          String   @id @default(cuid())
+  takeId      String
+  authorId    String
+  text        String?
+  voiceUrl    String?
+  voiceDurSec Int?
+  starRating  Int?
+  summaryText String?
+  createdAt   DateTime @default(now())
+
+  take   Take @relation(fields: [takeId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+}
+
+// Stubbed AI lesson summary: storage + manual edit; generation deferred.
+model LessonSummary {
+  id           String    @id @default(cuid())
+  bookingId    String    @unique
+  bullets      String    // JSON-stringified string[]
+  status       String    @default("PENDING") // "PENDING" | "READY" | "EDITED"
+  durationMin  Int?
+  recordingUrl String?
+  editedById   String?
+  generatedAt  DateTime?
+  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime  @default(now())
+
+  booking  Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  editedBy User?   @relation("summaryEditor", fields: [editedById], references: [id])
+}
+
+model NoteReadReceipt {
+  id        String   @id @default(cuid())
+  bookingId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([bookingId, userId])
+}
+
+model NoteVoiceMemo {
+  id          String   @id @default(cuid())
+  bookingId   String
+  addedById   String
+  audioUrl    String
+  durationSec Int
+  createdAt   DateTime @default(now())
+
+  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  addedBy User    @relation(fields: [addedById], references: [id])
 }
