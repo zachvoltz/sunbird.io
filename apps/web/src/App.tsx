@@ -30,10 +30,13 @@ import { VoiceRangePage } from "@/wireframe/pages/VoiceRange";
 import { InboxPage } from "@/wireframe/pages/Inbox";
 import { CalendarPage } from "@/wireframe/pages/Calendar";
 import { MyBookingsPage } from "@/wireframe/pages/MyBookingsPage";
-import { MyNotesPage } from "@/wireframe/pages/MyNotes";
+import { MyNotesPage, MyNoteExpandedPage } from "@/wireframe/pages/MyNotes";
 import { MyTakesPage } from "@/wireframe/pages/MyTakes";
 import { MyCurriculumHub } from "@/wireframe/pages/MyCurriculumHub";
 import { MyProfilePage } from "@/wireframe/pages/MyProfile";
+import { PracticePathPage } from "@/wireframe/pages/PracticePath";
+import { ExercisePlayerPage } from "@/wireframe/pages/ExercisePlayer";
+import { RecordTakePage } from "@/wireframe/pages/RecordTake";
 
 export function App() {
   return (
@@ -76,9 +79,13 @@ export function App() {
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
       <Route path="/my-bookings" element={<AuthGate><MyBookingsPage /></AuthGate>} />
       <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />
+      <Route path="/my-notes/:bookingId" element={<AuthGate><MyNoteExpandedPage /></AuthGate>} />
       <Route path="/my-takes" element={<AuthGate><MyTakesPage /></AuthGate>} />
       <Route path="/my-curriculum" element={<AuthGate><MyCurriculumHub /></AuthGate>} />
       <Route path="/my-profile" element={<AuthGate><MyProfilePage /></AuthGate>} />
+      <Route path="/practice" element={<AuthGate><PracticePathPage /></AuthGate>} />
+      <Route path="/practice/exercise/:assignmentId" element={<AuthGate><ExercisePlayerPage /></AuthGate>} />
+      <Route path="/practice/record/:assignmentId" element={<AuthGate><RecordTakePage /></AuthGate>} />
     </Routes>
   );
 }

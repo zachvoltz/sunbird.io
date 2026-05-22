@@ -141,6 +141,53 @@ export function useCoachDashboard(): {
   return { dashboard, loading };
 }
 
+// Self-data: same shape, fetched via /api/me/student-data (no role required).
+let selfDetailCache: StudentDetailPublic | null = null;
+let selfDetailInflight: Promise<StudentDetailPublic | undefined> | null = null;
+
+function fetchSelfDetail(): Promise<StudentDetailPublic | undefined> {
+  if (selfDetailCache) return Promise.resolve(selfDetailCache);
+  if (selfDetailInflight) return selfDetailInflight;
+  selfDetailInflight = apiFetch<{ data: StudentDetailPublic }>("/api/me/student-data")
+    .then((r) => {
+      selfDetailCache = r.data;
+      selfDetailInflight = null;
+      return r.data;
+    })
+    .catch(() => {
+      selfDetailInflight = null;
+      return undefined;
+    });
+  return selfDetailInflight;
+}
+
+export function useMyStudentDetail(): {
+  detail: StudentDetailPublic | undefined;
+  loading: boolean;
+  refresh: () => void;
+} {
+  const [detail, setDetail] = useState<StudentDetailPublic | undefined>(
+    selfDetailCache ?? undefined,
+  );
+  const [loading, setLoading] = useState(!detail);
+  useEffect(() => {
+    let alive = true;
+    fetchSelfDetail().then((d) => {
+      if (!alive) return;
+      setDetail(d);
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  const refresh = () => {
+    selfDetailCache = null;
+    fetchSelfDetail().then((d) => setDetail(d));
+  };
+  return { detail, loading, refresh };
+}
+
 export function useStudentDetail(studentId: string | undefined): {
   detail: StudentDetailPublic | undefined;
   loading: boolean;

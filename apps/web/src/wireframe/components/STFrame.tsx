@@ -2,14 +2,15 @@ import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
-type NavId = "home" | "lessons" | "notes" | "takes" | "curriculum" | "profile";
+type NavId = "home" | "practice" | "lessons" | "notes" | "takes" | "curriculum" | "profile";
 
 const NAV: Array<{ id: NavId; label: string; icon: string; to: string }> = [
   { id: "home", label: "Today", icon: "⌂", to: "/my-bookings" },
-  { id: "lessons", label: "Lessons", icon: "♪", to: "/my-bookings" },
-  { id: "notes", label: "Notes", icon: "✎", to: "/my-notes" },
+  { id: "practice", label: "Practice", icon: "♪", to: "/practice" },
+  { id: "lessons", label: "Lessons", icon: "♬", to: "/my-bookings" },
+  { id: "notes", label: "Journal", icon: "✎", to: "/my-notes" },
   { id: "takes", label: "My takes", icon: "⌥", to: "/my-takes" },
-  { id: "curriculum", label: "Curriculum", icon: "♬", to: "/my-curriculum" },
+  { id: "curriculum", label: "Curriculum", icon: "▦", to: "/my-curriculum" },
   { id: "profile", label: "Profile", icon: "☻", to: "/my-profile" },
 ];
 
@@ -87,6 +88,8 @@ export function STFrame({
   const inferred: NavId =
     side !== "home"
       ? side
+      : loc.pathname.startsWith("/practice")
+      ? "practice"
       : loc.pathname.startsWith("/my-notes")
       ? "notes"
       : loc.pathname.startsWith("/my-takes")
