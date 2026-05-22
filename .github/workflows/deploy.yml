@@ -66,6 +66,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api
+          wranglerVersion: "4"
           command: d1 migrations apply sunbird-db --remote
 
       - name: Deploy to Cloudflare Workers
@@ -74,4 +75,5 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api
+          wranglerVersion: "4"
           command: deploy
