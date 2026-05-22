@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { BookingPublic } from "@sunbird/shared";
+import type {
+  BookingPublic,
+  CoachDashboardPublic,
+  MissingNotesItem,
+  PlanGapItem,
+  UnreviewedTakeItem,
+} from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Avatar } from "../components/Avatar";
@@ -10,6 +17,20 @@ import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
 import { WaveBars, waveHeights } from "../components/WaveBars";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { useCoachDashboard } from "../hooks/useCoachData";
+
+function firstName(full: string | undefined): string {
+  if (!full) return "there";
+  return full.trim().split(/\s+/)[0];
+}
+
+function greetingFor(now: Date): string {
+  const h = now.getHours();
+  if (h < 5) return "Good night";
+  if (h < 12) return "Good morning";
+  if (h < 17) return "Good afternoon";
+  return "Good evening";
+}
 
 type StudentInfo = {
   id: string;
@@ -37,18 +58,26 @@ function studentIdSlug(name: string, fallback: string): string {
 function RosterDesktop({
   bookings,
   students,
-}: { bookings: BookingPublic[]; students: StudentInfo[] }) {
+  dashboard,
+  dashboardLoading,
+  coachName,
+}: {
+  bookings: BookingPublic[];
+  students: StudentInfo[];
+  dashboard: CoachDashboardPublic | undefined;
+  dashboardLoading: boolean;
+  coachName: string | undefined;
+}) {
   const now = new Date();
   const todayStr = ymd(now);
 
   const todayBookings = bookings.filter(
     (b) => b.status === "CONFIRMED" && ymd(new Date(b.startsAt)) === todayStr,
   );
-  const needsAttention = bookings.filter(
-    (b) =>
-      (b.status === "CONFIRMED" && new Date(b.startsAt) <= now && !b.practiceNotes) ||
-      (b.status === "COMPLETED" && !b.practiceNotes),
-  );
+  const needsCount =
+    (dashboard?.unreviewedTakes.length ?? 0) +
+    (dashboard?.bookingsMissingNotes.length ?? 0) +
+    (dashboard?.studentsWithoutPlan.length ?? 0);
 
   const dateLabel = now.toLocaleDateString([], {
     weekday: "long", month: "short", day: "numeric",
@@ -60,8 +89,9 @@ function RosterDesktop({
         <div>
           <h2 className="dt-title">{dateLabel}</h2>
           <div className="dt-sub">
-            Good morning, K — {todayBookings.length} lesson{todayBookings.length === 1 ? "" : "s"} today,{" "}
-            {needsAttention.length} thing{needsAttention.length === 1 ? "" : "s"} need you
+            {greetingFor(now)}, {firstName(coachName)} — {todayBookings.length} lesson
+            {todayBookings.length === 1 ? "" : "s"} today, {needsCount} thing
+            {needsCount === 1 ? "" : "s"} need you
           </div>
         </div>
         <div className="row gap-2">
@@ -80,233 +110,385 @@ function RosterDesktop({
               <div className="panel-title">Lessons today</div>
               <span className="chip tiny">{todayBookings.length}</span>
             </div>
-            <div className="panel-body scroll col gap-3">
-              {todayBookings.length === 0 && (
-                <>
-                  <TodayBookingDemoCard />
-                  <TodayBookingSmallDemoCard />
-                </>
+            <div className="panel-body scroll col gap-3" style={{ paddingTop: 12 }}>
+              {todayBookings.length === 0 ? (
+                <div
+                  className="box dashed"
+                  style={{
+                    textAlign: "center",
+                    padding: "24px 14px",
+                    color: "var(--ink-soft)",
+                  }}
+                >
+                  <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
+                    No lessons today.
+                  </div>
+                  <div className="small muted mt-2">
+                    A clear day for the studio. Drop one onto a student's week from the
+                    library, or block out practice time.
+                  </div>
+                  <div className="row gap-2 mt-3" style={{ justifyContent: "center" }}>
+                    <Link to="/coach/calendar" className="btn small">view week</Link>
+                    <Link to="/coach/library" className="btn small ghost">open library</Link>
+                  </div>
+                </div>
+              ) : (
+                todayBookings.map((b, i) => (
+                  <TodayBookingCard key={b.id} booking={b} prominent={i === 0} now={now} />
+                ))
               )}
-              {todayBookings.map((b, i) => (
-                <TodayBookingCard key={b.id} booking={b} prominent={i === 0} />
-              ))}
-              <div className="postit small wf-scrawl" style={{ transform: "rotate(-0.6deg)" }}>
-                Reminder: send Lina's parents the recital sign-up by EOD
-              </div>
             </div>
           </div>
 
           {/* Needs you */}
-          <div className="panel tinted">
-            <div className="panel-head">
-              <div className="panel-title">Needs you</div>
-              <span className="chip tiny accent">{Math.max(needsAttention.length, 4)}</span>
-            </div>
-            <div className="panel-body scroll col gap-3">
-              <div className="box accent" style={{ borderWidth: 2 }}>
-                <div className="row between">
-                  <div className="row gap-2">
-                    <Avatar name="Maya" size={32} />
-                    <div>
-                      <div className="bold">Maya · new take</div>
-                      <div className="tiny muted">River Flows · bars 16-24 · 0:48</div>
-                    </div>
-                  </div>
-                  <span className="tiny muted">2h ago</span>
-                </div>
-                <WaveBars heights={waveHeights(11, 28)} played={0} />
-                <div className="row gap-2 mt-2">
-                  <Link to="/coach/takes/maya-river-3" className="btn small accent grow">review &amp; reply</Link>
-                  <button className="btn icon ghost"><Icon name="play" size={12} /></button>
-                </div>
-              </div>
-
-              <div className="box">
-                <div className="row between">
-                  <div className="row gap-2">
-                    <Avatar name="Theo" size={32} />
-                    <div>
-                      <div className="bold">Theo · new take</div>
-                      <div className="tiny muted">Blackbird · 1:12 · self-rated ★★☆☆☆</div>
-                    </div>
-                  </div>
-                  <span className="tiny muted">yesterday</span>
-                </div>
-                <div className="small mt-1 muted">"the second verse keeps tripping"</div>
-              </div>
-
-              <div className="box">
-                <div className="row gap-2">
-                  <Avatar name="Sam" size={32} />
-                  <div className="grow">
-                    <div className="bold">Sam's mom · voice msg</div>
-                    <div className="tiny muted">0:22 · about Tuesday's reschedule</div>
-                  </div>
-                  <Icon name="play" size={14} />
-                </div>
-              </div>
-
-              <div className="box dashed">
-                <div className="row gap-2">
-                  <Avatar name="Ana" size={32} />
-                  <div className="grow">
-                    <div className="bold">Ana · weekly plan due</div>
-                    <div className="tiny muted">last sent 8 days ago</div>
-                  </div>
-                  <button className="btn small">plan</button>
-                </div>
-              </div>
-            </div>
-          </div>
+          <NeedsYouPanel dashboard={dashboard} loading={dashboardLoading} now={now} />
 
           {/* This week */}
-          <div className="panel">
-            <div className="panel-head">
-              <div className="panel-title">This week</div>
-              <div className="pill-row">
-                <span className="p">week</span>
-                <span className="p on">studio</span>
-              </div>
-            </div>
-            <div className="panel-body scroll col gap-3">
-              <div className="row gap-2 small muted">
-                <span>{students.length || 23} students</span><span>·</span>
-                <span>18 active this week</span><span>·</span>
-                <span>11 takes received</span>
-              </div>
-
-              {/* mini calendar */}
-              <div className="box small">
-                <div className="row between mb-2">
-                  <span className="bold">Apr 15 – 21</span>
-                  <span className="tiny muted">14 lessons booked</span>
-                </div>
-                <div className="row gap-1" style={{ height: 60 }}>
-                  {[
-                    { d: "M", h: [3, 2, 1] },
-                    { d: "T", h: [2, 3, 2, 1] },
-                    { d: "W", h: [2, 1, 2] },
-                    { d: "T", h: [3, 2] },
-                    { d: "F", h: [2, 2], today: true },
-                    { d: "S", h: [] as number[] },
-                    { d: "S", h: [] as number[] },
-                  ].map((day, i) => (
-                    <div key={i} style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, alignItems: "stretch" }}>
-                      <div className="tiny center" style={{ color: day.today ? "var(--accent)" : "var(--ink-soft)" }}>{day.d}</div>
-                      <div style={{
-                        flex: 1, display: "flex", flexDirection: "column", gap: 2, padding: 2,
-                        border: "1px solid var(--ink-faint)", borderRadius: 4,
-                        background: day.today ? "var(--accent-soft)" : "var(--paper)",
-                      }}>
-                        {day.h.map((n, j) => (
-                          <div key={j} style={{ flex: 1, background: "var(--ink)", opacity: 0.3 + n * 0.2, borderRadius: 2 }} />
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <div className="small muted mb-2">RECENT ACTIVITY</div>
-                <div className="col gap-2">
-                  {[
-                    { who: "Maya", what: "sent a take", when: "2h" },
-                    { who: "Lina", what: "completed warmup ×3", when: "4h" },
-                    { who: "Theo", what: "opened your notes", when: "6h" },
-                    { who: "Jonas", what: "streak +1 · 6d", when: "y" },
-                    { who: "Reza", what: "missed practice goal", when: "2d" },
-                  ].map((a, i) => (
-                    <div key={i} className="row gap-2 small">
-                      <Avatar name={a.who} size={22} />
-                      <span><span className="bold">{a.who}</span> {a.what}</span>
-                      <span className="muted tiny" style={{ marginLeft: "auto" }}>{a.when}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="hr-hand" />
-
-              <button className="btn small ghost">open inbox →</button>
-            </div>
-          </div>
+          <ThisWeekPanel dashboard={dashboard} loading={dashboardLoading} totalStudents={students.length} />
         </div>
       </div>
     </DTFrame>
   );
 }
 
-function TodayBookingDemoCard() {
+function NeedsYouPanel({
+  dashboard,
+  loading,
+  now,
+}: {
+  dashboard: CoachDashboardPublic | undefined;
+  loading: boolean;
+  now: Date;
+}) {
+  const takes = dashboard?.unreviewedTakes ?? [];
+  const missingNotes = dashboard?.bookingsMissingNotes ?? [];
+  const planGaps = dashboard?.studentsWithoutPlan ?? [];
+  const total = takes.length + missingNotes.length + planGaps.length;
+
   return (
-    <div className="box thick" style={{ position: "relative" }}>
-      <div className="corner">in 5h 18m</div>
-      <div className="row gap-3">
-        <Avatar name="Maya" size={46} />
-        <div className="grow">
-          <div className="bold big">Maya R. <span className="muted small">· 14 · piano</span></div>
-          <div className="small muted">3:00 PM · 30 min · online</div>
-        </div>
+    <div className="panel tinted">
+      <div className="panel-head">
+        <div className="panel-title">Needs you</div>
+        {total > 0 && <span className="chip tiny accent">{total}</span>}
       </div>
-      <Squiggle w={70} color="var(--ink-faint)" />
-      <div className="small mt-2">
-        Today's plan: <span className="hi">River Flows bars 16-24</span>, Hanon № 4 review
-      </div>
-      <div className="row gap-2 mt-2">
-        <Tag color="coral">new take to review</Tag>
-        <Tag>3 prep items</Tag>
-      </div>
-      <div className="row gap-2 mt-2">
-        <Link to="/coach/student/maya" className="btn small grow">open lesson page</Link>
-        <Link to="/coach/live/maya" className="btn small primary">join call ↗</Link>
+      <div className="panel-body scroll col gap-3">
+        {loading && !dashboard && <div className="small muted">Loading…</div>}
+
+        {!loading && total === 0 && (
+          <div
+            className="box dashed"
+            style={{ textAlign: "center", padding: "24px 14px", color: "var(--ink-soft)" }}
+          >
+            <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
+              All caught up.
+            </div>
+            <div className="small muted mt-2">
+              No unreviewed takes, no missing notes, no weekly plans overdue.
+            </div>
+          </div>
+        )}
+
+        {takes.map((t) => (
+          <UnreviewedTakeCard key={t.take.id} item={t} />
+        ))}
+
+        {missingNotes.map((m) => (
+          <MissingNotesCard key={m.booking.id} item={m} />
+        ))}
+
+        {planGaps.map((g) => (
+          <PlanGapCard key={g.student.id} item={g} now={now} />
+        ))}
       </div>
     </div>
   );
 }
 
-function TodayBookingSmallDemoCard() {
+function UnreviewedTakeCard({ item }: { item: UnreviewedTakeItem }) {
+  const t = item.take;
+  const heights = waveHeights(t.id.charCodeAt(0) + t.id.length, 28);
+  const ageLabel =
+    item.ageHours < 1
+      ? "just now"
+      : item.ageHours < 24
+      ? `${Math.round(item.ageHours)}h ago`
+      : `${Math.floor(item.ageHours / 24)}d ago`;
+  const dur = `${Math.floor(t.durationSec / 60)}:${String(t.durationSec % 60).padStart(2, "0")}`;
+  return (
+    <div className="box accent" style={{ borderWidth: 2 }}>
+      <div className="row between">
+        <div className="row gap-2">
+          <Avatar name={item.student.name} size={32} />
+          <div>
+            <div className="bold">{item.student.name.split(" ")[0]} · new take</div>
+            <div className="tiny muted">
+              {t.pieceTitle}
+              {t.bars ? ` · ${t.bars}` : ""} · {dur}
+            </div>
+          </div>
+        </div>
+        <span className="tiny muted">{ageLabel}</span>
+      </div>
+      <WaveBars heights={heights} played={0} />
+      {t.selfNote && (
+        <div className="small mt-1 muted" style={{ fontStyle: "italic" }}>
+          "{t.selfNote}"
+        </div>
+      )}
+      <div className="row gap-2 mt-2">
+        <Link to={`/coach/takes/${t.id}`} className="btn small accent grow">
+          review &amp; reply
+        </Link>
+        <button className="btn icon ghost"><Icon name="play" size={12} /></button>
+      </div>
+    </div>
+  );
+}
+
+function MissingNotesCard({ item }: { item: MissingNotesItem }) {
+  const b = item.booking;
+  const name = b.user?.name ?? "Student";
+  const slug = b.user?.id ?? b.id;
+  const ageLabel =
+    item.daysAgo === 0 ? "today" : item.daysAgo === 1 ? "yesterday" : `${item.daysAgo}d ago`;
   return (
     <div className="box">
-      <div className="row gap-3">
-        <Avatar name="Jonas" size={40} />
-        <div className="grow">
-          <div className="bold">Jonas K. <span className="muted small">· 11 · piano</span></div>
-          <div className="small muted">4:00 PM · 30 min · in person</div>
+      <div className="row between">
+        <div className="row gap-2">
+          <Avatar name={name} size={32} />
+          <div>
+            <div className="bold">
+              {name.split(" ")[0]} · note unsent
+            </div>
+            <div className="tiny muted">lesson {ageLabel} · needs a practice note</div>
+          </div>
         </div>
-      </div>
-      <div className="small mt-2 muted">Hanon № 4 · prep checklist 2/3 done</div>
-      <div className="row gap-2 mt-2">
-        <Link to="/coach/student/jonas" className="btn small grow">open lesson</Link>
-        <button className="btn small ghost">message</button>
+        <Link to={`/coach/student/${slug}`} className="btn small">write</Link>
       </div>
     </div>
   );
 }
 
-function TodayBookingCard({ booking, prominent }: { booking: BookingPublic; prominent: boolean }) {
+function PlanGapCard({ item, now }: { item: PlanGapItem; now: Date }) {
+  const daysSince = item.lastBookingAt
+    ? Math.max(0, Math.floor((now.getTime() - new Date(item.lastBookingAt).getTime()) / 86_400_000))
+    : null;
+  return (
+    <div className="box dashed">
+      <div className="row gap-2">
+        <Avatar name={item.student.name} size={32} />
+        <div className="grow">
+          <div className="bold">{item.student.name.split(" ")[0]} · weekly plan due</div>
+          <div className="tiny muted">
+            {daysSince == null ? "no recent lesson" : daysSince === 0 ? "last lesson today" : `last lesson ${daysSince}d ago`}
+          </div>
+        </div>
+        <Link to={`/coach/student/${item.student.id}`} className="btn small">plan</Link>
+      </div>
+    </div>
+  );
+}
+
+function ThisWeekPanel({
+  dashboard,
+  loading,
+  totalStudents,
+}: {
+  dashboard: CoachDashboardPublic | undefined;
+  loading: boolean;
+  totalStudents: number;
+}) {
+  const stats = dashboard?.weekStats;
+  const density = dashboard?.weekDensity ?? [];
+  const activity = dashboard?.recentActivity ?? [];
+  const maxLessonsAnyDay = density.reduce((m, d) => Math.max(m, d.lessonCount), 0) || 1;
+
+  const weekStart = dashboard?.weekStartsOn ? new Date(dashboard.weekStartsOn) : null;
+  const weekEnd = weekStart
+    ? new Date(weekStart.getTime() + 6 * 86_400_000)
+    : null;
+  const weekLabel =
+    weekStart && weekEnd
+      ? `${weekStart.toLocaleDateString([], { month: "short", day: "numeric" })} – ${weekEnd.getDate()}`
+      : "this week";
+
+  return (
+    <div className="panel">
+      <div className="panel-head">
+        <div className="panel-title">This week</div>
+        <div className="pill-row">
+          <span className="p">week</span>
+          <span className="p on">studio</span>
+        </div>
+      </div>
+      <div className="panel-body scroll col gap-3">
+        {loading && !dashboard && <div className="small muted">Loading…</div>}
+
+        <div className="row gap-2 small muted">
+          <span>{stats?.totalStudents ?? totalStudents} students</span><span>·</span>
+          <span>{stats?.activeThisWeek ?? 0} active this week</span><span>·</span>
+          <span>{stats?.takesReceivedThisWeek ?? 0} takes received</span>
+        </div>
+
+        {/* mini calendar */}
+        <div className="box small">
+          <div className="row between mb-2">
+            <span className="bold">{weekLabel}</span>
+            <span className="tiny muted">
+              {stats?.bookingsThisWeek ?? 0} lesson{(stats?.bookingsThisWeek ?? 0) === 1 ? "" : "s"} booked
+            </span>
+          </div>
+          <div className="row gap-1" style={{ height: 60 }}>
+            {density.map((day) => (
+              <div
+                key={day.date}
+                style={{ flex: 1, display: "flex", flexDirection: "column", gap: 2, alignItems: "stretch" }}
+              >
+                <div
+                  className="tiny center"
+                  style={{ color: day.isToday ? "var(--accent)" : "var(--ink-soft)" }}
+                >
+                  {day.dayLabel}
+                </div>
+                <div
+                  style={{
+                    flex: 1, display: "flex", flexDirection: "column", gap: 2, padding: 2,
+                    border: "1px solid var(--ink-faint)", borderRadius: 4,
+                    background: day.isToday ? "var(--accent-soft)" : "var(--paper)",
+                    justifyContent: "flex-end",
+                  }}
+                >
+                  {Array.from({ length: day.lessonCount }).map((_, j) => (
+                    <div
+                      key={j}
+                      style={{
+                        flex: 1,
+                        background: "var(--ink)",
+                        opacity: 0.4 + 0.5 * (day.lessonCount / maxLessonsAnyDay),
+                        borderRadius: 2,
+                        minHeight: 4,
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <div className="small muted mb-2">RECENT ACTIVITY</div>
+          {activity.length === 0 ? (
+            <div className="small muted">No activity yet this week.</div>
+          ) : (
+            <div className="col gap-2">
+              {activity.map((a, i) => {
+                const firstName = a.student.name.split(" ")[0];
+                const ageMs = Date.now() - new Date(a.at).getTime();
+                const ageLabel =
+                  ageMs < 3_600_000
+                    ? `${Math.max(1, Math.round(ageMs / 60_000))}m`
+                    : ageMs < 86_400_000
+                    ? `${Math.round(ageMs / 3_600_000)}h`
+                    : ageMs < 2 * 86_400_000
+                    ? "y"
+                    : `${Math.floor(ageMs / 86_400_000)}d`;
+                return (
+                  <div key={i} className="row gap-2 small">
+                    <Avatar name={a.student.name} size={22} />
+                    <span>
+                      <span className="bold">{firstName}</span> {a.text}
+                    </span>
+                    <span className="muted tiny" style={{ marginLeft: "auto" }}>
+                      {ageLabel}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="hr-hand" />
+
+        <Link to="/coach/inbox" className="btn small ghost">open inbox →</Link>
+      </div>
+    </div>
+  );
+}
+
+function relativeFromNow(targetIso: string, now: Date): string {
+  const diffMs = new Date(targetIso).getTime() - now.getTime();
+  if (diffMs <= -60_000) {
+    // already started or finished
+    const past = Math.abs(diffMs);
+    const h = Math.floor(past / 3_600_000);
+    const m = Math.floor((past / 60_000) % 60);
+    if (h > 0) return `${h}h ${m}m ago`;
+    return `${m}m ago`;
+  }
+  if (Math.abs(diffMs) < 60_000) return "now";
+  const h = Math.floor(diffMs / 3_600_000);
+  const m = Math.floor((diffMs / 60_000) % 60);
+  if (h > 0) return `in ${h}h ${m}m`;
+  return `in ${m}m`;
+}
+
+function TodayBookingCard({
+  booking,
+  prominent,
+  now,
+}: {
+  booking: BookingPublic;
+  prominent: boolean;
+  now: Date;
+}) {
   const name = booking.user?.name ?? "Student";
   const slug = booking.user?.id ?? studentIdSlug(name, booking.id);
-  const piece = booking.skillTree?.title ?? booking.category?.title ?? "Lesson";
+  const piece = booking.skillTree?.title ?? booking.category?.title ?? null;
+  const durMin = Math.max(
+    1,
+    Math.round((new Date(booking.endsAt).getTime() - new Date(booking.startsAt).getTime()) / 60_000),
+  );
+  const mode = booking.mode === "ONLINE" ? "online" : "in person";
+  const startTime = formatTime(booking.startsAt);
+  const isLive = new Date(booking.startsAt) <= now && new Date(booking.endsAt) > now;
+  const cornerLabel = isLive ? "live now" : relativeFromNow(booking.startsAt, now);
+
   return (
     <div className={prominent ? "box thick" : "box"} style={{ position: "relative" }}>
-      {prominent && <div className="corner">{formatTime(booking.startsAt)}</div>}
+      <div className="corner">{prominent ? cornerLabel : startTime}</div>
       <div className="row gap-3">
         <Avatar name={name} size={prominent ? 46 : 40} />
         <div className="grow">
           <div className={prominent ? "bold big" : "bold"}>
-            {name}{" "}
-            <span className="muted small">· {booking.mode === "ONLINE" ? "online" : "in person"}</span>
+            <Link
+              to={`/coach/student/${slug}`}
+              style={{ color: "inherit", textDecoration: "none" }}
+            >
+              {name}
+            </Link>
           </div>
-          <div className="small muted">{formatTime(booking.startsAt)} · {piece}</div>
+          <div className="small muted">
+            {startTime} · {durMin} min · {mode}
+            {piece ? <> · {piece}</> : null}
+          </div>
         </div>
       </div>
+      {prominent && <Squiggle w={70} color="var(--ink-faint)" />}
       {booking.studentNote && (
-        <div className="small mt-2 muted" style={{ fontStyle: "italic" }}>"{booking.studentNote}"</div>
+        <div className="small mt-2" style={{ fontStyle: "italic" }}>
+          "{booking.studentNote}"
+        </div>
       )}
       <div className="row gap-2 mt-2">
-        <Link to={`/coach/student/${slug}`} className="btn small grow">open lesson page</Link>
+        <Link to={`/coach/student/${slug}`} className="btn small grow">
+          open lesson page
+        </Link>
         {booking.mode === "ONLINE" && (
-          <Link to={`/coach/live/${booking.id}`} className="btn small primary">join call ↗</Link>
+          <Link to={`/coach/live/${booking.id}`} className="btn small primary">
+            {isLive ? "rejoin call ↗" : "join call ↗"}
+          </Link>
         )}
       </div>
     </div>
@@ -385,8 +567,10 @@ function RosterMobile() {
 
 export function RosterPage() {
   const isMobile = useIsMobile();
+  const { user } = useAuth();
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
   const [students, setStudents] = useState<StudentInfo[]>([]);
+  const { dashboard, loading: dashboardLoading } = useCoachDashboard();
 
   useEffect(() => {
     apiFetch<{ data: BookingPublic[] }>("/api/bookings")
@@ -397,5 +581,15 @@ export function RosterPage() {
       .catch(() => { /* DTFrame's shared hook also fetches and will fill in */ });
   }, []);
 
-  return isMobile ? <RosterMobile /> : <RosterDesktop bookings={bookings} students={students} />;
+  return isMobile ? (
+    <RosterMobile />
+  ) : (
+    <RosterDesktop
+      bookings={bookings}
+      students={students}
+      dashboard={dashboard}
+      dashboardLoading={dashboardLoading}
+      coachName={user?.name}
+    />
+  );
 }

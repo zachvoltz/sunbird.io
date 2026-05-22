@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useSidebarStudents } from "../hooks/useSidebarStudents";
+import { useAuth } from "@/context/AuthContext";
 
 export type SidebarStudent = {
   id: string;
@@ -19,6 +20,8 @@ function DTTopBar({
   collapsed: boolean;
   onToggleSide: () => void;
 }) {
+  const { user } = useAuth();
+  const initial = user?.name?.trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="dt-topbar">
       <button
@@ -55,7 +58,7 @@ function DTTopBar({
         </div>
       )}
       <button className="btn small ghost">＋ new</button>
-      <div className="wf-avatar">K</div>
+      <div className="wf-avatar" title={user?.name ?? "you"}>{initial}</div>
     </div>
   );
 }

@@ -414,6 +414,54 @@ export interface NoteVoiceMemoPublic {
   addedBy: UserPublic;
 }
 
+export interface UnreviewedTakeItem {
+  take: TakePublic;
+  student: UserPublic;
+  ageHours: number;
+}
+
+export interface MissingNotesItem {
+  booking: BookingPublic;
+  daysAgo: number;
+}
+
+export interface PlanGapItem {
+  student: UserPublic;
+  lastBookingAt: string | null;
+}
+
+export interface WeekDensityDay {
+  dayLabel: string;
+  date: string;
+  lessonCount: number;
+  isToday: boolean;
+}
+
+export type ActivityKind = "TAKE_SENT" | "BOOKING_COMPLETED" | "ASSIGNMENT_COMPLETED";
+
+export interface ActivityItem {
+  kind: ActivityKind;
+  student: UserPublic;
+  text: string;
+  at: string;
+}
+
+/** Aggregate for /coach (Roster) — fuels the "needs you" + "this week" columns. */
+export interface CoachDashboardPublic {
+  unreviewedTakes: UnreviewedTakeItem[];
+  bookingsMissingNotes: MissingNotesItem[];
+  studentsWithoutPlan: PlanGapItem[];
+  weekStats: {
+    totalStudents: number;
+    activeThisWeek: number;
+    takesReceivedThisWeek: number;
+    bookingsThisWeek: number;
+  };
+  weekDensity: WeekDensityDay[];
+  recentActivity: ActivityItem[];
+  weekStartsOn: string;
+}
+
 /** Aggregate for the Student page. */
 export interface StudentDetailPublic {
   id: string;

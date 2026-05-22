@@ -110,6 +110,219 @@ coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (
   return c.json({ data: students });
 });
 
+// GET /api/coaches/dashboard — aggregate powering /coach (Roster)
+coachRoutes.get("/dashboard", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const coachFilter = user.role === "COACH" ? { coachId: user.id } : {};
+
+  const now = new Date();
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayStart.getDate() + 1);
+
+  // Monday of this week (local time)
+  const day = now.getDay(); // 0=Sun
+  const offset = day === 0 ? -6 : 1 - day;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() + offset);
+  weekStart.setHours(0, 0, 0, 0);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 7);
+
+  const studentSelect = {
+    id: true, name: true, email: true, avatarUrl: true, bio: true, role: true,
+  } as const;
+
+  const [allBookings, unreviewedTakes, weeklyAssignments, recentTakes] = await Promise.all([
+    db.booking.findMany({
+      where: { ...coachFilter, status: { not: "CANCELLED" } },
+      orderBy: { startsAt: "desc" },
+      include: { user: { select: studentSelect } },
+    }),
+    db.take.findMany({
+      where: { ...coachFilter, status: "UNREVIEWED" },
+      orderBy: { createdAt: "desc" },
+      include: { student: { select: studentSelect } },
+    }),
+    db.assignment.findMany({
+      where: { ...coachFilter, weekStartsOn: weekStart },
+      select: { studentId: true },
+    }),
+    db.take.findMany({
+      where: { ...coachFilter, createdAt: { gte: weekStart } },
+      orderBy: { createdAt: "desc" },
+      include: { student: { select: studentSelect } },
+    }),
+  ]);
+
+  // ── Derive: unreviewed takes ────────────────────────────
+  const unreviewedItems = unreviewedTakes.slice(0, 6).map((t: any) => ({
+    take: {
+      id: t.id,
+      studentId: t.studentId,
+      coachId: t.coachId,
+      assignmentId: t.assignmentId,
+      pieceTitle: t.pieceTitle,
+      bars: t.bars,
+      takeNumber: t.takeNumber,
+      durationSec: t.durationSec,
+      audioUrl: t.audioUrl,
+      selfRating: t.selfRating,
+      selfNote: t.selfNote,
+      status: t.status,
+      reviewedAt: t.reviewedAt?.toISOString() ?? null,
+      createdAt: t.createdAt.toISOString(),
+      annotations: [],
+      replies: [],
+    },
+    student: t.student,
+    ageHours: Math.max(0, (now.getTime() - t.createdAt.getTime()) / 3_600_000),
+  }));
+
+  // ── Derive: bookings that completed without a practice note ─
+  const bookingsMissingNotes = allBookings
+    .filter((b: any) =>
+      (b.status === "CONFIRMED" && b.startsAt <= now && !b.practiceNotes) ||
+      (b.status === "COMPLETED" && !b.practiceNotes),
+    )
+    .slice(0, 6)
+    .map((b: any) => ({
+      booking: serializeBookingLight(b),
+      daysAgo: Math.max(0, Math.floor((now.getTime() - b.startsAt.getTime()) / 86_400_000)),
+    }));
+
+  // ── Derive: students with no assignments this week ──────
+  const studentMap = new Map<string, any>();
+  for (const b of allBookings) {
+    if (!studentMap.has(b.userId)) studentMap.set(b.userId, b.user);
+  }
+  const studentsWithAssignmentsThisWeek = new Set(weeklyAssignments.map((a: any) => a.studentId));
+  // Only flag students who have an upcoming booking this week or had one last week —
+  // anyone fully inactive shouldn't churn the list.
+  const studentLastBookingAt = new Map<string, Date>();
+  for (const b of allBookings) {
+    const prev = studentLastBookingAt.get(b.userId);
+    if (!prev || b.startsAt > prev) studentLastBookingAt.set(b.userId, b.startsAt);
+  }
+  const studentsWithoutPlan: any[] = [];
+  for (const [sid, student] of studentMap.entries()) {
+    if (studentsWithAssignmentsThisWeek.has(sid)) continue;
+    const last = studentLastBookingAt.get(sid);
+    const hasUpcoming = allBookings.some(
+      (b: any) => b.userId === sid && b.startsAt >= now && b.startsAt < weekEnd,
+    );
+    const recentlyActive = last && now.getTime() - last.getTime() < 21 * 86_400_000;
+    if (hasUpcoming || recentlyActive) {
+      studentsWithoutPlan.push({
+        student,
+        lastBookingAt: last ? last.toISOString() : null,
+      });
+    }
+  }
+  studentsWithoutPlan.sort((a, b) =>
+    (a.lastBookingAt ?? "").localeCompare(b.lastBookingAt ?? ""),
+  );
+
+  // ── Stats ──────────────────────────────────────────────
+  const bookingsThisWeek = allBookings.filter(
+    (b: any) => b.startsAt >= weekStart && b.startsAt < weekEnd,
+  );
+  const activeStudentsThisWeek = new Set<string>();
+  for (const b of bookingsThisWeek) activeStudentsThisWeek.add(b.userId);
+  for (const t of recentTakes) activeStudentsThisWeek.add(t.studentId);
+
+  // ── Week density (Mon..Sun, lesson counts) ─────────────
+  const dayLabels = ["M", "T", "W", "T", "F", "S", "S"];
+  const todayYmd = ymd(now);
+  const weekDensity = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setDate(weekStart.getDate() + i);
+    const nextDay = new Date(d);
+    nextDay.setDate(d.getDate() + 1);
+    const count = allBookings.filter(
+      (b: any) => b.status !== "CANCELLED" && b.startsAt >= d && b.startsAt < nextDay,
+    ).length;
+    return {
+      dayLabel: dayLabels[i],
+      date: ymd(d),
+      lessonCount: count,
+      isToday: ymd(d) === todayYmd,
+    };
+  });
+
+  // ── Activity feed ──────────────────────────────────────
+  const activity: any[] = [];
+  for (const t of recentTakes.slice(0, 8)) {
+    activity.push({
+      kind: "TAKE_SENT",
+      student: t.student,
+      text: t.pieceTitle ? `sent a take · ${t.pieceTitle}` : "sent a take",
+      at: t.createdAt.toISOString(),
+    });
+  }
+  for (const b of allBookings) {
+    if (b.status !== "COMPLETED" || !b.completedAt) continue;
+    if (b.completedAt < weekStart) continue;
+    activity.push({
+      kind: "BOOKING_COMPLETED",
+      student: b.user,
+      text: "completed a lesson",
+      at: b.completedAt.toISOString(),
+    });
+  }
+  activity.sort((a, b) => (a.at < b.at ? 1 : -1));
+
+  return c.json({
+    data: {
+      unreviewedTakes: unreviewedItems,
+      bookingsMissingNotes,
+      studentsWithoutPlan: studentsWithoutPlan.slice(0, 6),
+      weekStats: {
+        totalStudents: studentMap.size,
+        activeThisWeek: activeStudentsThisWeek.size,
+        takesReceivedThisWeek: recentTakes.length,
+        bookingsThisWeek: bookingsThisWeek.length,
+      },
+      weekDensity,
+      recentActivity: activity.slice(0, 8),
+      weekStartsOn: weekStart.toISOString(),
+    },
+  });
+});
+
+function ymd(d: Date): string {
+  // Local-date YYYY-MM-DD (matches the front-end's local-date math).
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function serializeBookingLight(b: any) {
+  return {
+    id: b.id,
+    startsAt: b.startsAt.toISOString(),
+    endsAt: b.endsAt.toISOString(),
+    status: b.status,
+    mode: b.mode,
+    meetingUrl: b.meetingUrl,
+    meetingProvider: b.meetingProvider,
+    studentNote: b.studentNote,
+    practiceNotes: b.practiceNotes,
+    completedAt: b.completedAt?.toISOString() ?? null,
+    usedSubscription: b.usedSubscription,
+    scheduleId: b.scheduleId,
+    category: b.category ?? null,
+    skillTree: b.skillTree ?? null,
+    node: b.node ?? null,
+    createdAt: b.createdAt.toISOString(),
+    user: b.user,
+    coach: b.coach,
+  };
+}
+
 // GET /api/coaches/students/:id — full StudentDetail aggregate for the student page
 coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;

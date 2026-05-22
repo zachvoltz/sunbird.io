@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import type { BookingPublic, StudentDetailPublic } from "@sunbird/shared";
+import type { BookingPublic, CoachDashboardPublic, StudentDetailPublic } from "@sunbird/shared";
 
 export type StudentInfo = {
   id: string;
@@ -98,6 +98,47 @@ export function useStudent(studentId: string | undefined): {
   }, [studentId]);
 
   return { student, bookings, loading };
+}
+
+let dashboardCache: CoachDashboardPublic | null = null;
+let dashboardInflight: Promise<CoachDashboardPublic | undefined> | null = null;
+
+function fetchDashboard(): Promise<CoachDashboardPublic | undefined> {
+  if (dashboardCache) return Promise.resolve(dashboardCache);
+  if (dashboardInflight) return dashboardInflight;
+  dashboardInflight = apiFetch<{ data: CoachDashboardPublic }>("/api/coaches/dashboard")
+    .then((r) => {
+      dashboardCache = r.data;
+      dashboardInflight = null;
+      return r.data;
+    })
+    .catch(() => {
+      dashboardInflight = null;
+      return undefined;
+    });
+  return dashboardInflight;
+}
+
+export function useCoachDashboard(): {
+  dashboard: CoachDashboardPublic | undefined;
+  loading: boolean;
+} {
+  const [dashboard, setDashboard] = useState<CoachDashboardPublic | undefined>(
+    dashboardCache ?? undefined,
+  );
+  const [loading, setLoading] = useState(!dashboard);
+  useEffect(() => {
+    let alive = true;
+    fetchDashboard().then((d) => {
+      if (!alive) return;
+      setDashboard(d);
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return { dashboard, loading };
 }
 
 export function useStudentDetail(studentId: string | undefined): {
