@@ -31,7 +31,7 @@ function STTopBar({ collapsed, onToggleSide }: { collapsed: boolean; onToggleSid
         <span className="bird">♪</span>
         {!collapsed && (
           <>
-            Songbird{" "}
+            sunbird{" "}
             <span className="muted small" style={{ fontWeight: 400, marginLeft: 4 }}>
               / practice
             </span>

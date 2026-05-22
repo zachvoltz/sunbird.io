@@ -36,7 +36,7 @@ function DTTopBar({
         <span className="bird">♪</span>
         {!collapsed && (
           <>
-            Songbird{" "}
+            sunbird{" "}
             <span className="muted small" style={{ fontWeight: 400, marginLeft: 4 }}>
               / teach
             </span>
@@ -94,13 +94,13 @@ function DTSidebar({
           <span className="dot" style={{ position: "absolute", top: 6, right: 6, marginLeft: 0 }}/>
         )}
       </Link>
-      <Link to="/coach/library" className={"item" + (on === "library" ? " on" : "")} title="Library">
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>☱</span>
-        {!collapsed && <span>Library</span>}
-      </Link>
       <Link to="/coach/calendar" className={"item" + (on === "calendar" ? " on" : "")} title="Calendar">
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>▦</span>
         {!collapsed && <span>Calendar</span>}
+      </Link>
+      <Link to="/coach/library" className={"item" + (on === "library" ? " on" : "")} title="Library">
+        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>☱</span>
+        {!collapsed && <span>Library</span>}
       </Link>
       <Link to="/coach/account" className={"item" + (on === "account" ? " on" : "")} title="Account">
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⌥</span>
