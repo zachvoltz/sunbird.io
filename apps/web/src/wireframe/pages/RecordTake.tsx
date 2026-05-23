@@ -7,6 +7,7 @@ import { Icon } from "../components/Icon";
 import { WaveBars, waveHeights } from "../components/WaveBars";
 import { MockTag } from "../components/MockTag";
 import { useMyStudentDetail } from "../hooks/useCoachData";
+import { MobileStatusBar as StatusBar } from "../components/MobileStatusBar";
 
 type RecState = "ready" | "recording" | "review";
 
@@ -54,15 +55,6 @@ function Header({ right }: { right?: React.ReactNode }) {
   );
 }
 
-function StatusBar() {
-  return (
-    <div className="wf-status">
-      <span>{new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-      <span className="dots">• • •</span>
-      <span>⌁ 87%</span>
-    </div>
-  );
-}
 
 export function RecordTakePage() {
   const params = useParams<{ assignmentId: string }>();

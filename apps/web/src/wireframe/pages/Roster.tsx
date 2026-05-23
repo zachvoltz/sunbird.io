@@ -18,6 +18,7 @@ import { Squiggle } from "../components/Squiggle";
 import { WaveBars, waveHeights } from "../components/WaveBars";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useCoachDashboard } from "../hooks/useCoachData";
+import { useNow } from "../hooks/useNow";
 
 function firstName(full: string | undefined): string {
   if (!full) return "there";
@@ -68,7 +69,7 @@ function RosterDesktop({
   dashboardLoading: boolean;
   coachName: string | undefined;
 }) {
-  const now = new Date();
+  const now = useNow();
   const todayStr = ymd(now);
 
   const todayBookings = bookings.filter(

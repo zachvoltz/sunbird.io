@@ -5,6 +5,8 @@ import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { Squiggle } from "../components/Squiggle";
 import { useMyStudentDetail } from "../hooks/useCoachData";
+import { useNow } from "../hooks/useNow";
+import { MobileStatusBar } from "../components/MobileStatusBar";
 
 // ── path geometry (verbatim from design) ─────────────────
 const PATH_D =
@@ -259,11 +261,7 @@ export function PracticePathPage() {
     <STFrame side="home">
       <MobileCard>
         <div className="wf">
-          <div className="wf-status">
-            <span>{new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-            <span className="dots">• • •</span>
-            <span>⌁ 87%</span>
-          </div>
+          <MobileStatusBar />
 
           <div className="wf-header">
             <div>

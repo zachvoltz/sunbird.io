@@ -9,6 +9,7 @@ import { Icon } from "../components/Icon";
 import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
 import { useMyStudentDetail } from "../hooks/useCoachData";
+import { useNow } from "../hooks/useNow";
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -76,7 +77,7 @@ export function TodayPage() {
       .catch(() => {});
   }, []);
 
-  const now = new Date();
+  const now = useNow();
   const todayStr = ymd(now);
   const todayBooking = bookings.find(
     (b) => b.status === "CONFIRMED" && ymd(new Date(b.startsAt)) === todayStr,

@@ -8,6 +8,7 @@ import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
+import { useNow } from "../hooks/useNow";
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -66,7 +67,7 @@ export function MyBookingsPage() {
   };
   useEffect(load, []);
 
-  const now = new Date();
+  const now = useNow();
   const todayStr = ymd(now);
 
   const today = bookings.filter(

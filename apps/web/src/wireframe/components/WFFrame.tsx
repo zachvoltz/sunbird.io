@@ -1,11 +1,18 @@
-function StatusBar({ time = "9:41" }: { time?: string }) {
-  return (
-    <div className="wf-status">
-      <span>{time}</span>
-      <span className="dots">• • •</span>
-      <span>⌁ 87%</span>
-    </div>
-  );
+import { MobileStatusBar } from "./MobileStatusBar";
+
+function StatusBar({ time }: { time?: string }) {
+  // If the caller passed a fixed time string, render it; otherwise show the
+  // live clock via the shared MobileStatusBar.
+  if (time) {
+    return (
+      <div className="wf-status">
+        <span>{time}</span>
+        <span className="dots">• • •</span>
+        <span>⌁ 87%</span>
+      </div>
+    );
+  }
+  return <MobileStatusBar />;
 }
 
 const NAV_ITEMS = [

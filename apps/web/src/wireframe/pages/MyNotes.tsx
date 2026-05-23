@@ -7,6 +7,7 @@ import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { Squiggle } from "../components/Squiggle";
 import { useMyStudentDetail } from "../hooks/useCoachData";
+import { MobileStatusBar } from "../components/MobileStatusBar";
 
 function MobileCard({ children }: { children: React.ReactNode }) {
   return (
@@ -40,15 +41,7 @@ function MobileCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StatusBar() {
-  return (
-    <div className="wf-status">
-      <span>{new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}</span>
-      <span className="dots">• • •</span>
-      <span>⌁ 87%</span>
-    </div>
-  );
-}
+const StatusBar = MobileStatusBar;
 
 const DAYS = ["S", "M", "T", "W", "T", "F", "S"];
 

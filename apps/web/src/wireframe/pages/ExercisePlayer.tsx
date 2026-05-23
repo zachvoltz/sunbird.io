@@ -6,6 +6,7 @@ import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { Squiggle } from "../components/Squiggle";
 import { useMyStudentDetail } from "../hooks/useCoachData";
+import { MobileStatusBar } from "../components/MobileStatusBar";
 
 // ── helpers ──────────────────────────────────────────────
 // A simple "line of staff" SVG with light notes, matching the design.
@@ -170,13 +171,7 @@ export function ExercisePlayerPage() {
     <STFrame side="lessons">
       <MobileCard>
         <div className="wf">
-          <div className="wf-status">
-            <span>
-              {new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-            </span>
-            <span className="dots">• • •</span>
-            <span>⌁ 87%</span>
-          </div>
+          <MobileStatusBar />
 
           <div className="wf-header">
             <Link to="/practice" className="btn icon ghost" style={{ border: 0, background: "transparent" }}>
