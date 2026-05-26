@@ -83,9 +83,31 @@ export const cancelBookingSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
-export const practiceNotesSchema = z.object({
-  practiceNotes: z.string().min(1, "Practice notes are required").max(5000),
+// Sectioned lesson notes — five labeled fields the coach fills in.
+// Each section is optional, but at least one must be non-empty.
+export const noteSectionsSchema = z.object({
+  intro: z.string().max(2000).optional(),
+  scalesExercises: z.string().max(2000).optional(),
+  topics: z.string().max(2000).optional(),
+  songWork: z.string().max(2000).optional(),
+  nextTime: z.string().max(2000).optional(),
 });
+
+export const practiceNotesSchema = z
+  .object({
+    practiceNotes: z.string().min(1).max(5000).optional(),
+    noteSections: noteSectionsSchema.optional(),
+  })
+  .refine(
+    (v) => {
+      const hasFlat = (v.practiceNotes ?? "").trim().length > 0;
+      const hasSection = v.noteSections
+        ? Object.values(v.noteSections).some((s) => (s ?? "").trim().length > 0)
+        : false;
+      return hasFlat || hasSection;
+    },
+    { message: "Add at least one note before sending." },
+  );
 
 export const createAvailabilitySchema = z.object({
   dayOfWeek: z.number().min(0).max(6),

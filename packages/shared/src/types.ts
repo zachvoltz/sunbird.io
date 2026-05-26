@@ -217,6 +217,7 @@ export interface BookingPublic {
   meetingProvider: string | null;
   studentNote: string | null;
   practiceNotes: string | null;
+  noteSections: NoteSections | null;
   completedAt: string | null;
   usedSubscription: boolean;
   scheduleId: string | null;

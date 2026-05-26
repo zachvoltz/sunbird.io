@@ -21,6 +21,16 @@ function formatDateTime(date: Date): string {
   });
 }
 
+function parseNoteSections(raw: string | null | undefined) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function serializeBooking(b: any) {
   return {
     id: b.id,
@@ -32,6 +42,7 @@ function serializeBooking(b: any) {
     meetingProvider: b.meetingProvider ?? null,
     studentNote: b.studentNote,
     practiceNotes: b.practiceNotes,
+    noteSections: parseNoteSections(b.noteSections),
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
     scheduleId: b.scheduleId ?? null,
@@ -366,7 +377,11 @@ bookingRoutes.patch("/:id/complete", requireAuth, requireRole("COACH", "ADMIN"),
   return c.json({ data: serializeBooking(updated) });
 });
 
-// PATCH /api/bookings/:id/notes — add practice notes and email student (coach/admin)
+// PATCH /api/bookings/:id/notes — save sectioned lesson notes and email
+// the student. Accepts either { practiceNotes } (legacy flat string) or
+// { noteSections } (Intro / Exercises done / Topics discussed / Song work /
+// Next time). When sections are provided, we also persist a flattened
+// practiceNotes string so existing consumers (TodayPage, etc.) keep working.
 bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const { id } = c.req.param();
   const user = c.get("user")!;
@@ -392,10 +407,32 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
     return c.json({ error: "Forbidden" }, 403);
   }
 
+  const sections = parsed.data.noteSections;
+  const SECTION_LABELS: Array<[keyof NonNullable<typeof sections>, string]> = [
+    ["intro", "Intro"],
+    ["scalesExercises", "Exercises done"],
+    ["topics", "Topics discussed"],
+    ["songWork", "Song work"],
+    ["nextTime", "Next time"],
+  ];
+
+  const flatFromSections = sections
+    ? SECTION_LABELS
+        .map(([key, label]) => {
+          const v = (sections[key] ?? "").trim();
+          return v ? `${label}\n${v}` : null;
+        })
+        .filter(Boolean)
+        .join("\n\n")
+    : "";
+
+  const practiceNotesText = (parsed.data.practiceNotes?.trim() || flatFromSections).trim();
+
   const updated = await db.booking.update({
     where: { id },
     data: {
-      practiceNotes: parsed.data.practiceNotes,
+      practiceNotes: practiceNotesText,
+      noteSections: sections ? JSON.stringify(sections) : null,
       practiceNotesSentAt: new Date(),
       status: booking.status === "CONFIRMED" ? "COMPLETED" : booking.status,
       completedAt: booking.completedAt ?? new Date(),
@@ -413,7 +450,7 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
       booking.user.name,
       booking.category?.title ?? "Lesson",
       "Open",
-      parsed.data.practiceNotes,
+      practiceNotesText,
     ).catch(console.error);
   } catch {}
 

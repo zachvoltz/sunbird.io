@@ -301,16 +301,7 @@ function JournalUpcoming({ booking }: { booking: BookingPublic }) {
 }
 
 function parseSections(b: BookingPublic): NoteSections | null {
-  // BookingPublic doesn't carry noteSections; this branch is for forwards
-  // compatibility once the shared type exposes it. For now, return null and
-  // fall back to practiceNotes text.
-  const anyB = b as unknown as { noteSections?: string };
-  if (!anyB.noteSections) return null;
-  try {
-    return JSON.parse(anyB.noteSections) as NoteSections;
-  } catch {
-    return null;
-  }
+  return b.noteSections ?? null;
 }
 
 // ──────────────────────────────────────────────────────────

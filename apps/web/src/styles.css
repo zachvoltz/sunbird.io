@@ -2,36 +2,44 @@
 @import "./wireframe/styles.css";
 
 @theme {
-  /* Colors — pulled slightly cooler, more editorial */
-  --color-cream: #F8F6F1;
-  --color-surface: #FFFFFF;
-  --color-warm-gray: #E5E2DC;
-  --color-charcoal: #1A1816;
-  --color-text-secondary: #6E6A64;
-  --color-gold: #F6B002;
-  --color-gold-hover: #D99A02;
-  --color-gold-soft: #F6B00215;
-  --color-sage: #5A7F60;
-  --color-coral: #C45050;
-  --color-blush: #ECDDD4;
-  --color-iris: #7C6DEB;
-  --color-iris-hover: #6B5CD9;
-  --color-ink: #2C2926;
+  /* Colors — aligned to the sketchy wireframe palette so the marketing
+     site and the logged-in coach views read as one product. The token
+     names stay the same to avoid churn, but they now resolve to the
+     wireframe's paper/ink/accent/highlight values. */
+  --color-cream: #fbf8f1;          /* paper */
+  --color-surface: #fbf8f1;        /* paper — same as bg; cards rely on borders + shadow */
+  --color-warm-gray: #f3eee2;      /* paper-2 */
+  --color-charcoal: #1a1612;       /* ink */
+  --color-text-secondary: #4a443d; /* ink-soft */
+  --color-ink: #1a1612;            /* ink */
+  --color-ink-faint: #8a8278;      /* ink-faint */
 
-  /* Fonts */
-  --font-display: "Playfair Display", "Georgia", serif;
-  --font-sans: "Inter", system-ui, sans-serif;
+  /* Highlights — coral as the primary accent, amber for warm text,
+     bright yellow reserved for tinted backgrounds. */
+  --color-iris: #e85d4d;           /* accent — primary CTA color */
+  --color-iris-hover: #d24a3a;
+  --color-coral: #e85d4d;          /* accent (same family as iris) */
+  --color-blush: #fce8e4;          /* accent-soft */
+  --color-gold: #c98d1f;           /* warm amber — readable as small text on cream */
+  --color-gold-hover: #a8731a;
+  --color-gold-soft: #ffe168;      /* bright yellow — for highlight backgrounds */
+  --color-sage: #5A7F60;           /* kept; used sparingly for "free" tags */
+
+  /* Fonts — Patrick Hand body, Caveat for display headings, to mirror
+     the .wf-scrawl + var(--hand) stack used inside .wireframe-root. */
+  --font-display: "Caveat", "Patrick Hand", cursive;
+  --font-sans: "Patrick Hand", "Kalam", "Comic Sans MS", system-ui, sans-serif;
   --font-handwritten: "Caveat", cursive;
-  --font-mono: "JetBrains Mono", "SF Mono", monospace;
+  --font-mono: "Cutive Mono", ui-monospace, monospace;
 
   /* Border radius */
   --radius-card: 8px;
   --radius-pill: 999px;
 
-  /* Shadows — barely there */
-  --shadow-card: 0 1px 3px rgba(26, 24, 22, 0.04);
-  --shadow-elevated: 0 4px 20px rgba(26, 24, 22, 0.08);
-  --shadow-header: 0 1px 0px rgba(26, 24, 22, 0.06);
+  /* Shadows — barely there, matches the soft wireframe drop */
+  --shadow-card: 0 1px 0 rgba(26, 22, 18, 0.06);
+  --shadow-elevated: 2px 2px 0 rgba(26, 22, 18, 0.12);
+  --shadow-header: 0 1px 0 rgba(26, 22, 18, 0.08);
 }
 
 html {
@@ -44,23 +52,23 @@ body {
   background-color: var(--color-cream);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  font-size: 16px;
-  line-height: 1.65;
-  letter-spacing: -0.01em;
+  font-size: 17px;
+  line-height: 1.5;
+  letter-spacing: 0;
 }
 
 h1, h2, h3, h4 {
   font-family: var(--font-display);
-  letter-spacing: -0.025em;
-  line-height: 1.1;
+  letter-spacing: 0;
+  line-height: 1.05;
 }
 
-/* Editorial horizontal rule */
+/* Editorial horizontal rule — slightly heavier to read as a hand-drawn line */
 .editorial-rule {
   border: none;
-  height: 1px;
+  height: 1.5px;
   background: var(--color-charcoal);
-  opacity: 0.15;
+  opacity: 0.18;
 }
 
 /* Subtle animation for links */
@@ -70,7 +78,7 @@ a {
 
 /* Selection color */
 ::selection {
-  background-color: var(--color-gold-soft);
+  background-color: var(--color-gold);
   color: var(--color-charcoal);
 }
 

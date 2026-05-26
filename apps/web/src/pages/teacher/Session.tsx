@@ -3,14 +3,80 @@ import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
+import { DTFrame } from "@/wireframe/components/DTFrame";
 import type {
   BookingPublic,
+  NoteSections,
   SessionMessagePublic,
   SessionResourcePublic,
   SessionResourceType,
   SkillTreeFull,
   StudentProgressPublic,
 } from "@sunbird/shared";
+
+type NoteSectionKey = keyof Pick<
+  NoteSections,
+  "intro" | "scalesExercises" | "topics" | "songWork" | "nextTime"
+>;
+
+const NOTE_SECTIONS: Array<{
+  key: NoteSectionKey;
+  label: string;
+  placeholder: string;
+}> = [
+  {
+    key: "intro",
+    label: "Intro",
+    placeholder: "How they showed up, what was on their mind, anything to set the tone…",
+  },
+  {
+    key: "scalesExercises",
+    label: "Exercises done",
+    placeholder: "Scales, technical work, warmups — what you ran and how it went.",
+  },
+  {
+    key: "topics",
+    label: "Topics discussed",
+    placeholder: "Concepts, theory, listening references, anything you talked through.",
+  },
+  {
+    key: "songWork",
+    label: "Song work",
+    placeholder: "Pieces worked on, sections drilled, performance notes.",
+  },
+  {
+    key: "nextTime",
+    label: "Next time",
+    placeholder: "What to bring, what to practice, what you'll pick up next lesson.",
+  },
+];
+
+const EMPTY_SECTIONS: Record<NoteSectionKey, string> = {
+  intro: "",
+  scalesExercises: "",
+  topics: "",
+  songWork: "",
+  nextTime: "",
+};
+
+function SessionShell({ children }: { children: React.ReactNode }) {
+  // Sidebar uses "roster" so Today stays highlighted while you're in a
+  // session — there's no dedicated session item in the left nav.
+  return (
+    <DTFrame side="roster">
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          background: "var(--color-cream)",
+        }}
+      >
+        {children}
+      </div>
+    </DTFrame>
+  );
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -73,6 +139,15 @@ export function CoachSession() {
   const [resUrl, setResUrl] = useState("");
   const [addingResource, setAddingResource] = useState(false);
 
+  // Lesson notes state — five labeled sections, persisted as
+  // booking.noteSections (JSON) with a flattened practiceNotes string
+  // generated server-side for the student email.
+  const [sections, setSections] = useState<Record<NoteSectionKey, string>>(EMPTY_SECTIONS);
+  const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSavedAt, setNotesSavedAt] = useState<string | null>(null);
+  const [notesError, setNotesError] = useState<string | null>(null);
+  const [savedSections, setSavedSections] = useState<Record<NoteSectionKey, string>>(EMPTY_SECTIONS);
+
   const loadBooking = () =>
     apiFetch<{ data: BookingPublic }>(`/api/bookings/${bookingId}`)
       .then((res) => setBooking(res.data))
@@ -94,6 +169,28 @@ export function CoachSession() {
       setLoading(false),
     );
   }, [bookingId]);
+
+  // Seed the section textareas from the booking once it loads (without
+  // clobbering whatever the coach has typed locally).
+  const seededFromBooking = useRef(false);
+  useEffect(() => {
+    if (!booking || seededFromBooking.current) return;
+    const next: Record<NoteSectionKey, string> = { ...EMPTY_SECTIONS };
+    const fromServer = booking.noteSections;
+    if (fromServer) {
+      for (const { key } of NOTE_SECTIONS) {
+        const val = (fromServer as Partial<Record<NoteSectionKey, string>>)[key];
+        if (typeof val === "string") next[key] = val;
+      }
+    } else if (booking.practiceNotes) {
+      // Legacy bookings stored everything in `intro` — surface it so the
+      // coach can split it across sections rather than lose context.
+      next.intro = booking.practiceNotes;
+    }
+    setSections(next);
+    setSavedSections(next);
+    seededFromBooking.current = true;
+  }, [booking]);
 
   // Load skill tree + student progress once booking is loaded
   useEffect(() => {
@@ -186,6 +283,48 @@ export function CoachSession() {
     }
   };
 
+  const saveNotes = async () => {
+    if (!bookingId || savingNotes) return;
+    const trimmed: Record<NoteSectionKey, string> = { ...EMPTY_SECTIONS };
+    let hasAny = false;
+    for (const { key } of NOTE_SECTIONS) {
+      const v = sections[key].trim();
+      trimmed[key] = v;
+      if (v) hasAny = true;
+    }
+    if (!hasAny) {
+      setNotesError("Add at least one section before sending.");
+      return;
+    }
+    setSavingNotes(true);
+    setNotesError(null);
+    try {
+      const res = await apiFetch<{ data: BookingPublic }>(
+        `/api/bookings/${bookingId}/notes`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ noteSections: trimmed }),
+        },
+      );
+      setBooking(res.data);
+      setSavedSections(trimmed);
+      setNotesSavedAt(new Date().toISOString());
+    } catch (err: any) {
+      setNotesError(err?.body?.error ?? "Couldn't save notes. Try again.");
+    } finally {
+      setSavingNotes(false);
+    }
+  };
+
+  const sectionsDirty = NOTE_SECTIONS.some(
+    ({ key }) => sections[key].trim() !== savedSections[key].trim(),
+  );
+  const sectionsTotalChars = NOTE_SECTIONS.reduce(
+    (sum, { key }) => sum + sections[key].length,
+    0,
+  );
+  const hasPriorNotes = !!booking?.practiceNotes;
+
   const deleteResource = async (resourceId: string) => {
     try {
       await apiFetch(`/api/bookings/${bookingId}/resources/${resourceId}`, {
@@ -232,45 +371,42 @@ export function CoachSession() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin" />
-      </div>
+      <SessionShell>
+        <div className="h-full flex items-center justify-center py-16">
+          <div className="w-6 h-6 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin" />
+        </div>
+      </SessionShell>
     );
   }
 
   if (notFound || !booking) {
     return (
-      <div className="py-16 px-6 md:px-10">
-        <div className="mx-auto max-w-[900px] text-center">
-          <h1 className="font-display text-3xl font-bold mb-4">
-            Session not found
-          </h1>
-          <Link
-            to="/coach"
-            className="text-sm text-iris hover:text-iris-hover transition-colors"
-          >
-            Back to dashboard
-          </Link>
+      <SessionShell>
+        <div className="py-16 px-6 md:px-10">
+          <div className="mx-auto max-w-[900px] text-center">
+            <h1 className="font-display text-3xl font-bold mb-4">
+              Session not found
+            </h1>
+            <Link
+              to="/coach"
+              className="text-sm text-iris hover:text-iris-hover transition-colors"
+            >
+              Back to dashboard
+            </Link>
+          </div>
         </div>
-      </div>
+      </SessionShell>
     );
   }
 
   const student = booking.user;
 
   return (
-    <div className="py-16 px-6 md:px-10">
-      <div className="mx-auto max-w-[1200px]">
-        {/* Breadcrumb */}
-        <Link
-          to="/coach"
-          className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-charcoal transition-colors"
-        >
-          &larr; Dashboard
-        </Link>
-
+    <SessionShell>
+      <div className="py-10 px-6 md:px-10">
+        <div className="mx-auto max-w-[1200px]">
         {/* Header */}
-        <div className="mt-8 mb-10 flex items-baseline justify-between">
+        <div className="mb-10 flex items-baseline justify-between">
           <h1 className="font-display text-3xl md:text-4xl font-bold">
             Session
           </h1>
@@ -297,6 +433,84 @@ export function CoachSession() {
             />
           </div>
         )}
+
+        {/* Lesson notes — five labeled sections, full width and prominent.
+            Saves to booking.noteSections and emails the student via
+            PATCH /api/bookings/:id/notes. */}
+        <section className="mb-10">
+          <div className="flex items-baseline justify-between mb-4">
+            <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+              Lesson notes for {student?.name?.split(" ")[0] ?? "student"}
+            </h2>
+            {hasPriorNotes && (
+              <span className="text-[11px] text-text-secondary">
+                {notesSavedAt
+                  ? "Sent just now"
+                  : booking.completedAt
+                    ? `Sent ${new Date(booking.completedAt).toLocaleDateString()}`
+                    : "Sent"}
+              </span>
+            )}
+          </div>
+          <div className="bg-surface rounded-card shadow-card p-5">
+            {/* Labels sit in a 140px column to the left of each textarea,
+                matching the StudentPage's .note-sections grid. */}
+            <div
+              className="note-sections"
+              style={{ rowGap: 14, alignItems: "start" }}
+            >
+              {NOTE_SECTIONS.map(({ key, label, placeholder }) => (
+                <div key={key} className="ns-row">
+                  <label
+                    htmlFor={`note-${key}`}
+                    className="ns-label"
+                    style={{ paddingTop: 10 }}
+                  >
+                    {label}
+                  </label>
+                  <textarea
+                    id={`note-${key}`}
+                    value={sections[key]}
+                    onChange={(e) => {
+                      setSections((prev) => ({ ...prev, [key]: e.target.value }));
+                      if (notesError) setNotesError(null);
+                    }}
+                    placeholder={placeholder}
+                    rows={2}
+                    maxLength={2000}
+                    className="ns-body w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none transition-colors resize-y leading-relaxed"
+                  />
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 flex-wrap pt-5 mt-5 border-t border-charcoal/10">
+              <p className="text-[11px] text-text-secondary">
+                Saving emails the notes to {student?.name?.split(" ")[0] ?? "the student"}.{" "}
+                <span className="text-text-secondary/70">{sectionsTotalChars} chars</span>
+              </p>
+              <div className="flex items-center gap-3">
+                {notesError && (
+                  <span className="text-[12px] text-coral">{notesError}</span>
+                )}
+                {notesSavedAt && !notesError && !sectionsDirty && (
+                  <span className="text-[12px] text-sage">Saved &amp; sent.</span>
+                )}
+                <button
+                  onClick={saveNotes}
+                  disabled={savingNotes || !sectionsDirty || sectionsTotalChars === 0}
+                  className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+                >
+                  {savingNotes
+                    ? "Sending…"
+                    : hasPriorNotes
+                      ? "Update & resend"
+                      : "Save & send to student"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* Two-column layout */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
@@ -597,6 +811,7 @@ export function CoachSession() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </SessionShell>
   );
 }

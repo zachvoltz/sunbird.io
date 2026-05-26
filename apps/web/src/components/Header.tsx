@@ -70,7 +70,9 @@ export function Header() {
   return (
     <header
       className={`sticky top-0 z-50 transition-all duration-500 ${
-        scrolled || !isHome ? "bg-surface shadow-header" : "bg-transparent"
+        scrolled || !isHome
+          ? "bg-warm-gray border-b-[1.5px] border-charcoal"
+          : "bg-transparent border-b-[1.5px] border-transparent"
       }`}
     >
       <div className="mx-auto max-w-[1200px] px-6 md:px-10 flex items-center justify-between h-14 relative">

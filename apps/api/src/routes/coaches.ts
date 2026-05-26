@@ -301,6 +301,10 @@ function ymd(d: Date): string {
 }
 
 function serializeBookingLight(b: any) {
+  let noteSections: any = null;
+  if (b.noteSections) {
+    try { noteSections = JSON.parse(b.noteSections); } catch {}
+  }
   return {
     id: b.id,
     startsAt: b.startsAt.toISOString(),
@@ -311,6 +315,7 @@ function serializeBookingLight(b: any) {
     meetingProvider: b.meetingProvider,
     studentNote: b.studentNote,
     practiceNotes: b.practiceNotes,
+    noteSections,
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
     scheduleId: b.scheduleId,
