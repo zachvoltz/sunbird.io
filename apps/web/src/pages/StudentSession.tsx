@@ -3,12 +3,31 @@ import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
+import { STFrame } from "@/wireframe/components/STFrame";
 import type {
   BookingPublic,
   SessionMessagePublic,
   SessionResourcePublic,
   SessionResourceType,
 } from "@sunbird/shared";
+
+function SessionShell({ children }: { children: React.ReactNode }) {
+  // Highlight "Lessons" in the left nav since /my-bookings is the parent.
+  return (
+    <STFrame side="lessons">
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: "auto",
+          background: "var(--color-cream)",
+        }}
+      >
+        {children}
+      </div>
+    </STFrame>
+  );
+}
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
@@ -121,45 +140,42 @@ export function StudentSession() {
 
   if (loading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin" />
-      </div>
+      <SessionShell>
+        <div className="h-full flex items-center justify-center py-16">
+          <div className="w-6 h-6 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin" />
+        </div>
+      </SessionShell>
     );
   }
 
   if (notFound || !booking) {
     return (
-      <div className="py-16 px-6 md:px-10">
-        <div className="mx-auto max-w-[900px] text-center">
-          <h1 className="font-display text-3xl font-bold mb-4">
-            Session not found
-          </h1>
-          <Link
-            to="/my-bookings"
-            className="text-sm text-iris hover:text-iris-hover transition-colors"
-          >
-            Back to my bookings
-          </Link>
+      <SessionShell>
+        <div className="py-16 px-6 md:px-10">
+          <div className="mx-auto max-w-[900px] text-center">
+            <h1 className="font-display text-3xl font-bold mb-4">
+              Session not found
+            </h1>
+            <Link
+              to="/my-bookings"
+              className="text-sm text-iris hover:text-iris-hover transition-colors"
+            >
+              Back to my bookings
+            </Link>
+          </div>
         </div>
-      </div>
+      </SessionShell>
     );
   }
 
   const coach = booking.coach;
 
   return (
-    <div className="py-16 px-6 md:px-10">
-      <div className="mx-auto max-w-[1200px]">
-        {/* Breadcrumb */}
-        <Link
-          to="/my-bookings"
-          className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-charcoal transition-colors"
-        >
-          &larr; My Bookings
-        </Link>
-
+    <SessionShell>
+      <div className="py-10 px-6 md:px-10">
+        <div className="mx-auto max-w-[1200px]">
         {/* Header */}
-        <div className="mt-8 mb-10 flex items-baseline justify-between">
+        <div className="mb-10 flex items-baseline justify-between">
           <h1 className="font-display text-3xl md:text-4xl font-bold">
             Session
           </h1>
@@ -379,6 +395,7 @@ export function StudentSession() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </SessionShell>
   );
 }

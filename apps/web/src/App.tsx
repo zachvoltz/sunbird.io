@@ -56,7 +56,6 @@ export function App() {
         <Route path="coaches/:slug" element={<CoachProfile />} />
         <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
         <Route path="my-bookings-legacy" element={<AuthGate><MyBookings /></AuthGate>} />
-        <Route path="my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
         <Route path="my-curriculum/:slug" element={<AuthGate><MyCurriculum /></AuthGate>} />
         <Route path="coach/dashboard-legacy" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
         <Route path="coach/settings" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSettings /></RoleGate></AuthGate>} />
@@ -84,6 +83,7 @@ export function App() {
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
       <Route path="/today" element={<AuthGate><TodayPage /></AuthGate>} />
       <Route path="/my-bookings" element={<AuthGate><MyBookingsPage /></AuthGate>} />
+      <Route path="/my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
       <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />
       <Route path="/my-notes/:bookingId" element={<AuthGate><MyNoteExpandedPage /></AuthGate>} />
       <Route path="/my-takes" element={<AuthGate><MyTakesPage /></AuthGate>} />
