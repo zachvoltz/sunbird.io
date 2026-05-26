@@ -116,6 +116,20 @@ export const createAvailabilitySchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+// Date-specific busy block. Coaches use these to mark vacations, doctor
+// appointments, etc. — they take precedence over the recurring weekly
+// availability when generating bookable slots.
+export const createCoachBusySchema = z
+  .object({
+    startsAt: z.string().datetime({ message: "startsAt must be ISO 8601" }),
+    endsAt: z.string().datetime({ message: "endsAt must be ISO 8601" }),
+    label: z.string().max(120).optional(),
+  })
+  .refine((v) => new Date(v.endsAt).getTime() > new Date(v.startsAt).getTime(), {
+    message: "endsAt must be after startsAt",
+    path: ["endsAt"],
+  });
+
 // ─── Coach Settings ───
 
 export const updateCoachSettingsSchema = z.object({

@@ -168,6 +168,18 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     if (!coachAvail) {
       return c.json({ error: "This time is not within the coach's available hours" }, 400);
     }
+
+    // Busy beats available — reject if any CoachBusy row overlaps this slot.
+    const busyOverlap = await db.coachBusy.findFirst({
+      where: {
+        coachId,
+        startsAt: { lt: endsAt },
+        endsAt: { gt: startsAt },
+      },
+    });
+    if (busyOverlap) {
+      return c.json({ error: "The coach is unavailable at this time" }, 409);
+    }
   } else {
     // Fallback to global slots if no coach assigned
     const availSlot = await db.availabilitySlot.findFirst({

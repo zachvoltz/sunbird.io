@@ -51,6 +51,7 @@ model User {
   sentMessages       SessionMessage[]
   addedResources     SessionResource[]
   coachAvailability  CoachAvailability[]
+  coachBusy          CoachBusy[]
   coachLessonTypes   CoachLessonType[]
   recurringSchedules RecurringSchedule[] @relation("studentSchedules")
   coachSchedules     RecurringSchedule[] @relation("coachSchedules")
@@ -160,6 +161,23 @@ model CoachAvailability {
   coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
 
   @@unique([coachId, dayOfWeek, startTime])
+}
+
+// Date-specific busy block. Takes precedence over CoachAvailability when
+// computing bookable slots — if any CoachBusy row overlaps the requested
+// time range for this coach, the slot is unavailable regardless of the
+// recurring weekly availability.
+model CoachBusy {
+  id        String   @id @default(cuid())
+  coachId   String
+  startsAt  DateTime
+  endsAt    DateTime
+  label     String?
+  createdAt DateTime @default(now())
+
+  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId, startsAt])
 }
 
 model CoachLessonType {

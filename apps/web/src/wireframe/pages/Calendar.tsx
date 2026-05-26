@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import type { BookingPublic } from "@sunbird/shared";
+import type { BookingPublic, CoachBusyPublic, CoachAvailabilitySlot } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
@@ -10,6 +10,13 @@ import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useNow } from "../hooks/useNow";
+
+// Coach edit modes for the week grid.
+//   view   — read-only (default)
+//   hours  — toggle recurring weekly availability per hour
+//   busy   — click an hour to create a 1-hour date-specific busy block;
+//            click an existing block to delete it
+type EditMode = "view" | "hours" | "busy";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const HOURS: number[] = [8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20];
@@ -105,10 +112,123 @@ function placeEvent(b: BookingPublic): PositionedEvent | null {
 // ──────────────────────────────────────────────────────────
 // Desktop view
 // ──────────────────────────────────────────────────────────
+// Build a Set<string> keyed "day-hour" (day 0=Mon..6=Sun, hour 0-23) from
+// the server's CoachAvailabilitySlot[] (which uses dayOfWeek where 0=Sun).
+function availabilityToKeys(slots: CoachAvailabilitySlot[]): Set<string> {
+  const keys = new Set<string>();
+  for (const s of slots) {
+    if (!s.isActive) continue;
+    // server day: 0=Sun..6=Sat; UI day: 0=Mon..6=Sun
+    const uiDay = (s.dayOfWeek + 6) % 7;
+    const [hStr] = s.startTime.split(":");
+    const hour = Number(hStr);
+    if (Number.isFinite(hour)) keys.add(`${uiDay}-${hour}`);
+  }
+  return keys;
+}
+
+function keysToSlots(keys: Set<string>): Array<{ dayOfWeek: number; startTime: string; endTime: string }> {
+  const out: Array<{ dayOfWeek: number; startTime: string; endTime: string }> = [];
+  for (const k of keys) {
+    const [uiDayStr, hStr] = k.split("-");
+    const uiDay = Number(uiDayStr);
+    const hour = Number(hStr);
+    if (!Number.isFinite(uiDay) || !Number.isFinite(hour)) continue;
+    // back to server convention (0=Sun)
+    const dayOfWeek = (uiDay + 1) % 7;
+    const startTime = `${String(hour).padStart(2, "0")}:00`;
+    const endHour = (hour + 1) % 24;
+    const endTime = `${String(endHour).padStart(2, "0")}:00`;
+    out.push({ dayOfWeek, startTime, endTime });
+  }
+  return out;
+}
+
 function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loading: boolean }) {
   const now = useNow(60_000);
   const [view, setView] = useState<ViewMode>("week");
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(now));
+  const [editMode, setEditMode] = useState<EditMode>("view");
+
+  // Availability: local Set<"day-hour"> + dirty tracker + saving state.
+  const [availKeys, setAvailKeys] = useState<Set<string>>(new Set());
+  const [savedAvailKeys, setSavedAvailKeys] = useState<Set<string>>(new Set());
+  const [savingAvail, setSavingAvail] = useState(false);
+
+  // Busy blocks — date-specific, fetched for a wide window so navigation
+  // between weeks doesn't refetch.
+  const [busy, setBusy] = useState<CoachBusyPublic[]>([]);
+
+  // Load availability + busy on mount.
+  useEffect(() => {
+    apiFetch<{ data: { availability: CoachAvailabilitySlot[] } }>("/api/coach-settings")
+      .then((res) => {
+        const keys = availabilityToKeys(res.data.availability ?? []);
+        setAvailKeys(keys);
+        setSavedAvailKeys(keys);
+      })
+      .catch(() => {});
+  }, []);
+
+  const refreshBusy = useCallback(() => {
+    apiFetch<{ data: CoachBusyPublic[] }>("/api/coach-busy")
+      .then((res) => setBusy(res.data))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => { refreshBusy(); }, [refreshBusy]);
+
+  const availDirty = useMemo(() => {
+    if (availKeys.size !== savedAvailKeys.size) return true;
+    for (const k of availKeys) if (!savedAvailKeys.has(k)) return true;
+    return false;
+  }, [availKeys, savedAvailKeys]);
+
+  const toggleAvailHour = useCallback((uiDay: number, hour: number) => {
+    setAvailKeys((prev) => {
+      const next = new Set(prev);
+      const key = `${uiDay}-${hour}`;
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
+
+  const saveAvailability = useCallback(async () => {
+    setSavingAvail(true);
+    try {
+      await apiFetch("/api/coach-settings/availability", {
+        method: "PUT",
+        body: JSON.stringify({ slots: keysToSlots(availKeys) }),
+      });
+      setSavedAvailKeys(new Set(availKeys));
+    } catch {}
+    finally { setSavingAvail(false); }
+  }, [availKeys]);
+
+  const addBusyAt = useCallback(async (date: Date, hour: number) => {
+    const start = new Date(date);
+    start.setHours(hour, 0, 0, 0);
+    const end = new Date(start);
+    end.setHours(start.getHours() + 1);
+    try {
+      await apiFetch<{ data: CoachBusyPublic }>("/api/coach-busy", {
+        method: "POST",
+        body: JSON.stringify({
+          startsAt: start.toISOString(),
+          endsAt: end.toISOString(),
+        }),
+      });
+      refreshBusy();
+    } catch {}
+  }, [refreshBusy]);
+
+  const removeBusy = useCallback(async (id: string) => {
+    try {
+      await apiFetch(`/api/coach-busy/${id}`, { method: "DELETE" });
+      setBusy((prev) => prev.filter((b) => b.id !== id));
+    } catch {}
+  }, []);
 
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
@@ -140,6 +260,8 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
           <h2 className="dt-title">Calendar</h2>
           <div className="dt-sub">
             {monthLabel} · {weekBookings.length} session{weekBookings.length === 1 ? "" : "s"} this week
+            {editMode === "hours" && <> · <span style={{ color: "var(--accent)" }}>click hours to mark when you're open</span></>}
+            {editMode === "busy" && <> · <span style={{ color: "var(--accent)" }}>click any hour to block it out</span></>}
           </div>
         </div>
         <div className="row gap-2">
@@ -177,6 +299,30 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
               list
             </span>
           </div>
+          {/* Edit-mode pill — only meaningful on the week view */}
+          {view === "week" && (
+            <div className="pill-row" style={{ marginLeft: 4 }}>
+              <span className={"p" + (editMode === "view" ? " on" : "")} onClick={() => setEditMode("view")}>
+                view
+              </span>
+              <span className={"p" + (editMode === "hours" ? " on" : "")} onClick={() => setEditMode("hours")}>
+                hours
+              </span>
+              <span className={"p" + (editMode === "busy" ? " on" : "")} onClick={() => setEditMode("busy")}>
+                busy
+              </span>
+            </div>
+          )}
+          {editMode === "hours" && view === "week" && (
+            <button
+              className="btn small primary"
+              onClick={saveAvailability}
+              disabled={!availDirty || savingAvail}
+              style={!availDirty ? { opacity: 0.5 } : undefined}
+            >
+              {savingAvail ? "saving…" : availDirty ? "save hours" : "saved"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -191,11 +337,22 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
               <span><LegendDot color="var(--accent)" /> confirmed</span>
               <span><LegendDot color="var(--ink)" /> completed</span>
               <span><LegendDot color="var(--ink-faint)" /> cancelled</span>
+              <span><LegendDot color="var(--accent)" /> busy</span>
             </div>
           </div>
           <div className="panel-body scroll">
             {view === "week" && (
-              <WeekGrid days={days} bookings={weekBookings} now={now} />
+              <WeekGrid
+                days={days}
+                bookings={weekBookings}
+                busy={busy}
+                now={now}
+                editMode={editMode}
+                availKeys={availKeys}
+                onToggleAvailHour={toggleAvailHour}
+                onAddBusy={addBusyAt}
+                onRemoveBusy={removeBusy}
+              />
             )}
             {view === "list" && (
               <ListView bookings={weekBookings} weekStart={weekStart} now={now} />
@@ -236,11 +393,23 @@ function LegendDot({ color }: { color: string }) {
 function WeekGrid({
   days,
   bookings,
+  busy,
   now,
+  editMode,
+  availKeys,
+  onToggleAvailHour,
+  onAddBusy,
+  onRemoveBusy,
 }: {
   days: Date[];
   bookings: BookingPublic[];
+  busy: CoachBusyPublic[];
   now: Date;
+  editMode: EditMode;
+  availKeys: Set<string>;
+  onToggleAvailHour: (uiDay: number, hour: number) => void;
+  onAddBusy: (date: Date, hour: number) => void;
+  onRemoveBusy: (id: string) => void;
 }) {
   return (
     <div
@@ -313,8 +482,15 @@ function WeekGrid({
           <DayColumn
             key={idx}
             day={d}
+            uiDay={idx}
             now={now}
             bookings={bookings.filter((b) => sameDay(new Date(b.startsAt), d))}
+            busy={busy.filter((bb) => sameDay(new Date(bb.startsAt), d))}
+            editMode={editMode}
+            availKeys={availKeys}
+            onToggleAvailHour={onToggleAvailHour}
+            onAddBusy={onAddBusy}
+            onRemoveBusy={onRemoveBusy}
           />
         ))}
       </div>
@@ -322,14 +498,32 @@ function WeekGrid({
   );
 }
 
+// Coral diagonal hatch used to render busy blocks, distinct from booking
+// fills (solid coral) and availability shading (paper-2 wash).
+const BUSY_HATCH = "repeating-linear-gradient(135deg, rgba(232,93,77,0.18) 0 6px, rgba(232,93,77,0.36) 6px 8px)";
+
 function DayColumn({
   day,
+  uiDay,
   bookings,
+  busy,
   now,
+  editMode,
+  availKeys,
+  onToggleAvailHour,
+  onAddBusy,
+  onRemoveBusy,
 }: {
   day: Date;
+  uiDay: number;
   bookings: BookingPublic[];
+  busy: CoachBusyPublic[];
   now: Date;
+  editMode: EditMode;
+  availKeys: Set<string>;
+  onToggleAvailHour: (uiDay: number, hour: number) => void;
+  onAddBusy: (date: Date, hour: number) => void;
+  onRemoveBusy: (id: string) => void;
 }) {
   const isToday = sameDay(day, now);
   const minutesNow = now.getHours() * 60 + now.getMinutes();
@@ -344,16 +538,118 @@ function DayColumn({
         background: isToday ? "rgba(232,93,77,0.04)" : undefined,
       }}
     >
-      {/* hour grid lines */}
-      {HOURS.slice(0, -1).map((h) => (
-        <div
-          key={h}
-          style={{
-            height: HOUR_PX,
-            borderBottom: "1.5px dotted var(--ink-faint)",
-          }}
-        />
-      ))}
+      {/* hour cells — each one is the unit of interaction in edit modes */}
+      {HOURS.slice(0, -1).map((h) => {
+        const isAvail = availKeys.has(`${uiDay}-${h}`);
+        const hoursMode = editMode === "hours";
+        const busyMode = editMode === "busy";
+        return (
+          <div
+            key={h}
+            onClick={
+              hoursMode
+                ? () => onToggleAvailHour(uiDay, h)
+                : busyMode
+                ? () => onAddBusy(day, h)
+                : undefined
+            }
+            title={
+              hoursMode
+                ? isAvail ? "click to unmark this hour as available" : "click to mark this hour as available"
+                : busyMode
+                ? "click to block this hour"
+                : undefined
+            }
+            style={{
+              position: "relative",
+              height: HOUR_PX,
+              borderBottom: "1.5px dotted var(--ink-faint)",
+              cursor: hoursMode || busyMode ? "pointer" : undefined,
+              // Soft paper-2 wash on cells the coach has marked as
+              // available — visible in all modes so the schedule is
+              // always legible.
+              background: isAvail
+                ? "rgba(26,22,18,0.05)"
+                : undefined,
+              transition: "background 0.15s ease",
+            }}
+          >
+            {hoursMode && (
+              <div
+                style={{
+                  position: "absolute",
+                  top: 4,
+                  right: 6,
+                  width: 14,
+                  height: 14,
+                  borderRadius: 3,
+                  border: "1.5px solid var(--ink-faint)",
+                  background: isAvail ? "var(--ink)" : "var(--paper)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "var(--paper)",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  pointerEvents: "none",
+                }}
+              >
+                {isAvail ? "✓" : ""}
+              </div>
+            )}
+          </div>
+        );
+      })}
+
+      {/* busy overlays — coral hatch above availability shading but
+          beneath events. Always visible regardless of editMode so the
+          coach can see what they've blocked. Click in busy mode to delete. */}
+      {busy.map((bb) => {
+        const start = new Date(bb.startsAt);
+        const end = new Date(bb.endsAt);
+        const startHour = start.getHours() + start.getMinutes() / 60;
+        const endHour = end.getHours() + end.getMinutes() / 60;
+        if (endHour <= START_HOUR || startHour >= END_HOUR + 1) return null;
+        const top = (Math.max(startHour, START_HOUR) - START_HOUR) * HOUR_PX;
+        const height = Math.max(20, (Math.min(endHour, END_HOUR + 1) - Math.max(startHour, START_HOUR)) * HOUR_PX);
+        return (
+          <div
+            key={bb.id}
+            onClick={editMode === "busy" ? () => onRemoveBusy(bb.id) : undefined}
+            title={
+              editMode === "busy"
+                ? "click to remove this busy block"
+                : bb.label ?? "busy"
+            }
+            style={{
+              position: "absolute",
+              left: 1,
+              right: 1,
+              top,
+              height,
+              background: BUSY_HATCH,
+              border: "1.5px solid var(--accent)",
+              borderRadius: 4,
+              zIndex: 1,
+              cursor: editMode === "busy" ? "pointer" : "help",
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              padding: "2px 5px",
+              fontFamily: "var(--hand)",
+              fontSize: 11,
+              color: "var(--accent)",
+              fontWeight: 600,
+              pointerEvents: "auto",
+            }}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {bb.label ?? "busy"}
+            </span>
+            {editMode === "busy" && <span style={{ marginLeft: 4 }}>✕</span>}
+          </div>
+        );
+      })}
 
       {/* events */}
       {bookings.map((b) => {

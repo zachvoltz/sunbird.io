@@ -207,6 +207,15 @@ export interface CoachAvailabilitySlot {
   isActive: boolean;
 }
 
+export interface CoachBusyPublic {
+  id: string;
+  coachId: string;
+  startsAt: string;
+  endsAt: string;
+  label: string | null;
+  createdAt: string;
+}
+
 export interface BookingPublic {
   id: string;
   startsAt: string;

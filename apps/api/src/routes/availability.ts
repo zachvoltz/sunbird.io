@@ -67,6 +67,15 @@ availabilityRoutes.get("/", async (c) => {
     select: { coachId: true, startsAt: true, endsAt: true },
   });
 
+  // Date-specific busy blocks — take precedence over availability.
+  const busyBlocks = await db.coachBusy.findMany({
+    where: {
+      startsAt: { lt: dayEnd },
+      endsAt: { gt: dayStart },
+    },
+    select: { coachId: true, startsAt: true, endsAt: true },
+  });
+
   // Build a map: time string -> set of available coach IDs
   const timeToCoaches = new Map<string, Set<string>>();
 
@@ -87,6 +96,12 @@ availabilityRoutes.get("/", async (c) => {
       (b: any) => b.coachId === coachId && startsAt < b.endsAt && endsAt > b.startsAt,
     );
     if (hasConflict) continue;
+
+    // Check if this coach is busy during this slot (busy beats available).
+    const isBusy = busyBlocks.some(
+      (bb: any) => bb.coachId === coachId && startsAt < bb.endsAt && endsAt > bb.startsAt,
+    );
+    if (isBusy) continue;
 
     const key = startsAt.toISOString();
     if (!timeToCoaches.has(key)) {
