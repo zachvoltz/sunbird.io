@@ -66,7 +66,7 @@ function SideBenefits({ active }: { active: SideKey }) {
   const benefits: Array<{ k: SideKey; t: string; b: string }> = [
     { k: "business", t: "why we ask",     b: "Your government requires us to verify who's getting paid. Stripe handles this so Songbird never stores your SSN or bank details." },
     { k: "personal", t: "identity check", b: "Last 4 of SSN is enough for most coaches under $20k/yr. Full SSN only if asked later." },
-    { k: "bank",     t: "how payouts work", b: "Instant payouts (default) route through Visa/Mastercard's debit rails — your student's payment lands in your bank within ~30 minutes. Stripe charges 1.5%; Songbird absorbs it on your first 100 charges." },
+    { k: "bank",     t: "payouts schedule", b: "Daily, weekly, or monthly — your choice. Most coaches pick weekly. First payout takes 7 days, then 2 days after that." },
     { k: "verify",   t: "document upload", b: "Driver's license or passport. Photo of front + back. Stripe verifies, we get a green check." },
     { k: "review",   t: "all set",         b: "Submit to Stripe. Most accounts approve in under a minute. You'll get an email when payouts unlock." },
   ];
@@ -121,20 +121,16 @@ function EntryView({ onBegin }: { onBegin: () => void }) {
               <span className="bold">Get paid by your students</span>
             </div>
             <h1 className="onb-hero-h">
-              Get paid <span className="hi">the moment</span><br />
-              your student pays
+              Connect your bank<br />
+              <span className="hi">in about 4 minutes</span>
             </h1>
             <div className="onb-hero-sub">
-              We use <span className="bold">Stripe</span> with{" "}
-              <span className="bold">Instant Payouts</span> — funds land in your bank in
-              about 30 seconds. You'll need:
+              We use <span className="bold">Stripe</span> to move money safely.
+              You'll need:
             </div>
             <ul className="onb-list">
               <li><span className="onb-bullet">①</span> Legal name + date of birth</li>
-              <li>
-                <span className="onb-bullet">②</span> A US debit card or RTP-eligible
-                bank <span className="muted small">(most major banks)</span>
-              </li>
+              <li><span className="onb-bullet">②</span> A US bank account (checking)</li>
               <li><span className="onb-bullet">③</span> A photo ID (driver's license or passport)</li>
               <li><span className="onb-bullet">④</span> Last 4 of SSN (for tax reporting)</li>
             </ul>
@@ -162,42 +158,41 @@ function EntryView({ onBegin }: { onBegin: () => void }) {
                 <div className="muted small">when connected, your dashboard shows:</div>
                 <div className="box mt-2" style={{ padding: 10 }}>
                   <div className="row between">
-                    <div className="bold">Today's deposits</div>
+                    <div className="bold">Next payout</div>
                     <span
                       className="chip tiny"
                       style={{ background: "var(--highlight)" }}
                     >
-                      ● live
+                      Mon Apr 22
                     </span>
                   </div>
                   <div
                     className="huge"
                     style={{ fontFamily: "var(--scrawl)", lineHeight: 1, marginTop: 6 }}
                   >
-                    $540.<span style={{ fontSize: 20, color: "var(--ink-faint)" }}>00</span>
+                    $1,642.<span style={{ fontSize: 20, color: "var(--ink-faint)" }}>20</span>
                   </div>
-                  <div className="small muted mt-1">→ Chase •••• 4419 · instant payouts on</div>
+                  <div className="small muted mt-1">→ Chase •••• 4419</div>
                 </div>
                 <div className="box mt-2" style={{ padding: 10 }}>
-                  <div className="bold small">Recent · arrived in ~30 sec</div>
+                  <div className="bold small">Recent payouts</div>
                   <div className="col gap-2 mt-2">
                     {[
-                      { d: "9:14 AM", who: "Maya R.", a: 240 },
-                      { d: "8:02 AM", who: "Lina S.", a: 180 },
-                      { d: "Yesterday", who: "Iris L.", a: 120 },
+                      { d: "Apr 15", a: 1380 },
+                      { d: "Apr 08", a: 1240 },
+                      { d: "Apr 01", a: 1620 },
                     ].map((p) => (
-                      <div key={p.who} className="row between small">
-                        <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>
+                      <div key={p.d} className="row between small">
+                        <span className="muted" style={{ fontFamily: "var(--mono)", fontSize: 11 }}>
                           {p.d}
                         </span>
-                        <span className="small muted grow" style={{ marginLeft: 6 }}>{p.who}</span>
-                        <span className="bold">+${p.a}.00</span>
+                        <span className="bold">${p.a.toLocaleString()}.00</span>
                       </div>
                     ))}
                   </div>
                 </div>
               </div>
-              <div className="onb-preview-tag wf-scrawl">↑ student pays → you're paid</div>
+              <div className="onb-preview-tag wf-scrawl">↑ what you'll see after setup</div>
             </div>
           </div>
         </div>
@@ -281,76 +276,21 @@ function BankView({ onBack, onContinue }: { onBack: () => void; onContinue: () =
                 </div>
 
                 <div className="onb-field span-2">
-                  <label>Payout speed</label>
-                  <div className="onb-payouts">
-                    <div className="onb-payout on">
-                      <div className="onb-payout-head">
-                        <span className="onb-radio-dot on" />
-                        <div className="grow">
-                          <div className="bold">
-                            Instant{" "}
-                            <span
-                              className="chip tiny"
-                              style={{ background: "var(--highlight)" }}
-                            >
-                              recommended
-                            </span>
-                          </div>
-                          <div className="tiny muted">
-                            funds arrive in ~30 seconds, every time a student pays
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div
-                            className="bold"
-                            style={{ fontFamily: "var(--scrawl)", fontSize: 18, lineHeight: 1 }}
-                          >
-                            +1.5%
-                          </div>
-                          <div className="tiny muted">per payout</div>
+                  <label>Payout schedule</label>
+                  <div className="onb-radios">
+                    {[
+                      { l: "Daily",   s: "funds arrive in 2 business days" },
+                      { l: "Weekly",  s: "every Monday · most popular", on: true },
+                      { l: "Monthly", s: "1st of each month" },
+                    ].map((o) => (
+                      <div key={o.l} className={"onb-radio" + (o.on ? " on" : "")}>
+                        <span className={"onb-radio-dot" + (o.on ? " on" : "")} />
+                        <div>
+                          <div className="bold small">{o.l}</div>
+                          <div className="tiny muted">{o.s}</div>
                         </div>
                       </div>
-                      <div className="onb-payout-meta">
-                        <span className="tiny">↓ today's deposit lands today</span>
-                        <span className="tiny muted">
-                          via debit-card rails (Visa OCT / Mastercard Send) or RTP/FedNow
-                        </span>
-                      </div>
-                    </div>
-                    <div className="onb-payout">
-                      <div className="onb-payout-head">
-                        <span className="onb-radio-dot" />
-                        <div className="grow">
-                          <div className="bold">
-                            Standard <span className="tiny muted">· free</span>
-                          </div>
-                          <div className="tiny muted">
-                            batched daily via ACH — 2 business days after the charge clears
-                          </div>
-                        </div>
-                        <div style={{ textAlign: "right" }}>
-                          <div
-                            className="bold"
-                            style={{ fontFamily: "var(--scrawl)", fontSize: 18, lineHeight: 1 }}
-                          >
-                            $0
-                          </div>
-                          <div className="tiny muted">no fee</div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div
-                    className="tiny muted mt-2"
-                    style={{ display: "flex", gap: 6, alignItems: "flex-start" }}
-                  >
-                    <span style={{ lineHeight: 1 }}>ⓘ</span>
-                    <span>
-                      Heads up: Stripe holds your{" "}
-                      <span className="bold">first payout for 7 days</span> on any new
-                      account for fraud review — this applies even to Instant. After
-                      that, every charge pays out in ~30 sec.
-                    </span>
+                    ))}
                   </div>
                 </div>
 
@@ -424,7 +364,7 @@ function VerifyingView() {
                   { l: "Business type",      v: "Individual / Sole prop",        done: true },
                   { l: "Identity",           v: "Klein, K. · DOB ••/••/1987",     done: true },
                   { l: "Address",            v: "Brooklyn, NY 11215",             done: true },
-                  { l: "Bank account",       v: "Chase •••• 4419 · debit + RTP",  done: true },
+                  { l: "Bank account",       v: "Chase •••• 4419 · checking",     done: true },
                   { l: "Photo ID",           v: "Driver's license · NY",          done: true, sub: "front + back uploaded" },
                   { l: "Tax info (W-9)",     v: "SSN last 4 · ••••6042",          done: true },
                   { l: "Stripe risk review", v: "in progress",                    spinning: true },
@@ -542,9 +482,8 @@ function ConnectedView() {
             <div>
               <h1 className="onb-success-h">You're all set.</h1>
               <div className="onb-success-sub">
-                Send your first invoice or share your booking link — every payment lands
-                in <span className="bold">Chase •••• 4419</span> within{" "}
-                <span className="bold">~30 seconds</span> of your student paying.
+                Send your first invoice or share your booking link — money lands in{" "}
+                <span className="bold">Chase •••• 4419</span> every Monday.
               </div>
               <div className="row gap-2 mt-3">
                 <button className="btn primary big">＋ send first invoice</button>
@@ -570,7 +509,7 @@ function ConnectedView() {
                 <div>
                   <div className="onb-sum-lbl">Payout bank</div>
                   <div className="bold">Chase •••• 4419</div>
-                  <div className="tiny muted">checking · instant payouts on</div>
+                  <div className="tiny muted">checking · weekly</div>
                 </div>
                 <div>
                   <div className="onb-sum-lbl">Tax form</div>
@@ -584,13 +523,13 @@ function ConnectedView() {
                 </div>
                 <div>
                   <div className="onb-sum-lbl">Fees</div>
-                  <div className="bold">2.9% + 30¢ + 1.5%</div>
-                  <div className="tiny muted">processing + instant payout</div>
+                  <div className="bold">2.9% + 30¢</div>
+                  <div className="tiny muted">per successful charge</div>
                 </div>
                 <div>
                   <div className="onb-sum-lbl">Payout speed</div>
-                  <div className="bold">~ 30 seconds</div>
-                  <div className="tiny muted">first payout: 7-day Stripe hold</div>
+                  <div className="bold">2 business days</div>
+                  <div className="tiny muted">first payout: 7 days</div>
                 </div>
               </div>
             </div>
@@ -617,12 +556,12 @@ function ConnectedView() {
               </div>
               <div className="panel tinted">
                 <div className="row gap-2">
-                  <span style={{ fontSize: 24 }}>⚡</span>
+                  <span style={{ fontSize: 24 }}>♪</span>
                   <div>
                     <div className="bold">Your first payout</div>
                     <div className="small muted">
-                      arrives ~7 days after your first student charges (Stripe risk
-                      hold). Every payment after that lands in your bank in ~30 seconds.
+                      arrives Mon, Apr 29 — about 7 days after your first charge
+                      clears.
                     </div>
                   </div>
                 </div>
@@ -675,21 +614,19 @@ function PaymentsMobile() {
               <div className="onb-input"><span className="mono-input">••••••••••4419</span></div>
             </div>
             <div className="onb-field">
-              <label>Payout speed</label>
+              <label>Payout schedule</label>
               <div className="onb-radios mobile">
+                <div className="onb-radio">
+                  <span className="onb-radio-dot" />
+                  <span className="small">Daily</span>
+                </div>
                 <div className="onb-radio on">
                   <span className="onb-radio-dot on" />
-                  <div className="grow">
-                    <div className="bold small">Instant <span className="tiny muted">· +1.5%</span></div>
-                    <div className="tiny muted">~30 sec per charge</div>
-                  </div>
+                  <span className="small bold">Weekly</span>
                 </div>
                 <div className="onb-radio">
                   <span className="onb-radio-dot" />
-                  <div className="grow">
-                    <div className="bold small">Standard <span className="tiny muted">· free</span></div>
-                    <div className="tiny muted">2 business days · ACH</div>
-                  </div>
+                  <span className="small">Monthly</span>
                 </div>
               </div>
             </div>

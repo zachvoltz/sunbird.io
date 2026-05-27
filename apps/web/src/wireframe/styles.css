@@ -1141,9 +1141,15 @@
   background: var(--accent);
 }
 
-/* mobile radios */
+/* radio cards (desktop default + mobile variant) */
+.wireframe-root .onb-radios {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px;
+}
 .wireframe-root .onb-radios.mobile {
-  display: grid; grid-template-columns: 1fr; gap: 6px;
+  grid-template-columns: 1fr;
+  gap: 6px;
 }
 .wireframe-root .onb-radio {
   display: flex; align-items: center; gap: 10px;
