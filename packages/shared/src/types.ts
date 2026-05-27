@@ -263,6 +263,29 @@ export interface PathDetail extends PathSummary {
   studentsOnIt: PathStudentRef[];
 }
 
+// ── Library · warmups, exercises, songs ──
+
+export type LibraryItemKind = "warmup" | "exercise" | "song";
+
+export interface LibraryItemPublic {
+  id: string;
+  coachId: string;
+  kind: LibraryItemKind;
+  title: string;
+  subtitle: string | null;
+  tags: string[];
+  bpmStart: number | null;
+  bpmEnd: number | null;
+  durationMin: number | null;
+  hasMidi: boolean;
+  midiUrl: string | null;
+  pdfUrl: string | null;
+  audioUrl: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface BookingPublic {
   id: string;
   startsAt: string;

@@ -407,6 +407,53 @@ async function main() {
     });
   }
 
+  // ── 9. Library items · warmups, exercises, songs ────────
+  // Mirrors the design-time mock so the Library page isn't empty.
+  // Re-running stays clean: we delete prior rows by their known titles
+  // (these titles are unique to the demo set) before re-inserting.
+  const DEMO_ITEMS: Array<{
+    kind: "warmup" | "exercise" | "song";
+    title: string;
+    bpmStart?: number;
+    bpmEnd?: number;
+    durationMin?: number;
+    hasMidi?: boolean;
+    pdfUrl?: string;
+    tags: string[];
+  }> = [
+    { kind: "warmup",   title: "C major scale · 2 octaves",      bpmStart: 80, durationMin: 5, hasMidi: true,  tags: ["scales", "used 18×"] },
+    { kind: "warmup",   title: "Hanon № 1 · slow",               bpmStart: 60, hasMidi: true,  tags: ["finger ind."] },
+    { kind: "warmup",   title: "Breathing · 4-7-8",              durationMin: 3, tags: ["voice"] },
+    { kind: "exercise", title: "Hanon № 4 — bar 12 loop",        bpmStart: 60, bpmEnd: 88, hasMidi: true, tags: ["technique"] },
+    { kind: "exercise", title: "Czerny op.299 № 1 — bars 1-8",   bpmStart: 76, hasMidi: true, tags: ["technique"] },
+    { kind: "exercise", title: "Octave jumps · F major",          bpmStart: 60, hasMidi: true, tags: ["stretch"] },
+    { kind: "exercise", title: "Phrasing drill — long-line",     durationMin: 5, tags: ["phrasing"] },
+    { kind: "song",     title: "River Flows in You — Yiruma",    hasMidi: true, pdfUrl: "https://example.com/river-flows.pdf", tags: ["recital"] },
+    { kind: "song",     title: "Twinkle var. — Suzuki bk 1",     hasMidi: true, tags: ["beginner"] },
+  ];
+
+  await db.libraryItem.deleteMany({
+    where: { coachId: zach.id, title: { in: DEMO_ITEMS.map((it) => it.title) } },
+  });
+
+  for (let i = 0; i < DEMO_ITEMS.length; i++) {
+    const it = DEMO_ITEMS[i];
+    await db.libraryItem.create({
+      data: {
+        coachId: zach.id,
+        kind: it.kind,
+        title: it.title,
+        tags: JSON.stringify(it.tags),
+        bpmStart: it.bpmStart ?? null,
+        bpmEnd: it.bpmEnd ?? null,
+        durationMin: it.durationMin ?? null,
+        hasMidi: !!it.hasMidi,
+        pdfUrl: it.pdfUrl ?? null,
+        sortOrder: i,
+      },
+    });
+  }
+
   console.log("Seeded Zach demo data:");
   console.log("  · profile: age 32, voice");
   console.log("  · streak: 14 / 22 days");
@@ -415,6 +462,7 @@ async function main() {
   console.log("  · 3 weekly assignments");
   console.log("  · 3 takes (1 with 3 annotations)");
   console.log(`  · ${DEMO_PATHS.length} demo paths (1 with full tree)`);
+  console.log(`  · ${DEMO_ITEMS.length} demo library items`);
 }
 
 main()

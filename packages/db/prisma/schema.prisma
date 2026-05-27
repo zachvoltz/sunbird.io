@@ -57,6 +57,7 @@ model User {
   coachPaths         Path[]              @relation("coachPaths")
   studentPathAssignments PathAssignment[] @relation("studentPathAssignments")
   coachPathAssignments   PathAssignment[] @relation("coachPathAssignments")
+  libraryItems       LibraryItem[]       @relation("coachLibraryItems")
   recurringSchedules RecurringSchedule[] @relation("studentSchedules")
   coachSchedules     RecurringSchedule[] @relation("coachSchedules")
   coachResources     CoachResource[]     @relation("coachResources")
@@ -165,6 +166,33 @@ model CoachAvailability {
   coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
 
   @@unique([coachId, dayOfWeek, startTime])
+}
+
+// Items in a coach's Library — warmups, exercises, and songs they can
+// drag onto a student's week or attach to path lessons. Lightweight
+// metadata (bpm range, duration, MIDI/PDF/audio refs); tags are stored
+// as a JSON string for simplicity.
+model LibraryItem {
+  id          String   @id @default(cuid())
+  coachId     String
+  kind        String   // "warmup" | "exercise" | "song"
+  title       String
+  subtitle    String?
+  tags        String   @default("[]") // JSON array of strings
+  bpmStart    Int?
+  bpmEnd      Int?
+  durationMin Int?
+  hasMidi     Boolean  @default(false)
+  midiUrl     String?
+  pdfUrl      String?
+  audioUrl    String?
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  coach User @relation("coachLibraryItems", fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@index([coachId])
 }
 
 // Khan-style lesson tree owned by a coach. The graph (nodes + edges) is

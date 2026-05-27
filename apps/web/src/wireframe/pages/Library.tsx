@@ -1,16 +1,77 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Tag } from "../components/Tag";
-import { Staff } from "../components/Staff";
 import { LibItem } from "../components/LibItem";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { PathsBrowsePane, PathsMobile, useCoachPaths } from "./Paths";
 import { apiFetch } from "@/lib/api";
-import type { PathSummary } from "@sunbird/shared";
+import type { LibraryItemKind, LibraryItemPublic, PathSummary } from "@sunbird/shared";
+
+const KIND_LABEL: Record<LibraryItemKind, string> = {
+  warmup: "WARMUPS",
+  exercise: "EXERCISES",
+  song: "SONGS & PIECES",
+};
+const KIND_ICON: Record<LibraryItemKind, "metro" | "note" | "mic"> = {
+  warmup: "metro",
+  exercise: "note",
+  song: "mic",
+};
+
+// Render the booking metadata under each item the same way the design
+// mocked it: "<kind> · <bpm range> · <duration> · <MIDI?>".
+function formatItemSubtitle(it: LibraryItemPublic): string {
+  if (it.subtitle && it.subtitle.trim().length > 0) return it.subtitle;
+  const parts: string[] = [it.kind];
+  if (it.bpmStart != null && it.bpmEnd != null && it.bpmStart !== it.bpmEnd) {
+    parts.push(`${it.bpmStart}→${it.bpmEnd} bpm`);
+  } else if (it.bpmStart != null) {
+    parts.push(`${it.bpmStart} bpm`);
+  }
+  if (it.durationMin != null) parts.push(`${it.durationMin} min`);
+  if (it.hasMidi) parts.push("MIDI");
+  if (it.pdfUrl) parts.push("PDF");
+  return parts.join(" · ");
+}
+
+function useLibraryItems() {
+  const [items, setItems] = useState<LibraryItemPublic[] | undefined>();
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(() => {
+    setLoading(true);
+    apiFetch<{ data: LibraryItemPublic[] }>("/api/library")
+      .then((r) => setItems(r.data))
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+  return { items, loading, refresh };
+}
+
+async function promptCreateLibraryItem(): Promise<LibraryItemPublic | null> {
+  const title = window.prompt("Title for the new library item:")?.trim();
+  if (!title) return null;
+  const kindRaw = window
+    .prompt("Kind — warmup / exercise / song:", "exercise")
+    ?.trim()
+    .toLowerCase();
+  const kind: LibraryItemKind =
+    kindRaw === "warmup" || kindRaw === "song" ? kindRaw : "exercise";
+  try {
+    const res = await apiFetch<{ data: LibraryItemPublic }>("/api/library", {
+      method: "POST",
+      body: JSON.stringify({ title, kind }),
+    });
+    return res.data;
+  } catch (err: any) {
+    window.alert(err?.body?.error ?? "Couldn't create item.");
+    return null;
+  }
+}
 
 type LibTab = "exercises" | "paths";
 
@@ -34,10 +95,12 @@ function useLibTab(): [LibTab, (t: LibTab) => void] {
 function TabPills({
   tab,
   onChange,
+  itemCount,
   pathCount,
 }: {
   tab: LibTab;
   onChange: (t: LibTab) => void;
+  itemCount: number;
   pathCount: number;
 }) {
   return (
@@ -47,7 +110,7 @@ function TabPills({
         onClick={() => onChange("exercises")}
         style={{ cursor: "pointer" }}
       >
-        items · 42
+        items · {itemCount}
       </span>
       <span
         className={"p" + (tab === "paths" ? " on" : "")}
@@ -93,15 +156,23 @@ async function promptCreatePath(): Promise<string | null> {
   }
 }
 
-function ExercisesFilterRail() {
+function ExercisesFilterRail({ items }: { items: LibraryItemPublic[] | undefined }) {
+  const counts = useMemo(() => {
+    const c = { all: 0, warmup: 0, exercise: 0, song: 0 };
+    for (const it of items ?? []) {
+      c.all++;
+      if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") c[it.kind]++;
+    }
+    return c;
+  }, [items]);
   return (
     <>
       <div className="small muted mb-2">TYPE</div>
       <div className="col gap-1 small">
-        <div className="row gap-2"><div className="checkbox done" style={{ width: 16, height: 16 }} /> all <span className="muted" style={{ marginLeft: "auto" }}>42</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> warmups <span className="muted" style={{ marginLeft: "auto" }}>12</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> exercises <span className="muted" style={{ marginLeft: "auto" }}>22</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> songs <span className="muted" style={{ marginLeft: "auto" }}>8</span></div>
+        <div className="row gap-2"><div className="checkbox done" style={{ width: 16, height: 16 }} /> all <span className="muted" style={{ marginLeft: "auto" }}>{counts.all}</span></div>
+        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> warmups <span className="muted" style={{ marginLeft: "auto" }}>{counts.warmup}</span></div>
+        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> exercises <span className="muted" style={{ marginLeft: "auto" }}>{counts.exercise}</span></div>
+        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> songs <span className="muted" style={{ marginLeft: "auto" }}>{counts.song}</span></div>
       </div>
 
       <div className="small muted mt-3 mb-2">FOR</div>
@@ -152,7 +223,30 @@ function PathsFilterRail() {
   );
 }
 
-function ExercisesPane() {
+function ExercisesPane({
+  items,
+  loading,
+  onCreate,
+}: {
+  items: LibraryItemPublic[] | undefined;
+  loading: boolean;
+  onCreate: () => void;
+}) {
+  // Group by kind so each section renders in the expected order.
+  const grouped = useMemo(() => {
+    const map: Record<LibraryItemKind, LibraryItemPublic[]> = {
+      warmup: [], exercise: [], song: [],
+    };
+    for (const it of items ?? []) {
+      if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") {
+        map[it.kind].push(it);
+      }
+    }
+    return map;
+  }, [items]);
+
+  const total = items?.length ?? 0;
+
   return (
     <>
       {/* item grid */}
@@ -168,47 +262,47 @@ function ExercisesPane() {
               <span className="p">most-used</span>
             </div>
           </div>
-          <span className="tiny muted">42 items</span>
+          <div className="row gap-2">
+            <button className="btn small ghost" onClick={onCreate}>＋ quick add</button>
+            <span className="tiny muted">{total} item{total === 1 ? "" : "s"}</span>
+          </div>
         </div>
 
         <div className="panel-body scroll">
-          <div className="small muted mb-2">WARMUPS</div>
-          <LibItem icon="metro" title="C major scale · 2 octaves" sub="warmup · 80 bpm · 5 min · MIDI" tags={["scales", "used 18×"]} />
-          <LibItem icon="metro" title="Hanon № 1 · slow" sub="warmup · 60 bpm · MIDI" tags={["finger ind."]} />
-          <LibItem icon="metro" title="Breathing · 4-7-8" sub="warmup · 3 min · no MIDI" tags={["voice"]} />
+          {loading && !items && (
+            <div className="small muted" style={{ padding: "20px 4px" }}>loading library…</div>
+          )}
 
-          <div className="small muted mt-3 mb-2">EXERCISES</div>
-          <div className="box small mb-2" style={{
-            transform: "rotate(-1deg) translateY(-1px)",
-            boxShadow: "3px 3px 0 rgba(0,0,0,0.15)",
-            borderColor: "var(--accent)",
-          }}>
-            <div className="row gap-3">
-              <span className="drag-handle">⋮⋮</span>
-              <Icon name="note" size={16} />
-              <div className="grow">
-                <div className="bold">Hanon № 4 — bar 12 loop</div>
-                <div className="tiny muted">exercise · 60→88 bpm · MIDI · sheet preview</div>
+          {!loading && total === 0 && (
+            <div className="box dashed" style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-soft)" }}>
+              <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
+                Empty library.
               </div>
-              <Tag color="coral">dragging…</Tag>
+              <div className="small muted mt-2 mb-3">
+                Add a warmup, exercise, or song to get started.
+              </div>
+              <button className="btn primary" onClick={onCreate}>＋ add an item</button>
             </div>
-            <div style={{ marginTop: 6, position: "relative" }}>
-              <Staff width={420} bar={12}
-                notes={[
-                  { pitch: "E4", dur: "e", x: 0 }, { pitch: "G4", dur: "e", x: 0.5 },
-                  { pitch: "B4", dur: "e", x: 1.0 }, { pitch: "C5", dur: "e", x: 1.5 },
-                  { pitch: "D5", dur: "e", x: 2.0 }, { pitch: "E5", dur: "e", x: 2.5 },
-                  { pitch: "D5", dur: "e", x: 3.0 }, { pitch: "C5", dur: "e", x: 3.5 },
-                ]} />
-            </div>
-          </div>
-          <LibItem icon="note" title="Czerny op.299 № 1 — bars 1-8" sub="exercise · 76 bpm · MIDI" tags={["technique"]} />
-          <LibItem icon="note" title="Octave jumps · F major" sub="exercise · 60 bpm · MIDI" tags={["stretch"]} />
-          <LibItem icon="note" title="Phrasing drill — long-line" sub="exercise · 5 min · note only" tags={["phrasing"]} />
+          )}
 
-          <div className="small muted mt-3 mb-2">SONGS &amp; PIECES</div>
-          <LibItem icon="mic" title="River Flows in You — Yiruma" sub="song · full · MIDI + PDF" tags={["recital"]} />
-          <LibItem icon="mic" title="Twinkle var. — Suzuki bk 1" sub="song · beginner · MIDI" tags={["beginner"]} />
+          {(["warmup", "exercise", "song"] as LibraryItemKind[]).map((kind) => {
+            const list = grouped[kind];
+            if (list.length === 0) return null;
+            return (
+              <div key={kind}>
+                <div className="small muted mt-3 mb-2">{KIND_LABEL[kind]}</div>
+                {list.map((it) => (
+                  <LibItem
+                    key={it.id}
+                    icon={KIND_ICON[it.kind]}
+                    title={it.title}
+                    sub={formatItemSubtitle(it)}
+                    tags={it.tags}
+                  />
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
 
@@ -258,17 +352,26 @@ function LibraryDesktop() {
   const [tab, setTab] = useLibTab();
   const isPaths = tab === "paths";
   const { paths, loading: pathsLoading, refresh: refreshPaths } = useCoachPaths();
+  const { items, loading: itemsLoading, refresh: refreshItems } = useLibraryItems();
   const navigate = useNavigate();
 
   const pathCount = paths?.length ?? 0;
+  const itemCount = items?.length ?? 0;
 
-  const handleCreate = async () => {
+  const handleCreatePath = async () => {
     const newSlug = await promptCreatePath();
     if (newSlug) {
       refreshPaths();
       navigate(`/coach/library/paths/${newSlug}`);
     }
   };
+
+  const handleCreateItem = async () => {
+    const created = await promptCreateLibraryItem();
+    if (created) refreshItems();
+  };
+
+  const handleCreate = isPaths ? handleCreatePath : handleCreateItem;
 
   return (
     <DTFrame side="library">
@@ -327,18 +430,22 @@ function LibraryDesktop() {
               </div>
             </div>
 
-            {isPaths ? <PathsFilterRail /> : <ExercisesFilterRail />}
+            {isPaths ? <PathsFilterRail /> : <ExercisesFilterRail items={items} />}
           </div>
 
           {isPaths ? (
             <PathsBrowsePane
-              activeFilters={<TabPills tab={tab} onChange={setTab} pathCount={pathCount} />}
+              activeFilters={<TabPills tab={tab} onChange={setTab} itemCount={itemCount} pathCount={pathCount} />}
               paths={paths}
               loading={pathsLoading}
-              onCreate={handleCreate}
+              onCreate={handleCreatePath}
             />
           ) : (
-            <ExercisesPane />
+            <ExercisesPane
+              items={items}
+              loading={itemsLoading}
+              onCreate={handleCreateItem}
+            />
           )}
         </div>
       </div>
@@ -348,17 +455,30 @@ function LibraryDesktop() {
 
 function LibraryMobile() {
   const [tab, setTab] = useLibTab();
+  const { items, loading, refresh } = useLibraryItems();
 
   if (tab === "paths") return <PathsMobile />;
+
+  const count = items?.length ?? 0;
 
   return (
     <WFFrame navActive="home">
       <div className="wf-header">
         <div>
           <h2 className="wf-title">Library</h2>
-          <div className="wf-subtitle">42 items</div>
+          <div className="wf-subtitle">
+            {loading ? "loading…" : `${count} item${count === 1 ? "" : "s"}`}
+          </div>
         </div>
-        <button className="btn icon ghost"><Icon name="plus" size={14} /></button>
+        <button
+          className="btn icon ghost"
+          onClick={async () => {
+            const created = await promptCreateLibraryItem();
+            if (created) refresh();
+          }}
+        >
+          <Icon name="plus" size={14} />
+        </button>
       </div>
       <div className="wf-body col gap-2 scroll-y">
         <div className="dt-search" style={{ padding: "4px 12px" }}>
@@ -370,16 +490,27 @@ function LibraryMobile() {
           <div className="s">shared</div>
         </div>
 
-        <LibItem icon="metro" title="C major scale · 2 oct" sub="warmup · 80 bpm" tags={["18×"]} />
-        <LibItem icon="note" title="Hanon № 4 · bar 12 loop" sub="exercise · 60→88" tags={["coral"]} />
-        <LibItem icon="note" title="Czerny op.299 · 1-8" sub="exercise · 76 bpm" tags={["technique"]} />
-        <LibItem icon="metro" title="Hanon № 1 · slow" sub="warmup · 60 bpm" tags={[]} />
-        <LibItem icon="mic" title="River Flows in You" sub="song · MIDI + PDF" tags={["recital"]} />
-        <LibItem icon="note" title="Phrasing drill" sub="exercise · 5 min" tags={["phrasing"]} />
+        {!loading && count === 0 && (
+          <div className="small muted center" style={{ marginTop: 18 }}>
+            No items yet — tap ＋ to add one.
+          </div>
+        )}
 
-        <div className="postit small wf-scrawl" style={{ transform: "rotate(0.4deg)" }}>
-          Tap any item to assign · long-press to multi-select
-        </div>
+        {(items ?? []).map((it) => (
+          <LibItem
+            key={it.id}
+            icon={KIND_ICON[it.kind]}
+            title={it.title}
+            sub={formatItemSubtitle(it)}
+            tags={it.tags}
+          />
+        ))}
+
+        {count > 0 && (
+          <div className="postit small wf-scrawl" style={{ transform: "rotate(0.4deg)" }}>
+            Tap any item to assign · long-press to multi-select
+          </div>
+        )}
       </div>
     </WFFrame>
   );

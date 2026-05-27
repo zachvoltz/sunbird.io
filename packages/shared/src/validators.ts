@@ -146,6 +146,26 @@ export const createPathSchema = z.object({
 
 export const updatePathSchema = createPathSchema.partial();
 
+// ── Library · warmups, exercises, songs ──
+
+export const libraryItemKindSchema = z.enum(["warmup", "exercise", "song"]);
+
+export const createLibraryItemSchema = z.object({
+  kind: libraryItemKindSchema.default("exercise"),
+  title: z.string().min(1).max(140),
+  subtitle: z.string().max(240).optional(),
+  tags: z.array(z.string().min(1).max(30)).max(12).default([]),
+  bpmStart: z.number().int().min(20).max(300).optional(),
+  bpmEnd: z.number().int().min(20).max(300).optional(),
+  durationMin: z.number().int().min(1).max(240).optional(),
+  hasMidi: z.boolean().optional().default(false),
+  midiUrl: z.string().url().max(500).optional(),
+  pdfUrl: z.string().url().max(500).optional(),
+  audioUrl: z.string().url().max(500).optional(),
+});
+
+export const updateLibraryItemSchema = createLibraryItemSchema.partial();
+
 // Date-specific busy block. Coaches use these to mark vacations, doctor
 // appointments, etc. — they take precedence over the recurring weekly
 // availability when generating bookable slots.
