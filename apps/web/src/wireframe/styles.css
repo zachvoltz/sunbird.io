@@ -1317,3 +1317,415 @@
   font-size: 42px;
   font-weight: 700;
 }
+
+/* ── Payments overview (post-connection dashboard) ────── */
+.wireframe-root .pay-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  flex: 0 0 auto;
+}
+.wireframe-root .pay-kpis.mobile {
+  grid-template-columns: 1fr 1fr;
+}
+.wireframe-root .kpi {
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--paper);
+  position: relative;
+  overflow: hidden;
+}
+.wireframe-root .kpi::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--ink-faint);
+}
+.wireframe-root .kpi-paid::before      { background: #4a8a5a; }
+.wireframe-root .kpi-pending::before   { background: var(--highlight); }
+.wireframe-root .kpi-requested::before { background: var(--accent); }
+.wireframe-root .kpi-expected::before  { background: #6b88c9; }
+.wireframe-root .kpi-overdue::before   { background: var(--ink); background-image: repeating-linear-gradient(45deg, var(--accent) 0 4px, var(--ink) 4px 8px); }
+.wireframe-root .kpi-total {
+  background: var(--ink);
+  color: var(--paper);
+}
+.wireframe-root .kpi-total::before { background: var(--highlight); }
+.wireframe-root .kpi-total .kpi-sub { color: var(--paper); opacity: 0.7; }
+.wireframe-root .kpi-lbl {
+  font-family: var(--hand);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.wireframe-root .kpi-total .kpi-lbl { color: var(--paper); opacity: 0.6; }
+.wireframe-root .kpi-warn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: white;
+  font-family: var(--scrawl);
+  font-size: 13px;
+  line-height: 1;
+}
+.wireframe-root .kpi-amt {
+  font-family: var(--scrawl);
+  font-size: 28px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.wireframe-root .kpi-sub {
+  font-size: 11px;
+  color: var(--ink-faint);
+  margin-top: 2px;
+}
+
+/* ledger table */
+.wireframe-root .pay-tbl {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  font-family: var(--hand);
+}
+.wireframe-root .pay-tbl th {
+  font-family: var(--hand);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-faint);
+  text-align: left;
+  font-weight: 400;
+  padding: 0 10px 4px;
+  border-bottom: 1.5px dotted var(--ink-faint);
+}
+.wireframe-root .pay-tbl td {
+  padding: 8px 10px;
+  background: var(--paper);
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  vertical-align: middle;
+}
+.wireframe-root .pay-tbl td:first-child {
+  border-left: 1.5px solid var(--ink);
+  border-radius: 10px 0 0 10px;
+  padding-left: 12px;
+}
+.wireframe-root .pay-tbl td:last-child {
+  border-right: 1.5px solid var(--ink);
+  border-radius: 0 10px 10px 0;
+  padding-right: 10px;
+}
+.wireframe-root .pay-row-paid td      { background: rgba(74, 138, 90, 0.06); }
+.wireframe-root .pay-row-pending td   { background: var(--paper); }
+.wireframe-root .pay-row-requested td { background: var(--accent-soft); }
+.wireframe-root .pay-row-expected td  { background: rgba(107, 136, 201, 0.08); }
+.wireframe-root .pay-row-overdue td   {
+  background: var(--paper);
+  border-color: var(--accent);
+}
+.wireframe-root .pay-row-overdue td:first-child { border-left-color: var(--accent); }
+.wireframe-root .pay-row-overdue td:last-child  { border-right-color: var(--accent); }
+
+.wireframe-root .pay-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-top: 2px;
+  border: 1px solid currentColor;
+}
+.wireframe-root .pay-pill-paid      { color: #2f6a3f; background: rgba(74, 138, 90, 0.12); }
+.wireframe-root .pay-pill-pending   { color: #8a6f00; background: var(--highlight); border-color: #8a6f00; }
+.wireframe-root .pay-pill-requested { color: var(--accent); background: var(--accent-soft); }
+.wireframe-root .pay-pill-expected  { color: #3b5fa0; background: rgba(107, 136, 201, 0.15); }
+.wireframe-root .pay-pill-overdue   { color: white; background: var(--accent); border-color: var(--accent); }
+
+/* year strip bar chart */
+.wireframe-root .year-bars {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  height: 110px;
+  align-items: end;
+  padding-bottom: 30px;
+}
+.wireframe-root .yb {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  cursor: pointer;
+  position: relative;
+}
+.wireframe-root .yb-stack {
+  flex: 1;
+  width: 70%;
+  position: relative;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px 4px 0 0;
+  overflow: hidden;
+  background:
+    repeating-linear-gradient(-45deg, transparent 0 4px, rgba(0,0,0,0.04) 4px 5px),
+    var(--paper-2);
+  display: flex;
+  align-items: flex-end;
+}
+.wireframe-root .yb-exp {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: repeating-linear-gradient(-45deg, transparent 0 3px, rgba(107, 136, 201, 0.4) 3px 5px);
+  border-top: 1.5px dashed #6b88c9;
+}
+.wireframe-root .yb-paid {
+  position: relative;
+  width: 100%;
+  background: var(--accent);
+  background-image: repeating-linear-gradient(-45deg, rgba(0,0,0,0.1) 0 3px, transparent 3px 6px);
+  border-top: 1.5px solid var(--ink);
+}
+.wireframe-root .yb-current .yb-stack { border-width: 2.5px; }
+.wireframe-root .yb-current::after {
+  content: "now";
+  position: absolute;
+  top: -14px;
+  font-family: var(--scrawl);
+  font-size: 12px;
+  color: var(--accent);
+}
+.wireframe-root .yb-lbl {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-faint);
+  margin-top: 4px;
+  white-space: nowrap;
+}
+.wireframe-root .yb-amt {
+  font-family: var(--scrawl);
+  font-size: 13px;
+  color: var(--ink);
+  line-height: 1;
+}
+.wireframe-root .yb:hover .yb-stack { background-color: var(--paper); }
+
+/* progress bar in future-expected cards */
+.wireframe-root .pay-bar {
+  height: 6px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  background: var(--paper-2);
+  overflow: hidden;
+}
+.wireframe-root .pay-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  background-image: repeating-linear-gradient(-45deg, rgba(0,0,0,0.15) 0 3px, transparent 3px 6px);
+}
+
+/* mobile pay row */
+.wireframe-root .pay-row-mb.pay-row-overdue { border-color: var(--accent); }
+.wireframe-root .pay-row-mb.pay-row-requested { background: var(--accent-soft); }
+.wireframe-root .pay-row-mb.pay-row-paid { background: rgba(74, 138, 90, 0.06); }
+.wireframe-root .pay-row-mb.pay-row-expected { background: rgba(107, 136, 201, 0.06); }
+
+/* scope dropdown (by month / by year) */
+.wireframe-root .scope-dd { position: relative; }
+.wireframe-root .scope-trigger {
+  display: inline-flex; align-items: center; gap: 8px;
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  padding: 4px 12px 4px 14px;
+  background: var(--paper-2);
+  font-family: var(--hand);
+  font-size: 14px;
+  cursor: pointer;
+}
+.wireframe-root .scope-trigger:hover { background: var(--highlight); }
+.wireframe-root .scope-trigger .scope-caret { color: var(--ink-faint); font-size: 11px; margin-left: 2px; }
+.wireframe-root .scope-backdrop {
+  position: fixed; inset: 0;
+  z-index: 50;
+}
+.wireframe-root .scope-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 51;
+  min-width: 260px;
+  border: 1.5px solid var(--ink);
+  border-radius: 12px;
+  background: var(--paper);
+  padding: 6px;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.12);
+}
+.wireframe-root .scope-opt {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.wireframe-root .scope-opt:hover { background: var(--paper-2); }
+.wireframe-root .scope-opt.on { background: var(--highlight); }
+.wireframe-root .scope-opt.disabled { opacity: 0.5; cursor: not-allowed; }
+.wireframe-root .scope-opt.disabled:hover { background: transparent; }
+.wireframe-root .scope-opt-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px;
+  border: 1.5px solid var(--ink);
+  border-radius: 6px;
+  background: var(--paper);
+  font-size: 14px;
+  flex: 0 0 auto;
+}
+.wireframe-root .scope-check {
+  margin-left: auto;
+  color: var(--accent);
+  font-family: var(--scrawl);
+  font-size: 18px;
+}
+.wireframe-root .scope-divider {
+  height: 1.5px;
+  background: repeating-linear-gradient(90deg, var(--ink-faint) 0 4px, transparent 4px 8px);
+  margin: 4px 6px;
+}
+
+/* year view */
+.wireframe-root .pay-tbl-year { border-spacing: 0 4px; }
+.wireframe-root .pay-tbl-year th { font-size: 10px; }
+.wireframe-root .pay-tbl-year tbody td {
+  padding: 6px 8px;
+  font-size: 13px;
+}
+.wireframe-root .pay-row-year:hover td { background: var(--highlight); }
+.wireframe-root .pay-row-year.is-current td {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+.wireframe-root .pay-row-year.is-current td:first-child { border-left-color: var(--accent); }
+.wireframe-root .pay-row-year.is-current td:last-child  { border-right-color: var(--accent); }
+.wireframe-root .pay-row-year.is-future td {
+  background: rgba(107, 136, 201, 0.06);
+  border-style: dashed;
+}
+.wireframe-root .pay-row-total td {
+  background: var(--ink) !important;
+  color: var(--paper);
+  border-color: var(--ink) !important;
+  padding: 10px 8px !important;
+  font-size: 13px !important;
+}
+.wireframe-root .pay-row-total td .muted { color: rgba(251,248,241,0.7); }
+
+/* composition stacked bar inside year table */
+.wireframe-root .stack-bar {
+  display: flex;
+  height: 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--paper-2);
+  min-width: 30px;
+}
+.wireframe-root .sb { display: block; height: 100%; }
+.wireframe-root .sb-paid     { background: #4a8a5a; }
+.wireframe-root .sb-pending  { background: var(--highlight); }
+.wireframe-root .sb-expected { background: repeating-linear-gradient(-45deg, #6b88c9 0 3px, rgba(107,136,201,0.5) 3px 6px); }
+.wireframe-root .sb-overdue  { background: var(--accent); }
+
+/* legend swatches */
+.wireframe-root .legend-sw {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+}
+.wireframe-root .legend-sw.paid     { background: #4a8a5a; }
+.wireframe-root .legend-sw.pending  { background: var(--highlight); }
+.wireframe-root .legend-sw.expected { background: repeating-linear-gradient(-45deg, #6b88c9 0 3px, rgba(107,136,201,0.5) 3px 6px); }
+
+/* full-year stacked chart */
+.wireframe-root .year-chart {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: 4px;
+  height: 130px;
+  align-items: end;
+  padding-bottom: 22px;
+}
+.wireframe-root .yc {
+  display: flex; flex-direction: column; align-items: center;
+  height: 100%;
+  cursor: pointer;
+  position: relative;
+}
+.wireframe-root .yc-stack {
+  flex: 1;
+  width: 80%;
+  border: 1.5px solid var(--ink);
+  border-radius: 4px 4px 0 0;
+  background: var(--paper-2);
+  display: flex;
+  flex-direction: column-reverse;
+  overflow: hidden;
+}
+.wireframe-root .yc-seg { width: 100%; }
+.wireframe-root .yc-paid     { background: #4a8a5a; border-top: 1px solid var(--ink); }
+.wireframe-root .yc-pending  { background: var(--highlight); border-top: 1px solid var(--ink); }
+.wireframe-root .yc-expected {
+  background: repeating-linear-gradient(-45deg, #6b88c9 0 3px, rgba(107,136,201,0.5) 3px 6px);
+  border-top: 1px dashed var(--ink);
+}
+.wireframe-root .yc-overdue  { background: var(--accent); border-top: 1px solid var(--ink); }
+.wireframe-root .yc.is-current .yc-stack { border-width: 2.5px; }
+.wireframe-root .yc.is-current::after {
+  content: "now";
+  position: absolute;
+  top: -14px;
+  font-family: var(--scrawl);
+  font-size: 11px;
+  color: var(--accent);
+}
+.wireframe-root .yc.is-future .yc-stack { border-style: dashed; }
+.wireframe-root .yc-lbl {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-faint);
+  margin-top: 3px;
+}
+.wireframe-root .yc:hover .yc-stack { background: var(--paper); }
+
+/* year-stat tile */
+.wireframe-root .yr-stat {
+  flex: 1;
+  border: 1.5px solid var(--ink);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--paper);
+}
+.wireframe-root .yr-stat-lbl {
+  font-family: var(--hand);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+.wireframe-root .yr-stat-val {
+  font-family: var(--scrawl);
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.1;
+  margin-top: 2px;
+}
+.wireframe-root .bullet-dot { color: var(--ink-faint); }
