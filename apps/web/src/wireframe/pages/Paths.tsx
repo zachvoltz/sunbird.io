@@ -1,17 +1,29 @@
 // Paths — Khan-style lesson trees inside the Coach's Library.
 //
-// Three views, all ported from /tmp/design/songbird/project/tw-paths.jsx
-// (the "Teacher Views" handoff bundle):
+// Reads from the API (/api/paths) backed by the Path + PathAssignment
+// tables. Three views:
 //
-//   PathsBrowsePane   — middle column + right rail content for the Library
-//                       page when the "paths" tab is active.
+//   PathsBrowsePane   — middle column + right rail for the Library page
+//                       when the "paths" tab is active.
 //   PathEditorPage    — full page: tree editor at /coach/library/paths/:slug
 //   PathLessonDetailPage — full page: focused lesson editor at
 //                       /coach/library/paths/:slug/lessons/:lessonId
 //
-// Data is mock for now; this is a design implementation pass.
+// The lesson-level content (text/key-insight/inline-sheet/try-it blocks,
+// attachments) is still mock — only the path itself + its node/edge
+// graph is persisted. That'll evolve as the design firms up.
 
-import { Link, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import type {
+  PathDetail,
+  PathEdge,
+  PathLessonNode,
+  PathShape,
+  PathStudentRef,
+  PathSummary,
+} from "@sunbird/shared";
+import { apiFetch } from "@/lib/api";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Avatar } from "../components/Avatar";
@@ -20,98 +32,83 @@ import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
 import { Staff } from "../components/Staff";
 
-// ── data ───────────────────────────────────────────────────
+// ── hooks ──────────────────────────────────────────────────
 
-export type PathShape = "linear" | "branch" | "spiral";
+export function useCoachPaths() {
+  const [paths, setPaths] = useState<PathSummary[] | undefined>();
+  const [loading, setLoading] = useState(true);
 
-export type PathSummary = {
-  slug: string;
-  title: string;
-  sub: string;
-  lessons: number;
-  students: number;
-  status: "published" | "draft";
-  shape: PathShape;
-  coral?: boolean;
-  tags: string[];
-};
+  const refresh = useCallback(() => {
+    setLoading(true);
+    apiFetch<{ data: PathSummary[] }>("/api/paths")
+      .then((r) => setPaths(r.data))
+      .catch(() => setPaths([]))
+      .finally(() => setLoading(false));
+  }, []);
 
-export const PATHS: PathSummary[] = [
-  {
-    slug: "piano-fundamentals",
-    title: "Piano fundamentals",
-    sub: "for total beginners · ages 6+",
-    lessons: 12, students: 4, status: "published",
-    shape: "linear", tags: ["beginner", "method"],
-  },
-  {
-    slug: "reading-sheet-music",
-    title: "Reading sheet music",
-    sub: "from treble to two-hand reading",
-    lessons: 8, students: 2, status: "published",
-    shape: "branch", tags: ["theory"],
-  },
-  {
-    slug: "voice-chest-mix",
-    title: "Voice · chest → mix",
-    sub: "passaggio navigation in 9 weeks",
-    lessons: 9, students: 3, status: "published",
-    shape: "spiral", tags: ["voice"], coral: true,
-  },
-  {
-    slug: "hanon-slowly",
-    title: "Hanon, slowly",
-    sub: "finger independence over 6 months",
-    lessons: 24, students: 6, status: "published",
-    shape: "linear", tags: ["technique"],
-  },
-  {
-    slug: "recital-prep-25",
-    title: "Recital prep · summer '25",
-    sub: "shared pieces, polished",
-    lessons: 4, students: 8, status: "draft",
-    shape: "branch", tags: ["recital"],
-  },
-  {
-    slug: "sight-reading-sprint",
-    title: "Sight-reading sprint",
-    sub: "daily 5-min drills",
-    lessons: 30, students: 0, status: "draft",
-    shape: "linear", tags: ["drill"],
-  },
-];
+  useEffect(() => { refresh(); }, [refresh]);
 
-// Lesson nodes for the demo "Piano Fundamentals" path. Real paths would
-// own their own nodes/edges; this is the design's reference data.
-type NodeState = "done" | "current" | "locked" | undefined;
-type LessonNode = {
-  id: string;
-  col: number;
-  row: number;
-  title: string;
-  titleB: string;
-  meta: string;
-  state?: NodeState;
-};
+  return { paths, loading, refresh };
+}
 
-const FUNDAMENTALS_NODES: LessonNode[] = [
-  { id: "n1", col: 1, row: 0, title: "Posture &", titleB: "hand position", meta: "1 lesson · 5 min", state: "done" },
-  { id: "n2", col: 1, row: 1, title: "C major", titleB: "5-finger", meta: "1 · scale", state: "done" },
-  { id: "n3", col: 1, row: 2, title: "Reading", titleB: "treble clef", meta: "2 · theory", state: "current" },
-  { id: "n4a", col: 0, row: 3, title: "Bass clef", titleB: "intro", meta: "1 · theory" },
-  { id: "n4b", col: 2, row: 3, title: "Intervals", titleB: "—", meta: "1 · ear" },
-  { id: "n5", col: 1, row: 4, title: "Hands", titleB: "together", meta: "2 · technique" },
-  { id: "n6", col: 1, row: 5, title: "Twinkle", titleB: "variations", meta: "2 · piece" },
-  { id: "n7", col: 1, row: 6, title: "Dynamics", titleB: "& shaping", meta: "1 · musicality", state: "locked" },
-  { id: "n8", col: 1, row: 7, title: "Mini-recital ★", titleB: "check-in", meta: "checkpoint", state: "locked" },
-];
+function useCoachPath(slug: string | undefined) {
+  const [path, setPath] = useState<PathDetail | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [notFound, setNotFound] = useState(false);
 
-const FUNDAMENTALS_EDGES: Array<[string, string]> = [
-  ["n1", "n2"], ["n2", "n3"],
-  ["n3", "n4a"], ["n3", "n4b"],
-  ["n4a", "n5"], ["n4b", "n5"],
-  ["n5", "n6"], ["n6", "n7"], ["n7", "n8"],
-];
+  useEffect(() => {
+    if (!slug) {
+      setLoading(false);
+      setNotFound(true);
+      return;
+    }
+    setLoading(true);
+    setNotFound(false);
+    apiFetch<{ data: PathDetail }>(`/api/paths/${slug}`)
+      .then((r) => setPath(r.data))
+      .catch((err: any) => {
+        if (err?.status === 404) setNotFound(true);
+        else setPath(undefined);
+      })
+      .finally(() => setLoading(false));
+  }, [slug]);
+
+  return { path, loading, notFound };
+}
+
+// Minimal create flow — uses prompt() for now so we ship without a
+// modal component. Returns the slug of the new path if successful so
+// the caller can navigate into the editor.
+async function createPathInteractive(): Promise<string | null> {
+  const title = window.prompt("Name this path:")?.trim();
+  if (!title) return null;
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+  if (!slug) {
+    window.alert("Couldn't derive a URL slug from that name.");
+    return null;
+  }
+  try {
+    await apiFetch<{ data: PathSummary }>("/api/paths", {
+      method: "POST",
+      body: JSON.stringify({
+        slug,
+        title,
+        shape: "linear",
+        status: "draft",
+        nodes: [],
+        edges: [],
+      }),
+    });
+    return slug;
+  } catch (err: any) {
+    window.alert(err?.body?.error ?? "Couldn't create path.");
+    return null;
+  }
+}
 
 // ── PathMini — small tree preview rendered inside path cards ─
 
@@ -160,7 +157,27 @@ export function PathMini({ shape = "linear", h = 80 }: { shape?: PathShape; h?: 
 // ── PathsBrowsePane — middle + right column for the Library when
 // the "paths" tab is active. Library owns DTFrame + filter rail. ────
 
-export function PathsBrowsePane({ activeFilters }: { activeFilters?: React.ReactNode }) {
+export function PathsBrowsePane({
+  activeFilters,
+  paths,
+  loading,
+  onCreate,
+}: {
+  activeFilters?: React.ReactNode;
+  paths: PathSummary[] | undefined;
+  loading: boolean;
+  onCreate: () => void;
+}) {
+  const studentsOnPaths = useMemo(
+    () => (paths ?? []).flatMap((p) =>
+      Array.from({ length: p.students }).map((_, i) => ({
+        pathTitle: p.title,
+        key: `${p.id}-${i}`,
+      })),
+    ),
+    [paths],
+  );
+
   return (
     <>
       {/* paths grid (middle column) */}
@@ -182,10 +199,14 @@ export function PathsBrowsePane({ activeFilters }: { activeFilters?: React.React
         </div>
 
         <div className="panel-body scroll">
+          {loading && !paths && (
+            <div className="small muted" style={{ padding: "24px 4px" }}>loading paths…</div>
+          )}
+
           <div className="paths-grid">
-            {PATHS.map((p, i) => (
+            {(paths ?? []).map((p, i) => (
               <Link
-                key={p.slug}
+                key={p.id}
                 to={`/coach/library/paths/${p.slug}`}
                 className={"path-card" + (p.coral ? " coral" : "")}
                 style={{ transform: `rotate(${i % 2 === 0 ? -0.3 : 0.4}deg)` }}
@@ -195,7 +216,7 @@ export function PathsBrowsePane({ activeFilters }: { activeFilters?: React.React
                     <span className="path-icon">⤳</span>
                     <div className="grow">
                       <div className="bold">{p.title}</div>
-                      <div className="tiny muted">{p.sub}</div>
+                      {p.sub && <div className="tiny muted">{p.sub}</div>}
                     </div>
                     {p.status === "draft" && <Tag>draft</Tag>}
                   </div>
@@ -204,7 +225,7 @@ export function PathsBrowsePane({ activeFilters }: { activeFilters?: React.React
                 <PathMini shape={p.shape} />
 
                 <div className="path-card-foot row gap-2 small">
-                  <Tag>{p.lessons} lessons</Tag>
+                  <Tag>{p.lessons} lesson{p.lessons === 1 ? "" : "s"}</Tag>
                   {p.students > 0
                     ? <Tag color="coral">{p.students} on it</Tag>
                     : <span className="muted tiny">no students yet</span>}
@@ -215,17 +236,27 @@ export function PathsBrowsePane({ activeFilters }: { activeFilters?: React.React
             ))}
 
             {/* "new path" tile */}
-            <div className="path-card path-card--new">
+            <button
+              className="path-card path-card--new"
+              onClick={(e) => { e.preventDefault(); onCreate(); }}
+              style={{ font: "inherit", color: "inherit", textAlign: "left" }}
+            >
               <div className="row" style={{ flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: 6 }}>
                 <div style={{ fontSize: 28, lineHeight: 1, color: "var(--accent)" }}>＋</div>
                 <div className="bold">New path</div>
                 <div className="tiny muted" style={{ textAlign: "center", padding: "0 14px" }}>
                   start blank, from a student's history, or pick a template
                 </div>
-                <button className="btn small primary mt-1">create →</button>
+                <span className="btn small primary mt-1">create →</span>
               </div>
-            </div>
+            </button>
           </div>
+
+          {!loading && paths && paths.length === 0 && (
+            <div className="small muted center" style={{ marginTop: 18 }}>
+              No paths yet — click <b>New path</b> above to start one.
+            </div>
+          )}
         </div>
       </div>
 
@@ -250,23 +281,22 @@ export function PathsBrowsePane({ activeFilters }: { activeFilters?: React.React
           </div>
 
           <div className="small muted mt-2">CURRENTLY ON A PATH</div>
-          {[
-            { n: "Maya R.", path: "Piano fundamentals", at: "8 / 12" },
-            { n: "Theo P.", path: "Piano fundamentals", at: "5 / 12" },
-            { n: "Ana B.", path: "Voice · chest → mix", at: "3 / 9" },
-            { n: "Sam W.", path: "Reading sheet music", at: "2 / 8" },
-          ].map((s) => (
-            <div key={s.n} className="box small row gap-2">
-              <Avatar name={s.n} size={24} />
-              <div className="grow" style={{ minWidth: 0 }}>
-                <div className="bold tiny" style={{ fontSize: 12 }}>{s.n}</div>
-                <div className="tiny muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {s.path}
+          {studentsOnPaths.length === 0 ? (
+            <div className="small muted">No students assigned yet.</div>
+          ) : (
+            studentsOnPaths.slice(0, 6).map((s) => (
+              <div key={s.key} className="box small row gap-2">
+                <Avatar name={"·"} size={24} />
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div className="bold tiny" style={{ fontSize: 12 }}>—</div>
+                  <div className="tiny muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {s.pathTitle}
+                  </div>
                 </div>
+                <span className="chip tiny">·</span>
               </div>
-              <span className="chip tiny">{s.at}</span>
-            </div>
-          ))}
+            ))
+          )}
         </div>
       </div>
     </>
@@ -280,28 +310,51 @@ function PathTreeSVG({
   edges,
   selected,
   pathSlug,
+  studentsOnIt,
 }: {
-  nodes: LessonNode[];
-  edges: Array<[string, string]>;
+  nodes: PathLessonNode[];
+  edges: PathEdge[];
   selected?: string;
   pathSlug: string;
+  studentsOnIt: PathStudentRef[];
 }) {
-  const colX = [140, 320, 500];
+  // Lay out columns dynamically based on the max col index in nodes.
+  const maxCol = Math.max(0, ...nodes.map((n) => n.col));
+  const colCount = maxCol + 1;
+  const COL_W = 180;
+  const canvasW = Math.max(640, colCount * COL_W + 80);
+  const colX = (col: number) => 40 + COL_W / 2 + col * COL_W;
   const rowY = (r: number) => 40 + r * 84;
   const nodeW = 130;
   const nodeH = 48;
+  const maxRow = Math.max(0, ...nodes.map((n) => n.row));
+  const totalH = rowY(maxRow) + nodeH + 30;
+
   const pos = (id: string) => {
-    const n = nodes.find((x) => x.id === id)!;
-    return { x: colX[n.col], y: rowY(n.row), n };
+    const n = nodes.find((x) => x.id === id);
+    if (!n) return null;
+    return { x: colX(n.col), y: rowY(n.row), n };
   };
-  const totalH = rowY(Math.max(...nodes.map((n) => n.row))) + nodeH + 30;
+
+  // Group students by their current lesson so the badge sits next to it.
+  const studentsByNode = useMemo(() => {
+    const map = new Map<string, PathStudentRef[]>();
+    for (const s of studentsOnIt) {
+      if (!s.currentLessonId) continue;
+      const arr = map.get(s.currentLessonId) ?? [];
+      arr.push(s);
+      map.set(s.currentLessonId, arr);
+    }
+    return map;
+  }, [studentsOnIt]);
 
   return (
-    <svg viewBox={`0 0 640 ${totalH}`} width="100%" height={totalH}
+    <svg viewBox={`0 0 ${canvasW} ${totalH}`} width="100%" height={totalH}
       style={{ display: "block", overflow: "visible" }}>
       {edges.map(([a, b], i) => {
         const A = pos(a);
         const B = pos(b);
+        if (!A || !B) return null;
         const x1 = A.x;
         const y1 = A.y + nodeH / 2;
         const x2 = B.x;
@@ -317,18 +370,21 @@ function PathTreeSVG({
       })}
 
       {nodes.map((n) => {
-        const { x, y } = pos(n.id);
+        const p = pos(n.id);
+        if (!p) return null;
+        const { x, y } = p;
         const isSel = n.id === selected;
         const done = n.state === "done";
         const current = n.state === "current";
         const locked = n.state === "locked";
-        const checkpoint = n.id === "n8";
+        const checkpoint = /checkpoint|recital|review/i.test(n.meta) || /★/.test(n.title);
         const fill = isSel ? "var(--highlight)"
           : done ? "var(--paper-2)"
           : current ? "var(--accent-soft)"
           : "var(--paper)";
         const border = current ? "var(--accent)" : "var(--ink)";
         const strokeW = isSel || current ? 2.5 : 1.5;
+        const studentsHere = studentsByNode.get(n.id) ?? [];
         return (
           <g key={n.id} style={{ cursor: "pointer" }}>
             <Link to={`/coach/library/paths/${pathSlug}/lessons/${n.id}`}>
@@ -376,49 +432,85 @@ function PathTreeSVG({
                 {n.meta}
               </text>
             </Link>
+
+            {/* student avatars beside this node, if any are here */}
+            {studentsHere.length > 0 && (
+              <g transform={`translate(${x - nodeW / 2 - 12}, ${y})`}>
+                {studentsHere.slice(0, 3).map((s, i) => (
+                  <g key={s.id} transform={`translate(0, ${-28 - i * 18})`}>
+                    <circle r="9" fill="var(--paper)" stroke="var(--ink)" strokeWidth="1.5" />
+                    <text textAnchor="middle" y="3" fontSize="10" fontFamily="var(--scrawl)">
+                      {s.name.charAt(0)}
+                    </text>
+                  </g>
+                ))}
+                <text x="-12" y={-28 - studentsHere.length * 18 + 4} textAnchor="end"
+                  fontSize="9" fontFamily="var(--mono)" fill="var(--ink-faint)">
+                  {studentsHere.length} here
+                </text>
+              </g>
+            )}
           </g>
         );
       })}
-
-      {/* hand-annotated hint near the current node */}
-      <g transform={`translate(${colX[1] + 80}, ${rowY(2) + 30})`}>
-        <text fontFamily="var(--scrawl)" fontSize="14" fill="var(--accent)" transform="rotate(-6)">
-          drop exercise here →
-        </text>
-        <path d="M -4 -14 q 20 -8 40 -2" stroke="var(--accent)" strokeWidth="1.5" fill="none" />
-      </g>
-
-      {/* student avatars beside the current node */}
-      <g transform={`translate(${colX[1] - 75}, ${rowY(2)})`}>
-        <g transform="translate(-12, -28)">
-          <circle r="9" fill="var(--paper)" stroke="var(--ink)" strokeWidth="1.5" />
-          <text textAnchor="middle" y="3" fontSize="10" fontFamily="var(--scrawl)">M</text>
-        </g>
-        <g transform="translate(-26, -28)">
-          <circle r="9" fill="var(--paper)" stroke="var(--ink)" strokeWidth="1.5" />
-          <text textAnchor="middle" y="3" fontSize="10" fontFamily="var(--scrawl)">T</text>
-        </g>
-        <text x="-44" y="-24" textAnchor="end" fontSize="9"
-          fontFamily="var(--mono)" fill="var(--ink-faint)">
-          2 here
-        </text>
-      </g>
     </svg>
   );
 }
 
 // ── PathEditorPage — /coach/library/paths/:slug ────────────
 
+function findCurrentLessonId(nodes: PathLessonNode[]): string | undefined {
+  return nodes.find((n) => n.state === "current")?.id ?? nodes[0]?.id;
+}
+
 export function PathEditorPage() {
-  const { slug = "piano-fundamentals" } = useParams<{ slug: string }>();
-  const path = PATHS.find((p) => p.slug === slug) ?? PATHS[0];
-  const selected = "n3";
+  const { slug } = useParams<{ slug: string }>();
+  const navigate = useNavigate();
+  const { path, loading, notFound } = useCoachPath(slug);
+  const { paths } = useCoachPaths();
+
+  const selected = useMemo(
+    () => (path ? findCurrentLessonId(path.nodes) : undefined),
+    [path],
+  );
+  const selectedNode = path?.nodes.find((n) => n.id === selected);
+
+  if (notFound) {
+    return (
+      <DTFrame side="library">
+        <div className="dt-main-head">
+          <div>
+            <h2 className="dt-title">Path not found</h2>
+            <div className="dt-sub">Maybe it was deleted or moved.</div>
+          </div>
+          <Link to="/coach/library?tab=paths" className="btn small primary">back to paths</Link>
+        </div>
+      </DTFrame>
+    );
+  }
+
+  if (loading || !path) {
+    return (
+      <DTFrame side="library">
+        <div className="dt-main-head">
+          <div>
+            <h2 className="dt-title">Loading…</h2>
+            <div className="dt-sub">fetching path</div>
+          </div>
+        </div>
+      </DTFrame>
+    );
+  }
+
+  const lessonIdx = selected
+    ? Math.max(0, path.nodes.findIndex((n) => n.id === selected)) + 1
+    : 1;
 
   return (
     <DTFrame side="library">
       <div className="dt-main-head">
         <div className="row gap-3" style={{ alignItems: "center" }}>
-          <Link to="/coach/library" className="btn icon ghost">
+          <Link to="/coach/library?tab=paths" className="btn icon ghost">
             <Icon name="back" size={14} />
           </Link>
           <div>
@@ -428,7 +520,8 @@ export function PathEditorPage() {
               <Tag>{path.status}</Tag>
             </div>
             <div className="dt-sub">
-              {path.lessons} lessons · {path.students} students on it · last edited Tue
+              {path.lessons} lesson{path.lessons === 1 ? "" : "s"} · {path.students}{" "}
+              {path.students === 1 ? "student" : "students"} on it
             </div>
           </div>
         </div>
@@ -445,9 +538,9 @@ export function PathEditorPage() {
           <div className="panel" style={{ padding: "10px 8px" }}>
             <div className="small muted mb-2">YOUR PATHS</div>
             <div className="col gap-1 small">
-              {PATHS.map((p) => (
+              {(paths ?? []).map((p) => (
                 <Link
-                  key={p.slug}
+                  key={p.id}
                   to={`/coach/library/paths/${p.slug}`}
                   className={"item" + (p.slug === path.slug ? " on" : "")}
                   style={{ borderRadius: 3, padding: "5px 6px", lineHeight: 1.2 }}
@@ -462,7 +555,16 @@ export function PathEditorPage() {
                 </Link>
               ))}
             </div>
-            <button className="btn small ghost mt-2" style={{ width: "100%" }}>＋ new path</button>
+            <button
+              className="btn small ghost mt-2"
+              style={{ width: "100%" }}
+              onClick={async () => {
+                const newSlug = await createPathInteractive();
+                if (newSlug) navigate(`/coach/library/paths/${newSlug}`);
+              }}
+            >
+              ＋ new path
+            </button>
 
             <div className="hr-hand" />
             <div className="small muted mb-1">VIEW</div>
@@ -502,12 +604,27 @@ export function PathEditorPage() {
                 padding: 8,
                 minHeight: "100%",
               }}>
-                <PathTreeSVG
-                  nodes={FUNDAMENTALS_NODES}
-                  edges={FUNDAMENTALS_EDGES}
-                  selected={selected}
-                  pathSlug={path.slug}
-                />
+                {path.nodes.length === 0 ? (
+                  <div className="box dashed" style={{
+                    margin: 40, padding: "32px 18px", textAlign: "center",
+                    color: "var(--ink-soft)",
+                  }}>
+                    <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
+                      Empty path.
+                    </div>
+                    <div className="small muted mt-2">
+                      Click <b>＋ add lesson</b> above to drop in your first node.
+                    </div>
+                  </div>
+                ) : (
+                  <PathTreeSVG
+                    nodes={path.nodes}
+                    edges={path.edges}
+                    selected={selected}
+                    pathSlug={path.slug}
+                    studentsOnIt={path.studentsOnIt}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -516,96 +633,50 @@ export function PathEditorPage() {
           <div className="panel tinted">
             <div className="panel-head">
               <div>
-                <div className="tiny muted">LESSON 3 of {path.lessons}</div>
-                <div className="panel-title">Reading treble clef</div>
+                <div className="tiny muted">
+                  {selectedNode
+                    ? `LESSON ${lessonIdx} of ${path.lessons}`
+                    : "NO LESSON SELECTED"}
+                </div>
+                <div className="panel-title">
+                  {selectedNode ? `${selectedNode.title} ${selectedNode.titleB}`.trim() : "—"}
+                </div>
               </div>
-              <Link to={`/coach/library/paths/${path.slug}/lessons/${selected}`} className="btn small">expand →</Link>
+              {selectedNode && (
+                <Link to={`/coach/library/paths/${path.slug}/lessons/${selectedNode.id}`} className="btn small">
+                  expand →
+                </Link>
+              )}
             </div>
             <div className="panel-body scroll col gap-3">
-              <div className="row gap-2">
-                <Tag color="coral">in focus</Tag>
-                <Tag>theory</Tag>
-                <Tag>2 sub-lessons</Tag>
-              </div>
+              {!selectedNode ? (
+                <div className="small muted">
+                  This path has no lessons yet. Add one above to get started.
+                </div>
+              ) : (
+                <>
+                  <div className="row gap-2">
+                    {selectedNode.state === "current" && <Tag color="coral">in focus</Tag>}
+                    {selectedNode.meta && <Tag>{selectedNode.meta}</Tag>}
+                  </div>
 
-              <div className="small muted">NOTES TO STUDENT</div>
-              <div className="box dashed" style={{
-                fontFamily: "var(--scrawl)", fontSize: 16, lineHeight: 1.45,
-                padding: "10px 12px", background: "var(--paper)",
-              }}>
-                Treble clef = the swirly one. Lines spell <span className="hi">EGBDF</span>{" "}
-                ("Every Good Boy Does Fine"), spaces spell <span className="hi">FACE</span>.
-                We'll start on lines, then add spaces.
-              </div>
+                  <div className="small muted">NOTES TO STUDENT</div>
+                  <div className="box dashed" style={{
+                    fontFamily: "var(--scrawl)", fontSize: 16, lineHeight: 1.45,
+                    padding: "10px 12px", background: "var(--paper)",
+                  }}>
+                    Lesson content lives on the focused editor — open it to edit text,
+                    attachments, and exercises.
+                  </div>
 
-              <div className="small muted">ATTACHMENTS · 3</div>
-              <div className="col gap-1">
-                <div className="box small row gap-2">
-                  <Icon name="note" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>treble-clef-cheatsheet.pdf</div>
-                    <div className="tiny muted">1 page · printable</div>
+                  <div className="hr-hand" />
+                  <div className="row gap-2">
+                    <button className="btn small ghost grow">duplicate</button>
+                    <button className="btn small grow">↑ move</button>
+                    <button className="btn small primary grow">save</button>
                   </div>
-                  <Icon name="chev" size={11} />
-                </div>
-                <div className="box small row gap-2">
-                  <span style={{ fontSize: 14 }}>♫</span>
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>reading-demo.mid</div>
-                    <div className="tiny muted">8 bars · slow playback</div>
-                  </div>
-                  <Icon name="play" size={11} />
-                </div>
-                <div className="box small row gap-2">
-                  <span style={{ fontSize: 14 }}>🎙</span>
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>klein-explains.mp3</div>
-                    <div className="tiny muted">2:14 · your voice memo</div>
-                  </div>
-                  <Icon name="play" size={11} />
-                </div>
-                <button className="btn small ghost" style={{ alignSelf: "flex-start" }}>＋ attach…</button>
-              </div>
-
-              <div className="small muted">EXERCISES · 4</div>
-              <div className="col gap-1">
-                <div className="box small row gap-2" style={{ borderColor: "var(--accent)" }}>
-                  <Icon name="metro" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Name-the-note · lines</div>
-                    <div className="tiny muted">drill · auto-graded · from library</div>
-                  </div>
-                  <Tag>from lib</Tag>
-                </div>
-                <div className="box small row gap-2">
-                  <Icon name="note" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Name-the-note · spaces</div>
-                    <div className="tiny muted">drill · auto-graded</div>
-                  </div>
-                  <Tag>from lib</Tag>
-                </div>
-                <div className="box small row gap-2">
-                  <Icon name="note" size={14} stroke="var(--accent)" />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Play these 5 notes</div>
-                    <div className="tiny muted">MIDI · play to advance · custom</div>
-                  </div>
-                  <Tag color="coral">new</Tag>
-                </div>
-                <div className="box small row gap-2 dashed" style={{ borderStyle: "dashed", background: "transparent" }}>
-                  <span className="muted small">＋ exercise from library</span>
-                  <span className="grow" />
-                  <span className="muted small">＋ create here</span>
-                </div>
-              </div>
-
-              <div className="hr-hand" />
-              <div className="row gap-2">
-                <button className="btn small ghost grow">duplicate</button>
-                <button className="btn small grow">↑ move</button>
-                <button className="btn small primary grow">save</button>
-              </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -617,8 +688,43 @@ export function PathEditorPage() {
 // ── PathLessonDetailPage — focused single-lesson editor ────
 
 export function PathLessonDetailPage() {
-  const { slug = "piano-fundamentals" } = useParams<{ slug: string; lessonId: string }>();
-  const path = PATHS.find((p) => p.slug === slug) ?? PATHS[0];
+  const { slug, lessonId } = useParams<{ slug: string; lessonId: string }>();
+  const { path, loading, notFound } = useCoachPath(slug);
+  const node = path?.nodes.find((n) => n.id === lessonId);
+
+  if (notFound || (path && !node && !loading)) {
+    return (
+      <DTFrame side="library">
+        <div className="dt-main-head">
+          <div>
+            <h2 className="dt-title">Lesson not found</h2>
+            <div className="dt-sub">It may have been removed from this path.</div>
+          </div>
+          <Link
+            to={`/coach/library/paths/${slug ?? ""}`}
+            className="btn small primary"
+          >
+            back to path
+          </Link>
+        </div>
+      </DTFrame>
+    );
+  }
+
+  if (loading || !path || !node) {
+    return (
+      <DTFrame side="library">
+        <div className="dt-main-head">
+          <div>
+            <h2 className="dt-title">Loading…</h2>
+          </div>
+        </div>
+      </DTFrame>
+    );
+  }
+
+  const lessonIdx = Math.max(0, path.nodes.findIndex((n) => n.id === node.id)) + 1;
+  const title = `${node.title} ${node.titleB}`.trim();
 
   return (
     <DTFrame side="library">
@@ -631,32 +737,31 @@ export function PathLessonDetailPage() {
             <div className="row gap-2" style={{ alignItems: "baseline" }}>
               <span className="tiny muted">paths /</span>
               <span className="tiny muted">{path.title} /</span>
-              <span className="tiny muted">lesson 3</span>
+              <span className="tiny muted">lesson {lessonIdx}</span>
             </div>
-            <h2 className="dt-title" style={{ fontSize: 28 }}>Reading treble clef</h2>
+            <h2 className="dt-title" style={{ fontSize: 28 }}>{title}</h2>
           </div>
         </div>
         <div className="row gap-2">
           <Tag>auto-saved · 14s ago</Tag>
-          <button className="btn small ghost">preview as Maya</button>
+          <button className="btn small ghost">preview as student</button>
           <button className="btn small primary">save &amp; close</button>
         </div>
       </div>
 
       <div className="dt-main-body">
         <div className="dt-cols" style={{ gridTemplateColumns: "1fr 320px", height: "100%", gap: 14 }}>
-          {/* main editor */}
+          {/* main editor — content blocks are illustrative for now */}
           <div className="panel" style={{ padding: 0 }}>
             <div className="panel-head" style={{ padding: "10px 16px" }}>
               <div className="pill-row">
                 <span className="p on">content</span>
-                <span className="p">attachments · 3</span>
-                <span className="p">exercises · 4</span>
+                <span className="p">attachments</span>
+                <span className="p">exercises</span>
                 <span className="p">settings</span>
               </div>
               <div className="row gap-2">
-                <Tag>theory</Tag>
-                <Tag>est. 12 min</Tag>
+                {node.meta && <Tag>{node.meta}</Tag>}
               </div>
             </div>
 
@@ -669,7 +774,7 @@ export function PathLessonDetailPage() {
                 fontFamily: "var(--scrawl)", fontSize: 22, padding: "8px 14px",
                 background: "var(--paper)",
               }}>
-                Reading treble clef{" "}
+                {title}{" "}
                 <span style={{ borderRight: "1.5px solid var(--ink)", marginLeft: 2 }}>&nbsp;</span>
               </div>
 
@@ -681,7 +786,7 @@ export function PathLessonDetailPage() {
                 padding: "8px 12px", background: "var(--paper)",
                 fontFamily: "var(--hand)", fontSize: 14,
               }}>
-                The swirly clef — line and space names.
+                {node.meta || "Add a one-line summary…"}
               </div>
 
               <div className="row gap-2 mt-3 mb-2">
@@ -699,9 +804,8 @@ export function PathLessonDetailPage() {
                 <div className="cblock">
                   <div className="cblock-tag">¶ text</div>
                   <div className="cblock-body" style={{ fontFamily: "var(--hand)", fontSize: 15, lineHeight: 1.55 }}>
-                    The <b>treble clef</b> wraps around the second line from the bottom — that's the
-                    G line. Once you know G, you can count up or down. Most piano music for your
-                    right hand lives on the treble staff.
+                    Add an explanation for {title}. What's the core idea? Where does it usually
+                    trip students up?
                   </div>
                 </div>
 
@@ -711,7 +815,7 @@ export function PathLessonDetailPage() {
                     background: "var(--highlight)", padding: "6px 10px", borderRadius: 3,
                     fontFamily: "var(--hand)", fontSize: 15,
                   }}>
-                    Lines: <b>E G B D F</b> · Spaces: <b>F A C E</b>
+                    The one thing they should remember after this lesson.
                   </div>
                 </div>
 
@@ -731,17 +835,6 @@ export function PathLessonDetailPage() {
                   </div>
                 </div>
 
-                <div className="cblock">
-                  <div className="cblock-tag">★ try it</div>
-                  <div className="cblock-body" style={{ fontFamily: "var(--hand)", fontSize: 15, lineHeight: 1.5 }}>
-                    Play E, G, B, D, F up the keyboard. Then say the names out loud as you play.
-                    When you can do it without looking, you've got the lines. <br />
-                    <span className="muted small">
-                      → linked to exercise: <b>Name-the-note · lines</b>
-                    </span>
-                  </div>
-                </div>
-
                 <div className="cblock add">
                   <div className="cblock-tag">＋</div>
                   <div className="cblock-body row gap-2 muted small" style={{ flexWrap: "wrap" }}>
@@ -756,38 +849,14 @@ export function PathLessonDetailPage() {
             </div>
           </div>
 
-          {/* right · attachments + exercises */}
+          {/* right · attachments + exercises (still illustrative) */}
           <div className="col gap-3" style={{ minHeight: 0, display: "flex", flexDirection: "column" }}>
             <div className="panel" style={{ flex: "0 0 auto" }}>
               <div className="panel-head">
                 <div className="panel-title">Attachments</div>
-                <span className="chip tiny">3</span>
+                <span className="chip tiny">0</span>
               </div>
               <div className="panel-body col gap-1">
-                <div className="box small row gap-2">
-                  <Icon name="note" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>treble-clef-cheatsheet.pdf</div>
-                    <div className="tiny muted">1 page · printable · auto-attached on assign</div>
-                  </div>
-                  <Icon name="chev" size={11} />
-                </div>
-                <div className="box small row gap-2">
-                  <span style={{ fontSize: 14 }}>♫</span>
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>reading-demo.mid</div>
-                    <div className="tiny muted">8 bars · slow · plays in browser</div>
-                  </div>
-                  <Icon name="play" size={11} />
-                </div>
-                <div className="box small row gap-2">
-                  <span style={{ fontSize: 14 }}>🎙</span>
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>klein-explains.mp3</div>
-                    <div className="tiny muted">2:14 · your voice memo</div>
-                  </div>
-                  <Icon name="play" size={11} />
-                </div>
                 <div className="dropzone" style={{ padding: 10, marginTop: 6 }}>
                   <div className="small" style={{ fontFamily: "var(--hand)" }}>
                     drop a PDF, MIDI, audio, image…
@@ -802,7 +871,7 @@ export function PathLessonDetailPage() {
             <div className="panel tinted" style={{ flex: "1 1 auto", minHeight: 0 }}>
               <div className="panel-head">
                 <div className="panel-title">Exercises</div>
-                <span className="chip tiny">4</span>
+                <span className="chip tiny">0</span>
               </div>
               <div className="panel-body scroll col gap-1">
                 <div className="row gap-2 small">
@@ -812,42 +881,7 @@ export function PathLessonDetailPage() {
                   </div>
                 </div>
 
-                <div className="box small row gap-2 mt-1">
-                  <span className="drag-handle">⋮⋮</span>
-                  <Icon name="metro" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Name-the-note · lines</div>
-                    <div className="tiny muted">drill · 30 q · auto-graded</div>
-                  </div>
-                  <Tag>from lib</Tag>
-                </div>
-                <div className="box small row gap-2">
-                  <span className="drag-handle">⋮⋮</span>
-                  <Icon name="note" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Name-the-note · spaces</div>
-                    <div className="tiny muted">drill · 30 q · auto-graded</div>
-                  </div>
-                  <Tag>from lib</Tag>
-                </div>
-                <div className="box small row gap-2" style={{ borderColor: "var(--accent)" }}>
-                  <span className="drag-handle">⋮⋮</span>
-                  <Icon name="note" size={14} stroke="var(--accent)" />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Play these 5 notes</div>
-                    <div className="tiny muted">MIDI · E G B D F · play to advance</div>
-                  </div>
-                  <Tag color="coral">new · custom</Tag>
-                </div>
-                <div className="box small row gap-2">
-                  <span className="drag-handle">⋮⋮</span>
-                  <Icon name="mic" size={14} />
-                  <div className="grow">
-                    <div className="bold tiny" style={{ fontSize: 12 }}>Sight-read · take 1</div>
-                    <div className="tiny muted">record &amp; send · 4 bars</div>
-                  </div>
-                  <Tag>from lib</Tag>
-                </div>
+                <div className="small muted center mt-3">No exercises attached yet.</div>
 
                 <div className="row gap-2 mt-2">
                   <button className="btn small ghost grow">＋ from library</button>
@@ -881,14 +915,27 @@ export function PathLessonDetailPage() {
 // ── Mobile · path browse list ──────────────────────────────
 
 export function PathsMobile() {
+  const { paths, loading } = useCoachPaths();
+  const navigate = useNavigate();
+
   return (
     <WFFrame navActive="home">
       <div className="wf-header">
         <div>
           <h2 className="wf-title">Paths</h2>
-          <div className="wf-subtitle">{PATHS.length} paths · 23 students</div>
+          <div className="wf-subtitle">
+            {loading ? "loading…" : `${paths?.length ?? 0} paths`}
+          </div>
         </div>
-        <button className="btn icon ghost"><Icon name="plus" size={14} /></button>
+        <button
+          className="btn icon ghost"
+          onClick={async () => {
+            const slug = await createPathInteractive();
+            if (slug) navigate(`/coach/library/paths/${slug}`);
+          }}
+        >
+          <Icon name="plus" size={14} />
+        </button>
       </div>
       <div className="wf-body col gap-2 scroll-y">
         <div className="seg">
@@ -897,9 +944,15 @@ export function PathsMobile() {
           <div className="s">shared</div>
         </div>
 
-        {PATHS.slice(0, 5).map((p) => (
+        {!loading && paths && paths.length === 0 && (
+          <div className="small muted center" style={{ marginTop: 18 }}>
+            No paths yet — tap ＋ to start one.
+          </div>
+        )}
+
+        {(paths ?? []).map((p) => (
           <Link
-            key={p.slug}
+            key={p.id}
             to={`/coach/library/paths/${p.slug}`}
             className={"path-card path-card--mobile" + (p.coral ? " coral" : "")}
           >
@@ -918,7 +971,16 @@ export function PathsMobile() {
           </Link>
         ))}
 
-        <button className="btn primary" style={{ marginTop: 4 }}>＋ new path</button>
+        <button
+          className="btn primary"
+          style={{ marginTop: 4 }}
+          onClick={async () => {
+            const slug = await createPathInteractive();
+            if (slug) navigate(`/coach/library/paths/${slug}`);
+          }}
+        >
+          ＋ new path
+        </button>
       </div>
     </WFFrame>
   );

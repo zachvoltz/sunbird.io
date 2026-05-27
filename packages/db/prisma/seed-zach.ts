@@ -333,6 +333,80 @@ async function main() {
     },
   });
 
+  // ── 8. Paths · Khan-style lesson trees ──────────────────
+  // Six demo paths so the Library "paths" tab isn't empty. The first
+  // ships with the full 9-node Piano Fundamentals tree used in the
+  // design mockups; the rest are empty shells the coach can flesh out.
+  const FUNDAMENTALS_NODES = [
+    { id: "n1", col: 1, row: 0, title: "Posture &", titleB: "hand position", meta: "1 lesson · 5 min", state: "done" },
+    { id: "n2", col: 1, row: 1, title: "C major", titleB: "5-finger", meta: "1 · scale", state: "done" },
+    { id: "n3", col: 1, row: 2, title: "Reading", titleB: "treble clef", meta: "2 · theory", state: "current" },
+    { id: "n4a", col: 0, row: 3, title: "Bass clef", titleB: "intro", meta: "1 · theory" },
+    { id: "n4b", col: 2, row: 3, title: "Intervals", titleB: "—", meta: "1 · ear" },
+    { id: "n5", col: 1, row: 4, title: "Hands", titleB: "together", meta: "2 · technique" },
+    { id: "n6", col: 1, row: 5, title: "Twinkle", titleB: "variations", meta: "2 · piece" },
+    { id: "n7", col: 1, row: 6, title: "Dynamics", titleB: "& shaping", meta: "1 · musicality", state: "locked" },
+    { id: "n8", col: 1, row: 7, title: "Mini-recital ★", titleB: "check-in", meta: "checkpoint", state: "locked" },
+  ];
+  const FUNDAMENTALS_EDGES = [
+    ["n1", "n2"], ["n2", "n3"],
+    ["n3", "n4a"], ["n3", "n4b"],
+    ["n4a", "n5"], ["n4b", "n5"],
+    ["n5", "n6"], ["n6", "n7"], ["n7", "n8"],
+  ];
+
+  const DEMO_PATHS: Array<{
+    slug: string;
+    title: string;
+    sub: string;
+    shape: "linear" | "branch" | "spiral";
+    status: "draft" | "published";
+    coral?: boolean;
+    nodes?: any[];
+    edges?: any[];
+  }> = [
+    {
+      slug: "piano-fundamentals",
+      title: "Piano fundamentals",
+      sub: "for total beginners · ages 6+",
+      shape: "linear",
+      status: "published",
+      nodes: FUNDAMENTALS_NODES,
+      edges: FUNDAMENTALS_EDGES,
+    },
+    { slug: "reading-sheet-music", title: "Reading sheet music", sub: "from treble to two-hand reading", shape: "branch",  status: "published" },
+    { slug: "voice-chest-mix",     title: "Voice · chest → mix",  sub: "passaggio navigation in 9 weeks", shape: "spiral",  status: "published", coral: true },
+    { slug: "hanon-slowly",        title: "Hanon, slowly",        sub: "finger independence over 6 months", shape: "linear", status: "published" },
+    { slug: "recital-prep-25",     title: "Recital prep · summer '25", sub: "shared pieces, polished", shape: "branch", status: "draft" },
+    { slug: "sight-reading-sprint", title: "Sight-reading sprint", sub: "daily 5-min drills", shape: "linear", status: "draft" },
+  ];
+
+  for (const p of DEMO_PATHS) {
+    await db.path.upsert({
+      where: { coachId_slug: { coachId: zach.id, slug: p.slug } },
+      update: {
+        title: p.title,
+        sub: p.sub,
+        shape: p.shape,
+        status: p.status,
+        coral: !!p.coral,
+        nodes: JSON.stringify(p.nodes ?? []),
+        edges: JSON.stringify(p.edges ?? []),
+      },
+      create: {
+        coachId: zach.id,
+        slug: p.slug,
+        title: p.title,
+        sub: p.sub,
+        shape: p.shape,
+        status: p.status,
+        coral: !!p.coral,
+        nodes: JSON.stringify(p.nodes ?? []),
+        edges: JSON.stringify(p.edges ?? []),
+      },
+    });
+  }
+
   console.log("Seeded Zach demo data:");
   console.log("  · profile: age 32, voice");
   console.log("  · streak: 14 / 22 days");
@@ -340,6 +414,7 @@ async function main() {
   console.log("  · today's lesson @ 3:00 PM");
   console.log("  · 3 weekly assignments");
   console.log("  · 3 takes (1 with 3 annotations)");
+  console.log(`  · ${DEMO_PATHS.length} demo paths (1 with full tree)`);
 }
 
 main()

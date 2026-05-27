@@ -53,6 +53,9 @@ model User {
   coachAvailability  CoachAvailability[]
   coachBusy          CoachBusy[]
   coachLessonTypes   CoachLessonType[]
+  coachPaths         Path[]              @relation("coachPaths")
+  studentPathAssignments PathAssignment[] @relation("studentPathAssignments")
+  coachPathAssignments   PathAssignment[] @relation("coachPathAssignments")
   recurringSchedules RecurringSchedule[] @relation("studentSchedules")
   coachSchedules     RecurringSchedule[] @relation("coachSchedules")
   coachResources     CoachResource[]     @relation("coachResources")
@@ -161,6 +164,47 @@ model CoachAvailability {
   coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
 
   @@unique([coachId, dayOfWeek, startTime])
+}
+
+// Khan-style lesson tree owned by a coach. The graph (nodes + edges) is
+// stored as JSON on the row — small (typically <30 nodes), keeps schema
+// churn down, and matches how noteSections is handled elsewhere.
+model Path {
+  id        String   @id @default(cuid())
+  coachId   String
+  slug      String
+  title     String
+  sub       String?
+  shape     String   @default("linear") // "linear" | "branch" | "spiral"
+  status    String   @default("draft")  // "draft" | "published"
+  coral     Boolean  @default(false)
+  nodes     String   @default("[]")     // JSON array of PathLessonNode
+  edges     String   @default("[]")     // JSON array of [fromId, toId]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  coach       User             @relation("coachPaths", fields: [coachId], references: [id], onDelete: Cascade)
+  assignments PathAssignment[]
+
+  @@unique([coachId, slug])
+}
+
+// A student walking through one of a coach's paths.
+model PathAssignment {
+  id              String   @id @default(cuid())
+  pathId          String
+  studentId       String
+  coachId         String
+  currentLessonId String?
+  startedAt       DateTime @default(now())
+
+  path    Path @relation(fields: [pathId], references: [id], onDelete: Cascade)
+  student User @relation("studentPathAssignments", fields: [studentId], references: [id], onDelete: Cascade)
+  coach   User @relation("coachPathAssignments", fields: [coachId], references: [id], onDelete: Cascade)
+
+  @@unique([pathId, studentId])
+  @@index([coachId])
+  @@index([studentId])
 }
 
 // Date-specific busy block. Takes precedence over CoachAvailability when

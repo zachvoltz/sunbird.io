@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Avatar } from "../components/Avatar";
@@ -8,7 +8,9 @@ import { Tag } from "../components/Tag";
 import { Staff } from "../components/Staff";
 import { LibItem } from "../components/LibItem";
 import { useIsMobile } from "../hooks/useIsMobile";
-import { PathsBrowsePane, PathsMobile, PATHS } from "./Paths";
+import { PathsBrowsePane, PathsMobile, useCoachPaths } from "./Paths";
+import { apiFetch } from "@/lib/api";
+import type { PathSummary } from "@sunbird/shared";
 
 type LibTab = "exercises" | "paths";
 
@@ -29,7 +31,15 @@ function useLibTab(): [LibTab, (t: LibTab) => void] {
 
 // Pill toggle reused in both the filter rail's VIEW section and the
 // middle-column header so the active subview is unambiguous.
-function TabPills({ tab, onChange }: { tab: LibTab; onChange: (t: LibTab) => void }) {
+function TabPills({
+  tab,
+  onChange,
+  pathCount,
+}: {
+  tab: LibTab;
+  onChange: (t: LibTab) => void;
+  pathCount: number;
+}) {
   return (
     <div className="pill-row" style={{ marginBottom: 0 }}>
       <span
@@ -44,12 +54,43 @@ function TabPills({ tab, onChange }: { tab: LibTab; onChange: (t: LibTab) => voi
         onClick={() => onChange("paths")}
         style={{ cursor: "pointer" }}
       >
-        paths · {PATHS.length}
+        paths · {pathCount}
       </span>
       <span className="p muted" style={{ opacity: 0.6 }}>tags</span>
       <span className="p muted" style={{ opacity: 0.6 }}>shared</span>
     </div>
   );
+}
+
+async function promptCreatePath(): Promise<string | null> {
+  const title = window.prompt("Name this path:")?.trim();
+  if (!title) return null;
+  const slug = title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
+    .slice(0, 60);
+  if (!slug) {
+    window.alert("Couldn't derive a URL slug from that name.");
+    return null;
+  }
+  try {
+    await apiFetch<{ data: PathSummary }>("/api/paths", {
+      method: "POST",
+      body: JSON.stringify({
+        slug,
+        title,
+        shape: "linear",
+        status: "draft",
+        nodes: [],
+        edges: [],
+      }),
+    });
+    return slug;
+  } catch (err: any) {
+    window.alert(err?.body?.error ?? "Couldn't create path.");
+    return null;
+  }
 }
 
 function ExercisesFilterRail() {
@@ -216,6 +257,18 @@ function ExercisesPane() {
 function LibraryDesktop() {
   const [tab, setTab] = useLibTab();
   const isPaths = tab === "paths";
+  const { paths, loading: pathsLoading, refresh: refreshPaths } = useCoachPaths();
+  const navigate = useNavigate();
+
+  const pathCount = paths?.length ?? 0;
+
+  const handleCreate = async () => {
+    const newSlug = await promptCreatePath();
+    if (newSlug) {
+      refreshPaths();
+      navigate(`/coach/library/paths/${newSlug}`);
+    }
+  };
 
   return (
     <DTFrame side="library">
@@ -231,7 +284,7 @@ function LibraryDesktop() {
         <div className="row gap-2">
           <button className="btn small ghost">import MIDI / PDF</button>
           {isPaths ? (
-            <button className="btn small primary">＋ new path</button>
+            <button className="btn small primary" onClick={handleCreate}>＋ new path</button>
           ) : (
             <Link to="/coach/midi/capture" className="btn small primary">＋ record new</Link>
           )}
@@ -270,7 +323,7 @@ function LibraryDesktop() {
               >
                 <span style={{ width: 14 }}>{tab === "paths" ? "▸" : "·"}</span>
                 <b style={{ fontWeight: tab === "paths" ? 700 : 500 }}>paths</b>
-                <span className="muted" style={{ marginLeft: "auto" }}>{PATHS.length}</span>
+                <span className="muted" style={{ marginLeft: "auto" }}>{pathCount}</span>
               </div>
             </div>
 
@@ -278,7 +331,12 @@ function LibraryDesktop() {
           </div>
 
           {isPaths ? (
-            <PathsBrowsePane activeFilters={<TabPills tab={tab} onChange={setTab} />} />
+            <PathsBrowsePane
+              activeFilters={<TabPills tab={tab} onChange={setTab} pathCount={pathCount} />}
+              paths={paths}
+              loading={pathsLoading}
+              onCreate={handleCreate}
+            />
           ) : (
             <ExercisesPane />
           )}

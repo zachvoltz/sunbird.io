@@ -216,6 +216,53 @@ export interface CoachBusyPublic {
   createdAt: string;
 }
 
+// ── Paths · Khan-style lesson trees ──
+
+export type PathShape = "linear" | "branch" | "spiral";
+export type PathStatus = "draft" | "published";
+export type PathLessonState = "done" | "current" | "locked";
+
+export interface PathLessonNode {
+  id: string;
+  col: number;
+  row: number;
+  title: string;
+  titleB: string;
+  meta: string;
+  state?: PathLessonState;
+}
+
+export type PathEdge = [string, string];
+
+export interface PathSummary {
+  id: string;
+  slug: string;
+  title: string;
+  sub: string | null;
+  shape: PathShape;
+  status: PathStatus;
+  coral: boolean;
+  lessons: number;
+  students: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PathStudentRef {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  currentLessonId: string | null;
+  startedAt: string;
+}
+
+export interface PathDetail extends PathSummary {
+  coachId: string;
+  nodes: PathLessonNode[];
+  edges: PathEdge[];
+  studentsOnIt: PathStudentRef[];
+}
+
 export interface BookingPublic {
   id: string;
   startsAt: string;

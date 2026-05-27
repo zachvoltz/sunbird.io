@@ -116,6 +116,36 @@ export const createAvailabilitySchema = z.object({
   isActive: z.boolean().default(true),
 });
 
+// ── Paths · Khan-style lesson trees inside the Library ──
+
+const pathLessonNodeSchema = z.object({
+  id: z.string().min(1).max(40),
+  col: z.number().int().min(0).max(10),
+  row: z.number().int().min(0).max(40),
+  title: z.string().min(1).max(60),
+  titleB: z.string().max(60).optional().default(""),
+  meta: z.string().max(60).optional().default(""),
+  state: z.enum(["done", "current", "locked"]).optional(),
+});
+const pathEdgeSchema = z.tuple([z.string().min(1), z.string().min(1)]);
+
+export const createPathSchema = z.object({
+  slug: z
+    .string()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z0-9-]+$/i, "Slug must be lowercase letters, numbers, and hyphens"),
+  title: z.string().min(1).max(120),
+  sub: z.string().max(240).optional(),
+  shape: z.enum(["linear", "branch", "spiral"]).default("linear"),
+  status: z.enum(["draft", "published"]).default("draft"),
+  coral: z.boolean().optional().default(false),
+  nodes: z.array(pathLessonNodeSchema).max(60).default([]),
+  edges: z.array(pathEdgeSchema).max(120).default([]),
+});
+
+export const updatePathSchema = createPathSchema.partial();
+
 // Date-specific busy block. Coaches use these to mark vacations, doctor
 // appointments, etc. — they take precedence over the recurring weekly
 // availability when generating bookable slots.
