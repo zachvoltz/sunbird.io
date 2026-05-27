@@ -135,6 +135,10 @@ function DTSidebar({
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>☱</span>
         {!collapsed && <span>Library</span>}
       </Link>
+      <Link to="/coach/payments" className={"item" + (on === "payments" ? " on" : "")} title="Payments">
+        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>$</span>
+        {!collapsed && <span>Payments</span>}
+      </Link>
       <Link to="/coach/account" className={"item" + (on === "account" ? " on" : "")} title="Account">
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⌥</span>
         {!collapsed && <span>Account</span>}
