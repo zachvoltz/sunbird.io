@@ -60,10 +60,11 @@ const EMPTY_SECTIONS: Record<NoteSectionKey, string> = {
 };
 
 function SessionShell({ children }: { children: React.ReactNode }) {
-  // Sidebar uses "roster" so Today stays highlighted while you're in a
-  // session — there's no dedicated session item in the left nav.
+  // Sidebar highlights Calendar — bookings are scheduled there, and the
+  // coach lands on a session from a calendar event, so it's the natural
+  // parent. There's no dedicated session item in the left nav.
   return (
-    <DTFrame side="roster">
+    <DTFrame side="calendar">
       <div
         style={{
           flex: 1,
