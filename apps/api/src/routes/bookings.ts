@@ -21,6 +21,36 @@ function formatDateTime(date: Date): string {
   });
 }
 
+// Drop a system-style SessionMessage on a newly created booking so the
+// coach's inbox unread badge ticks up. Modeled as a message FROM the
+// student (since SessionMessage.senderId is required) so it shows up in
+// the coach's unread count (which filters out sender = self). No-op
+// when the requester is the coach themselves — they already know.
+async function notifyCoachOfBooking(
+  db: any,
+  args: {
+    bookingId: string;
+    studentId: string;
+    coachId: string | null;
+    content: string;
+  },
+) {
+  if (!args.coachId) return;
+  if (args.studentId === args.coachId) return;
+  try {
+    await db.sessionMessage.create({
+      data: {
+        bookingId: args.bookingId,
+        senderId: args.studentId,
+        content: args.content,
+      },
+    });
+  } catch (err) {
+    // Non-fatal; the booking itself already succeeded.
+    console.error("Failed to write booking notification:", err);
+  }
+}
+
 function parseNoteSections(raw: string | null | undefined) {
   if (!raw) return null;
   try {
@@ -205,6 +235,14 @@ bookingRoutes.post("/", requireAuth, async (c) => {
       status: "CONFIRMED",
     },
     include: bookingInclude,
+  });
+
+  // Notify the coach in their inbox.
+  await notifyCoachOfBooking(db, {
+    bookingId: booking.id,
+    studentId: user.id,
+    coachId,
+    content: `📅 Booked a ${category.title} lesson — ${formatDateTime(startsAt)}`,
   });
 
   // Send confirmation email (fire and forget)
@@ -571,6 +609,17 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     });
 
     createdBookings.push(serializeBooking(booking));
+  }
+
+  // Notify the coach in their inbox — one summary message anchored on
+  // the first booking, so the badge ticks up by 1 (not N).
+  if (createdBookings.length > 0) {
+    await notifyCoachOfBooking(db, {
+      bookingId: createdBookings[0].id,
+      studentId: user.id,
+      coachId,
+      content: `📅 Booked ${dates.length} ${frequency.toLowerCase()} ${category.title} lessons — starting ${formatDateTime(dates[0])}`,
+    });
   }
 
   // Send confirmation email
