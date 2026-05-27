@@ -110,22 +110,41 @@ coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (
   return c.json({ data: students });
 });
 
-// GET /api/coaches/inbox-count — number of SessionMessages on this
-// coach's bookings that weren't sent by them (i.e. incoming from
-// students). Powers the badge on the coach sidebar's Inbox item.
-// SessionMessage has no read-tracking field yet, so this is "total
-// incoming" rather than "unread".
+// GET /api/coaches/inbox-count — number of unread incoming
+// SessionMessages for this coach. "Unread" = the message arrived after
+// the user's lastInboxViewedAt (or they've never opened the inbox).
+// Powers the badge on the coach sidebar's Inbox item.
 coachRoutes.get("/inbox-count", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
   const db = getDb();
   const bookingFilter = user.role === "COACH" ? { coachId: user.id } : {};
+  const me = await db.user.findUnique({
+    where: { id: user.id },
+    select: { lastInboxViewedAt: true },
+  });
+  const since = me?.lastInboxViewedAt ?? null;
   const count = await db.sessionMessage.count({
     where: {
       booking: bookingFilter,
       NOT: { senderId: user.id },
+      ...(since ? { createdAt: { gt: since } } : {}),
     },
   });
   return c.json({ data: { count } });
+});
+
+// POST /api/coaches/inbox-viewed — stamp the user's lastInboxViewedAt
+// to now and return the resulting (zero) count. The Inbox page calls
+// this on mount so the sidebar badge clears as soon as the coach
+// opens the inbox.
+coachRoutes.post("/inbox-viewed", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  await db.user.update({
+    where: { id: user.id },
+    data: { lastInboxViewedAt: new Date() },
+  });
+  return c.json({ data: { count: 0 } });
 });
 
 // GET /api/coaches/dashboard — aggregate powering /coach (Roster)

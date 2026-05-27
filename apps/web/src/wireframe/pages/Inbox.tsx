@@ -1,9 +1,25 @@
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Icon } from "../components/Icon";
 import { Squiggle } from "../components/Squiggle";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { apiFetch } from "@/lib/api";
+
+// Inform the server (and the sidebar badge) that the coach has opened
+// the inbox. Fires once per page mount.
+function useMarkInboxViewed() {
+  useEffect(() => {
+    apiFetch("/api/coaches/inbox-viewed", { method: "POST" })
+      .then(() => {
+        // Tell DTFrame's useInboxCount to refetch so the badge clears
+        // without waiting for the next route change.
+        window.dispatchEvent(new Event("sunbird:inbox-viewed"));
+      })
+      .catch(() => { /* non-fatal */ });
+  }, []);
+}
 
 function InboxEmpty() {
   return (
@@ -45,6 +61,7 @@ function InboxEmpty() {
 }
 
 function InboxDesktop() {
+  useMarkInboxViewed();
   return (
     <DTFrame side="inbox">
       <div className="dt-main-head">
@@ -73,6 +90,7 @@ function InboxDesktop() {
 }
 
 function InboxMobile() {
+  useMarkInboxViewed();
   return (
     <WFFrame navActive="notes">
       <div className="wf-header">

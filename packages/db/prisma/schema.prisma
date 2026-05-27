@@ -34,6 +34,7 @@ model User {
   referralSource String?
   age            Int?
   instrument     String?
+  lastInboxViewedAt DateTime?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

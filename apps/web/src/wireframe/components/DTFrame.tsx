@@ -5,21 +5,27 @@ import { useAuth } from "@/context/AuthContext";
 import { TopSearch } from "./TopSearch";
 import { apiFetch } from "@/lib/api";
 
-// Live count of incoming SessionMessages for the calling coach. Used
-// to render the sidebar's Inbox badge. Refetches whenever the route
-// changes so the badge stays roughly in sync as the coach navigates
-// (good enough until we wire real-time updates).
+// Unread incoming SessionMessages for the calling coach. Used to
+// render the sidebar's Inbox badge. Refetches:
+//   - on every route change (DTFrame re-mounts per page),
+//   - when the Inbox page fires `sunbird:inbox-viewed` so the badge
+//     clears immediately on open instead of waiting for the next nav.
 function useInboxCount(): number {
   const [count, setCount] = useState(0);
   const params = useParams();
-  // Refetch on any sidebar mount (which happens per route change because
-  // DTFrame is re-mounted by each page).
   useEffect(() => {
     let cancelled = false;
-    apiFetch<{ data: { count: number } }>("/api/coaches/inbox-count")
-      .then((r) => { if (!cancelled) setCount(r.data.count); })
-      .catch(() => { /* leave at 0 */ });
-    return () => { cancelled = true; };
+    const refetch = () => {
+      apiFetch<{ data: { count: number } }>("/api/coaches/inbox-count")
+        .then((r) => { if (!cancelled) setCount(r.data.count); })
+        .catch(() => { /* leave at last known */ });
+    };
+    refetch();
+    window.addEventListener("sunbird:inbox-viewed", refetch);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("sunbird:inbox-viewed", refetch);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(params)]);
   return count;
