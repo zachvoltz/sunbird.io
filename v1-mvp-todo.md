@@ -13,7 +13,20 @@ Wireframe references:
 - [x] Email/password register, login, logout, session cookie
 - [x] Password reset via email
 - [ ] Final pass on logout UX — confirm logout button is wired in both coach and student left-nav
-- [ ] Decide whether Google OAuth ships in V1 (placeholder exists; not required for MVP)
+- [ ] **Add a "student or coach?" step to the signup flow** — applies to both email/password and Google OAuth signup
+  - [ ] Decide placement: pre-signup picker (role chosen before either auth method) vs. post-signup landing step that runs the first time a user has no role set yet
+  - [ ] Persist the chosen role on the `User` record (`COACH` or `STUDENT`)
+  - [ ] Pre-signup picker links: surface both "Sign up as a student" and "Sign up as a coach" entry points from the marketing/home page
+  - [ ] Email/password signup: include role in the registration form payload
+  - [ ] Google OAuth signup: today the callback creates a user with the schema default role (`auth.ts:264`) — change the flow so first-time Google users are sent to the role-picker step before being routed to a dashboard
+  - [ ] Returning Google users (already have a role) should skip the picker and land on their dashboard as before
+- [ ] **Google sign-up / sign-in working end-to-end for both coaches and students** (must ship in V1)
+  - [x] Backend OAuth start + callback wired (`/api/auth/oauth/google`, `/api/auth/oauth/google/cb`), arctic-based; links by email if user exists, otherwise creates user + sends welcome email
+  - [x] "Continue with Google" button on Login page
+  - [ ] Configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` in `.dev.vars` and Cloudflare secrets (prod)
+  - [ ] Register dev + prod redirect URIs in the Google Cloud Console OAuth client
+  - [ ] Surface "Continue with Google" on the coach signup path too (not just Login)
+  - [ ] End-to-end test: new coach via Google, new student via Google, existing email/password user adding Google as a linked account
 
 ---
 
