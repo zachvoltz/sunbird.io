@@ -1,8 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useSidebarStudents } from "../hooks/useSidebarStudents";
 import { useAuth } from "@/context/AuthContext";
 import { TopSearch } from "./TopSearch";
+import { apiFetch } from "@/lib/api";
+
+// Live count of incoming SessionMessages for the calling coach. Used
+// to render the sidebar's Inbox badge. Refetches whenever the route
+// changes so the badge stays roughly in sync as the coach navigates
+// (good enough until we wire real-time updates).
+function useInboxCount(): number {
+  const [count, setCount] = useState(0);
+  const params = useParams();
+  // Refetch on any sidebar mount (which happens per route change because
+  // DTFrame is re-mounted by each page).
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ data: { count: number } }>("/api/coaches/inbox-count")
+      .then((r) => { if (!cancelled) setCount(r.data.count); })
+      .catch(() => { /* leave at 0 */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params)]);
+  return count;
+}
 
 export type SidebarStudent = {
   id: string;
@@ -70,24 +91,33 @@ function DTSidebar({
   students: SidebarStudent[];
 }) {
   const params = useParams<{ studentId?: string }>();
+  const inboxCount = useInboxCount();
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
       <Link to="/coach" className={"item" + (on === "roster" ? " on" : "")} title="Today">
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⌂</span>
         {!collapsed && <span>Today</span>}
       </Link>
-      <Link to="/coach/inbox" className={"item" + (on === "inbox" ? " on" : "")} title="Inbox">
+      <Link
+        to="/coach/inbox"
+        className={"item" + (on === "inbox" ? " on" : "")}
+        title={inboxCount > 0 ? `Inbox (${inboxCount})` : "Inbox"}
+      >
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>✉</span>
         {!collapsed && (
           <>
             <span>Inbox</span>
-            <span
-              className="chip tiny"
-              style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10 }}
-            >4</span>
+            {inboxCount > 0 && (
+              <span
+                className="chip tiny"
+                style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10 }}
+              >
+                {inboxCount}
+              </span>
+            )}
           </>
         )}
-        {collapsed && (
+        {collapsed && inboxCount > 0 && (
           <span className="dot" style={{ position: "absolute", top: 6, right: 6, marginLeft: 0 }}/>
         )}
       </Link>

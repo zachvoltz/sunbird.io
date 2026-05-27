@@ -110,6 +110,24 @@ coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (
   return c.json({ data: students });
 });
 
+// GET /api/coaches/inbox-count — number of SessionMessages on this
+// coach's bookings that weren't sent by them (i.e. incoming from
+// students). Powers the badge on the coach sidebar's Inbox item.
+// SessionMessage has no read-tracking field yet, so this is "total
+// incoming" rather than "unread".
+coachRoutes.get("/inbox-count", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const bookingFilter = user.role === "COACH" ? { coachId: user.id } : {};
+  const count = await db.sessionMessage.count({
+    where: {
+      booking: bookingFilter,
+      NOT: { senderId: user.id },
+    },
+  });
+  return c.json({ data: { count } });
+});
+
 // GET /api/coaches/dashboard — aggregate powering /coach (Roster)
 coachRoutes.get("/dashboard", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
