@@ -1,34 +1,116 @@
-// Payments — Stripe Connect coach onboarding flow.
+// Payments — Stripe Connect (Express) coach onboarding flow.
 //
-// Four desktop states + mobile, all driven by a `stage` URL query param
-// so each can be deep-linked during the demo. Buttons advance through
-// the natural sequence:
-//   entry → bank → verifying → connected
+// Default behaviour is driven by real status from
+//   GET /api/coach-payments/status
+// which mirrors the User row's Stripe flags onto the UI stage:
+//   no account              → entry  (button: "begin setup")
+//   account, no details     → entry  (button: "resume setup")
+//   submitted, not enabled  → verifying (polls every 3s)
+//   payouts enabled         → connected
 //
-// This is the UI implementation only — no real Stripe Connect API is
-// wired yet. The "begin setup" button moves you forward without
-// creating a real account.
+// `?stage=entry|bank|verifying|connected` still works as a demo
+// override so the design pages stay browsable without real Stripe.
 
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { useIsMobile } from "../hooks/useIsMobile";
+import { apiFetch } from "@/lib/api";
 
 type Stage = "entry" | "bank" | "verifying" | "connected";
 
-function useStage(): [Stage, (s: Stage) => void] {
-  const [params, setParams] = useSearchParams();
-  const raw = params.get("stage");
-  const stage: Stage =
-    raw === "bank" || raw === "verifying" || raw === "connected" ? raw : "entry";
-  const set = (s: Stage) => {
-    const next = new URLSearchParams(params);
-    if (s === "entry") next.delete("stage");
-    else next.set("stage", s);
-    setParams(next, { replace: false });
-  };
-  return [stage, set];
+type StripeStatus = {
+  hasStripeAccount: boolean;
+  detailsSubmitted: boolean;
+  chargesEnabled: boolean;
+  payoutsEnabled: boolean;
+  stripeAccountId: string | null;
+};
+
+const EMPTY_STATUS: StripeStatus = {
+  hasStripeAccount: false,
+  detailsSubmitted: false,
+  chargesEnabled: false,
+  payoutsEnabled: false,
+  stripeAccountId: null,
+};
+
+function stageFromStatus(s: StripeStatus): Stage {
+  if (!s.hasStripeAccount) return "entry";
+  if (!s.detailsSubmitted) return "entry";
+  if (!s.payoutsEnabled || !s.chargesEnabled) return "verifying";
+  return "connected";
+}
+
+function useStripeStatus(opts: { poll?: boolean; refresh?: boolean }) {
+  const [status, setStatus] = useState<StripeStatus | undefined>();
+  const [loading, setLoading] = useState(true);
+  const [unconfigured, setUnconfigured] = useState(false);
+
+  const fetchOnce = useCallback(async () => {
+    try {
+      const res = await apiFetch<{ data: StripeStatus }>(
+        `/api/coach-payments/status${opts.refresh ? "?refresh=1" : ""}`,
+      );
+      setStatus(res.data);
+      setUnconfigured(false);
+    } catch (err: any) {
+      if (err?.status === 501) {
+        setUnconfigured(true);
+        setStatus(EMPTY_STATUS);
+      } else {
+        setStatus(EMPTY_STATUS);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }, [opts.refresh]);
+
+  useEffect(() => { fetchOnce(); }, [fetchOnce]);
+
+  // Poll while the caller wants it (verifying view does this).
+  useEffect(() => {
+    if (!opts.poll) return;
+    const handle = window.setInterval(() => {
+      apiFetch<{ data: StripeStatus }>("/api/coach-payments/status?refresh=1")
+        .then((r) => setStatus(r.data))
+        .catch(() => { /* keep last known */ });
+    }, 3000);
+    return () => window.clearInterval(handle);
+  }, [opts.poll]);
+
+  return { status: status ?? EMPTY_STATUS, loading, unconfigured, refresh: fetchOnce };
+}
+
+async function beginSetup(): Promise<string | null> {
+  try {
+    const res = await apiFetch<{ data: { url: string } }>(
+      "/api/coach-payments/onboarding-link",
+      { method: "POST" },
+    );
+    return res.data.url;
+  } catch (err: any) {
+    window.alert(
+      err?.body?.error ??
+        (err?.status === 501
+          ? "Stripe isn't configured yet on the server."
+          : "Couldn't start Stripe onboarding."),
+    );
+    return null;
+  }
+}
+
+async function openStripeDashboard(): Promise<void> {
+  try {
+    const res = await apiFetch<{ data: { url: string } }>(
+      "/api/coach-payments/dashboard-link",
+      { method: "POST" },
+    );
+    window.open(res.data.url, "_blank", "noopener,noreferrer");
+  } catch (err: any) {
+    window.alert(err?.body?.error ?? "Couldn't open Stripe dashboard.");
+  }
 }
 
 // ── Shared building blocks ────────────────────────────────
@@ -92,7 +174,15 @@ function SideBenefits({ active }: { active: SideKey }) {
 
 // ── A · Entry / promotional landing ───────────────────────
 
-function EntryView({ onBegin }: { onBegin: () => void }) {
+function EntryView({
+  onBegin,
+  resume,
+  starting,
+}: {
+  onBegin: () => void;
+  resume?: boolean;
+  starting?: boolean;
+}) {
   return (
     <DTFrame side="payments">
       <div className="dt-main-head">
@@ -135,7 +225,9 @@ function EntryView({ onBegin }: { onBegin: () => void }) {
               <li><span className="onb-bullet">④</span> Last 4 of SSN (for tax reporting)</li>
             </ul>
             <div className="row gap-2 mt-3">
-              <button className="btn primary big" onClick={onBegin}>begin setup →</button>
+              <button className="btn primary big" onClick={onBegin} disabled={starting}>
+                {starting ? "opening Stripe…" : resume ? "resume setup →" : "begin setup →"}
+              </button>
               <button className="btn ghost big">I'll do this later</button>
             </div>
             <div className="mt-3">
@@ -460,7 +552,9 @@ function ConnectedView() {
           >
             ● connected to Stripe
           </span>
-          <button className="btn small ghost">manage account ↗</button>
+          <button className="btn small ghost" onClick={openStripeDashboard}>
+            manage account ↗
+          </button>
         </div>
       </div>
       <div className="dt-main-body">
@@ -650,25 +744,81 @@ function PaymentsMobile() {
 
 export function PaymentsPage() {
   const isMobile = useIsMobile();
-  const [stage, setStage] = useStage();
+  const [params, setParams] = useSearchParams();
+  const demoRaw = params.get("stage");
+  const demoStage: Stage | null =
+    demoRaw === "entry" || demoRaw === "bank" ||
+    demoRaw === "verifying" || demoRaw === "connected"
+      ? demoRaw
+      : null;
 
-  // Auto-advance verifying → connected after ~3.5s so the demo flow
-  // shows the success burst without requiring an extra click.
+  // The `?stage=verifying` URL is also what Stripe redirects back to
+  // after hosted onboarding completes. While we're in that state we
+  // poll status so the page advances to Connected the moment Stripe
+  // flips the account to enabled.
+  const isAfterReturn = demoRaw === "verifying";
+  const { status } = useStripeStatus({
+    poll: isAfterReturn,
+    refresh: isAfterReturn,
+  });
+
+  // Once Stripe flips payouts enabled, drop the stage param so a
+  // future refresh lands on the canonical /coach/payments URL.
   useEffect(() => {
-    if (stage !== "verifying") return;
-    const handle = window.setTimeout(() => setStage("connected"), 3500);
-    return () => window.clearTimeout(handle);
+    if (isAfterReturn && status.payoutsEnabled) {
+      const next = new URLSearchParams(params);
+      next.delete("stage");
+      setParams(next, { replace: true });
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage]);
+  }, [isAfterReturn, status.payoutsEnabled]);
 
-  const view = useMemo(() => {
-    if (isMobile) return <PaymentsMobile />;
-    if (stage === "bank")      return <BankView onBack={() => setStage("entry")} onContinue={() => setStage("verifying")} />;
-    if (stage === "verifying") return <VerifyingView />;
-    if (stage === "connected") return <ConnectedView />;
-    return <EntryView onBegin={() => setStage("bank")} />;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stage, isMobile]);
+  const [starting, setStarting] = useState(false);
+  const startOnboarding = useCallback(async () => {
+    if (starting) return;
+    setStarting(true);
+    const url = await beginSetup();
+    if (url) {
+      window.location.href = url;
+      return;
+    }
+    setStarting(false);
+  }, [starting]);
 
-  return view;
+  if (isMobile) return <PaymentsMobile />;
+
+  // Pure-demo overrides — `?stage=bank` etc. without real status. The
+  // verifying URL is special-cased above (real status takes over).
+  if (demoStage === "bank") {
+    return (
+      <BankView
+        onBack={() => {
+          const next = new URLSearchParams(params);
+          next.delete("stage");
+          setParams(next, { replace: true });
+        }}
+        onContinue={() => {
+          const next = new URLSearchParams(params);
+          next.set("stage", "verifying");
+          setParams(next, { replace: true });
+        }}
+      />
+    );
+  }
+  if (demoStage === "connected" && !isAfterReturn) return <ConnectedView />;
+  if (demoStage === "entry") {
+    return <EntryView onBegin={startOnboarding} resume={false} starting={starting} />;
+  }
+
+  // Real-status path.
+  const derived = stageFromStatus(status);
+  if (isAfterReturn || derived === "verifying") return <VerifyingView />;
+  if (derived === "connected") return <ConnectedView />;
+  return (
+    <EntryView
+      onBegin={startOnboarding}
+      resume={status.hasStripeAccount}
+      starting={starting}
+    />
+  );
 }

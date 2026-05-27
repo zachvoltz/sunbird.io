@@ -12,6 +12,7 @@ import { coachBusyRoutes } from "./routes/coach-busy";
 import { pathRoutes } from "./routes/paths";
 import { searchRoutes } from "./routes/search";
 import { libraryRoutes } from "./routes/library";
+import { coachPaymentsRoutes } from "./routes/coach-payments";
 import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
 import { initDb, initDbD1 } from "./lib/db";
@@ -32,6 +33,9 @@ type Bindings = {
   // R2 bucket for library audio + future media. Optional: the upload
   // endpoint returns 501 with a helpful message when this isn't bound.
   MEDIA_BUCKET?: R2Bucket;
+  // Stripe secret key (sk_test_… or sk_live_…). Optional: payment
+  // endpoints 501 until this is configured via `wrangler secret put`.
+  STRIPE_SECRET_KEY?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -76,6 +80,7 @@ app.route("/api/coach-busy", coachBusyRoutes);
 app.route("/api/paths", pathRoutes);
 app.route("/api/search", searchRoutes);
 app.route("/api/library", libraryRoutes);
+app.route("/api/coach-payments", coachPaymentsRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/skill-trees", skillTreeRoutes);
 

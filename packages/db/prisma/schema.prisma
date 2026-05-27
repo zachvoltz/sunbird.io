@@ -35,6 +35,16 @@ model User {
   age            Int?
   instrument     String?
   lastInboxViewedAt DateTime?
+
+  // Stripe Connect (Express) — set once the coach starts the
+  // onboarding flow. Flags mirror Stripe's account.{charges,payouts,
+  // details_submitted} so the dashboard can render the right stage
+  // without an API roundtrip on every page load.
+  stripeAccountId        String?
+  stripeChargesEnabled   Boolean @default(false)
+  stripePayoutsEnabled   Boolean @default(false)
+  stripeDetailsSubmitted Boolean @default(false)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 

@@ -21,7 +21,8 @@
     "@sunbird/shared": "workspace:*",
     "arctic": "^3.7.0",
     "hono": "^4.6.0",
-    "resend": "^6.9.4"
+    "resend": "^6.9.4",
+    "stripe": "^22.2.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",
