@@ -133,6 +133,69 @@ coachRoutes.get("/inbox-count", requireAuth, requireRole("COACH", "ADMIN"), asyn
   return c.json({ data: { count } });
 });
 
+// GET /api/coaches/inbox — list incoming SessionMessages on this
+// coach's bookings (not sent by them), newest first, capped at 50.
+// Returns each message with sender + booking context plus an `unread`
+// flag (createdAt > lastInboxViewedAt) so the UI can highlight new
+// rows without a second roundtrip.
+coachRoutes.get("/inbox", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const bookingFilter = user.role === "COACH" ? { coachId: user.id } : {};
+
+  const me = await db.user.findUnique({
+    where: { id: user.id },
+    select: { lastInboxViewedAt: true },
+  });
+  const lastViewedAt: Date | null = me?.lastInboxViewedAt ?? null;
+
+  const messages: any[] = await db.sessionMessage.findMany({
+    where: {
+      booking: bookingFilter,
+      NOT: { senderId: user.id },
+    },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: {
+      sender:  { select: { id: true, name: true, avatarUrl: true } },
+      booking: {
+        select: {
+          id: true,
+          startsAt: true,
+          category: { select: { title: true } },
+          user:     { select: { id: true, name: true } },
+        },
+      },
+    },
+  });
+
+  return c.json({
+    data: {
+      items: messages.map((m) => ({
+        id: m.id,
+        bookingId: m.bookingId,
+        content: m.content,
+        createdAt: m.createdAt.toISOString(),
+        unread: lastViewedAt ? m.createdAt > lastViewedAt : true,
+        sender: {
+          id: m.sender.id,
+          name: m.sender.name,
+          avatarUrl: m.sender.avatarUrl ?? null,
+        },
+        booking: {
+          id: m.booking.id,
+          startsAt: m.booking.startsAt.toISOString(),
+          category: m.booking.category ? { title: m.booking.category.title } : null,
+          student: m.booking.user
+            ? { id: m.booking.user.id, name: m.booking.user.name }
+            : null,
+        },
+      })),
+      lastViewedAt: lastViewedAt ? lastViewedAt.toISOString() : null,
+    },
+  });
+});
+
 // POST /api/coaches/inbox-viewed — stamp the user's lastInboxViewedAt
 // to now and return the resulting (zero) count. The Inbox page calls
 // this on mount so the sidebar badge clears as soon as the coach
