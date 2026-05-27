@@ -285,4 +285,38 @@ me.post("/takes", requireAuth, async (c) => {
   return c.json({ data: { id: take.id } }, 201);
 });
 
+// GET /api/me/inbox-count — unread incoming SessionMessages for the
+// calling user (treated as a student). "Unread" = arrived after
+// lastInboxViewedAt, or all if never opened. Powers the student
+// sidebar's Inbox badge.
+me.get("/inbox-count", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const me = await db.user.findUnique({
+    where: { id: user.id },
+    select: { lastInboxViewedAt: true },
+  });
+  const since = me?.lastInboxViewedAt ?? null;
+  const count = await db.sessionMessage.count({
+    where: {
+      booking: { userId: user.id },
+      NOT: { senderId: user.id },
+      ...(since ? { createdAt: { gt: since } } : {}),
+    },
+  });
+  return c.json({ data: { count } });
+});
+
+// POST /api/me/inbox-viewed — stamp the user's lastInboxViewedAt to
+// now. The student Inbox page calls this on mount.
+me.post("/inbox-viewed", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  await db.user.update({
+    where: { id: user.id },
+    data: { lastInboxViewedAt: new Date() },
+  });
+  return c.json({ data: { count: 0 } });
+});
+
 export { me as meRoutes };

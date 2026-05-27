@@ -41,6 +41,7 @@ import { RecordTakePage } from "@/wireframe/pages/RecordTake";
 import { TodayPage } from "@/wireframe/pages/TodayPage";
 import { AccountPage } from "@/wireframe/pages/Account";
 import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
+import { MyInboxPage } from "@/wireframe/pages/MyInbox";
 
 export function App() {
   return (
@@ -85,6 +86,7 @@ export function App() {
 
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
       <Route path="/today" element={<AuthGate><TodayPage /></AuthGate>} />
+      <Route path="/my-inbox" element={<AuthGate><MyInboxPage /></AuthGate>} />
       <Route path="/my-bookings" element={<AuthGate><MyBookingsPage /></AuthGate>} />
       <Route path="/my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
       <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />

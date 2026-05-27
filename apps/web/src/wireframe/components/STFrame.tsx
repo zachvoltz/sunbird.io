@@ -1,19 +1,45 @@
-import { useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { apiFetch } from "@/lib/api";
 import { TopSearch } from "./TopSearch";
 
-type NavId = "home" | "practice" | "lessons" | "notes" | "takes" | "curriculum" | "profile";
+type NavId = "home" | "practice" | "lessons" | "inbox" | "notes" | "takes" | "curriculum" | "profile";
 
 const NAV: Array<{ id: NavId; label: string; icon: string; to: string }> = [
   { id: "home", label: "Today", icon: "⌂", to: "/today" },
   { id: "practice", label: "Practice", icon: "♪", to: "/practice" },
   { id: "lessons", label: "Lessons", icon: "♬", to: "/my-bookings" },
+  { id: "inbox", label: "Inbox", icon: "✉", to: "/my-inbox" },
   { id: "notes", label: "Journal", icon: "✎", to: "/my-notes" },
   { id: "takes", label: "My takes", icon: "⌥", to: "/my-takes" },
   { id: "curriculum", label: "Curriculum", icon: "▦", to: "/my-curriculum" },
   { id: "profile", label: "Profile", icon: "☻", to: "/my-profile" },
 ];
+
+// Same shape as DTFrame's useInboxCount, just pointed at /api/me.
+// Refetches on route change and on the "sunbird:inbox-viewed" event
+// that MyInbox dispatches when the user opens the inbox.
+function useInboxCount(): number {
+  const [count, setCount] = useState(0);
+  const params = useParams();
+  useEffect(() => {
+    let cancelled = false;
+    const refetch = () => {
+      apiFetch<{ data: { count: number } }>("/api/me/inbox-count")
+        .then((r) => { if (!cancelled) setCount(r.data.count); })
+        .catch(() => { /* leave at last known */ });
+    };
+    refetch();
+    window.addEventListener("sunbird:inbox-viewed", refetch);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("sunbird:inbox-viewed", refetch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params)]);
+  return count;
+}
 
 function STTopBar({ collapsed, onToggleSide }: { collapsed: boolean; onToggleSide: () => void }) {
   const { user, logout } = useAuth();
@@ -55,19 +81,39 @@ function STTopBar({ collapsed, onToggleSide }: { collapsed: boolean; onToggleSid
 }
 
 function STSidebar({ on, collapsed }: { on: NavId; collapsed: boolean }) {
+  const inboxCount = useInboxCount();
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
-      {NAV.map((n) => (
-        <Link
-          key={n.id}
-          to={n.to}
-          className={"item" + (n.id === on ? " on" : "")}
-          title={n.label}
-        >
-          <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>{n.icon}</span>
-          {!collapsed && <span>{n.label}</span>}
-        </Link>
-      ))}
+      {NAV.map((n) => {
+        const isInbox = n.id === "inbox";
+        const showBadge = isInbox && inboxCount > 0;
+        return (
+          <Link
+            key={n.id}
+            to={n.to}
+            className={"item" + (n.id === on ? " on" : "")}
+            title={showBadge ? `${n.label} (${inboxCount})` : n.label}
+          >
+            <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>{n.icon}</span>
+            {!collapsed && (
+              <>
+                <span>{n.label}</span>
+                {showBadge && (
+                  <span
+                    className="chip tiny"
+                    style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10 }}
+                  >
+                    {inboxCount}
+                  </span>
+                )}
+              </>
+            )}
+            {collapsed && showBadge && (
+              <span className="dot" style={{ position: "absolute", top: 6, right: 6, marginLeft: 0 }}/>
+            )}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -89,6 +135,8 @@ export function STFrame({
       ? "home"
       : loc.pathname.startsWith("/practice")
       ? "practice"
+      : loc.pathname.startsWith("/my-inbox")
+      ? "inbox"
       : loc.pathname.startsWith("/my-notes")
       ? "notes"
       : loc.pathname.startsWith("/my-takes")
