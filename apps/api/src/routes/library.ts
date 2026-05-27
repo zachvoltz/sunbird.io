@@ -193,7 +193,11 @@ libraryRoutes.post("/:id/audio", requireAuth, requireRole("COACH", "ADMIN"), asy
     return c.json({ error: "Missing `file` field" }, 400);
   }
   const file = entry as Blob & { name?: string };
-  if (!ALLOWED_AUDIO_TYPES.has(file.type)) {
+  // MediaRecorder (and some uploads) report mime types like
+  // "audio/webm;codecs=opus" — strip the codec parameter before the
+  // allowlist check.
+  const baseType = (file.type || "").split(";")[0].trim().toLowerCase();
+  if (!ALLOWED_AUDIO_TYPES.has(baseType)) {
     return c.json({
       error: `Unsupported file type: ${file.type || "unknown"}`,
     }, 415);
@@ -217,8 +221,9 @@ libraryRoutes.post("/:id/audio", requireAuth, requireRole("COACH", "ADMIN"), asy
   const safeName = (file.name ?? "audio").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
   const key = `library/${user.id}/${id}/${Date.now()}-${safeName}`;
   // Stream the Blob into R2. R2's put() accepts ReadableStream | ArrayBuffer | Blob.
+  // Store the base type so playback doesn't carry codec params back.
   await bucket.put(key, file.stream(), {
-    httpMetadata: { contentType: file.type },
+    httpMetadata: { contentType: baseType || "application/octet-stream" },
   });
 
   const audioUrl = `/api/library/audio/${encodeURIComponent(key)}`;

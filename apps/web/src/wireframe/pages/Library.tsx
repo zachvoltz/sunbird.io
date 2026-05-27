@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
@@ -189,6 +189,12 @@ function ExerciseTypeFilter({
   );
 }
 
+function formatRecElapsed(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 // Inline-edit row for a library item. View mode renders like LibItem
 // but with an "edit" button; edit mode expands the row into a small
 // form with save / cancel / delete. Saves PUT, deletes DELETE; both
@@ -218,6 +224,84 @@ function LibraryRow({
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+
+  // Mic recording state. We accumulate Blob chunks while recording, then
+  // wrap them in a File on stop and hand off to uploadAudio.
+  const [recording, setRecording] = useState(false);
+  const [recElapsed, setRecElapsed] = useState(0);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const recStreamRef = useRef<MediaStream | null>(null);
+  const recChunksRef = useRef<Blob[]>([]);
+  const recTimerRef = useRef<number | null>(null);
+
+  // Best-effort cleanup if the row unmounts mid-recording.
+  useEffect(() => {
+    return () => {
+      recStreamRef.current?.getTracks().forEach((t) => t.stop());
+      if (recTimerRef.current) window.clearInterval(recTimerRef.current);
+    };
+  }, []);
+
+  // MediaRecorder might be missing on older browsers; hide the button
+  // when it is.
+  const recSupported =
+    typeof window !== "undefined" &&
+    typeof (window as any).MediaRecorder !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia;
+
+  const startRecording = async () => {
+    setUploadError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      recStreamRef.current = stream;
+      recChunksRef.current = [];
+      // Prefer webm/opus when supported (Chrome/Firefox); Safari uses mp4.
+      const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      const mimeType =
+        candidates.find((m) => (window as any).MediaRecorder.isTypeSupported?.(m)) ?? "";
+      const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) recChunksRef.current.push(e.data);
+      };
+      recorder.onstop = async () => {
+        const fullType = recorder.mimeType || "audio/webm";
+        const baseType = fullType.split(";")[0];
+        const ext = baseType.includes("mp4") ? "m4a"
+          : baseType.includes("webm") ? "webm"
+          : "bin";
+        const blob = new Blob(recChunksRef.current, { type: baseType });
+        const file = new File([blob], `recording-${Date.now()}.${ext}`, { type: baseType });
+        await uploadAudio(file);
+        // Cleanup mic stream + timer regardless of upload result.
+        recStreamRef.current?.getTracks().forEach((t) => t.stop());
+        recStreamRef.current = null;
+        if (recTimerRef.current) {
+          window.clearInterval(recTimerRef.current);
+          recTimerRef.current = null;
+        }
+        setRecElapsed(0);
+      };
+      recorder.start();
+      recorderRef.current = recorder;
+      setRecording(true);
+      setRecElapsed(0);
+      recTimerRef.current = window.setInterval(() => setRecElapsed((e) => e + 1), 1000);
+    } catch (err: any) {
+      setUploadError(
+        err?.name === "NotAllowedError"
+          ? "Microphone access denied. Allow it in your browser to record."
+          : err?.message ?? "Couldn't start recording",
+      );
+    }
+  };
+
+  const stopRecording = () => {
+    setRecording(false);
+    if (recorderRef.current && recorderRef.current.state !== "inactive") {
+      recorderRef.current.stop();
+    }
+    recorderRef.current = null;
+  };
 
   const uploadAudio = async (file: File) => {
     setUploading(true);
@@ -388,14 +472,14 @@ function LibraryRow({
           />
         </div>
 
-        {/* Audio upload */}
+        {/* Audio upload + recording */}
         <div className="col gap-1">
           <div className="row gap-2" style={{ alignItems: "center", flexWrap: "wrap" }}>
             <label className="tiny muted" style={{ minWidth: 36 }}>audio</label>
             <input
               type="file"
               accept="audio/*"
-              disabled={uploading}
+              disabled={uploading || recording}
               onChange={(e) => {
                 const f = e.target.files?.[0];
                 if (f) uploadAudio(f);
@@ -404,8 +488,31 @@ function LibraryRow({
               }}
               style={{ ...editInputStyle, padding: "3px 6px", flex: "1 1 200px" }}
             />
+            {recSupported && !recording && (
+              <button
+                className="btn small"
+                onClick={startRecording}
+                disabled={uploading}
+                title="record from microphone"
+              >
+                ● record
+              </button>
+            )}
+            {recording && (
+              <button
+                className="btn small"
+                onClick={stopRecording}
+                style={{
+                  background: "var(--accent)",
+                  color: "var(--paper)",
+                  borderColor: "var(--accent)",
+                }}
+              >
+                ◼ stop · {formatRecElapsed(recElapsed)}
+              </button>
+            )}
             {uploading && <span className="small muted">uploading…</span>}
-            {item.audioUrl && !uploading && (
+            {item.audioUrl && !uploading && !recording && (
               <button
                 className="btn small ghost"
                 onClick={clearAudio}
