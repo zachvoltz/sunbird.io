@@ -29,7 +29,9 @@ type Bindings = {
   DATABASE_URL: string;
   DB: D1Database;
   ASSETS: { fetch: typeof fetch };
-  // SONGS_BUCKET: R2Bucket;
+  // R2 bucket for library audio + future media. Optional: the upload
+  // endpoint returns 501 with a helpful message when this isn't bound.
+  MEDIA_BUCKET?: R2Bucket;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();

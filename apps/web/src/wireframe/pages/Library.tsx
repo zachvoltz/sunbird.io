@@ -221,6 +221,43 @@ function LibraryRow({
   const [tagsInput, setTagsInput] = useState<string>(item.tags.join(", "));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const uploadAudio = async (file: File) => {
+    setUploading(true);
+    setUploadError(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      // Plain fetch — apiFetch hardcodes Content-Type: application/json
+      // which would break multipart boundary detection.
+      const res = await fetch(`/api/library/${item.id}/audio`, {
+        method: "POST",
+        body: form,
+        credentials: "include",
+      });
+      const json: any = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.error ?? `Upload failed (${res.status})`);
+      }
+      onChange();
+    } catch (err: any) {
+      setUploadError(err?.message ?? "Couldn't upload audio");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const clearAudio = async () => {
+    if (!window.confirm("Remove the audio from this item?")) return;
+    try {
+      await apiFetch(`/api/library/${item.id}/audio`, { method: "DELETE" });
+      onChange();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't remove audio");
+    }
+  };
 
   // Re-sync local draft if the parent's item reference changes (e.g.
   // after refresh) — but only when we're not in the middle of an edit.
@@ -292,6 +329,16 @@ function LibraryRow({
           {item.tags.map((t) => <Tag key={t}>{t}</Tag>)}
           <button className="btn small ghost" onClick={() => setEditing(true)}>edit</button>
         </div>
+        {item.audioUrl && (
+          <div className="mt-2">
+            <audio
+              src={item.audioUrl}
+              controls
+              preload="none"
+              style={{ width: "100%", height: 32 }}
+            />
+          </div>
+        )}
       </div>
     );
   }
@@ -365,6 +412,46 @@ function LibraryRow({
           placeholder="subtitle (optional — overrides the auto-derived line)"
           style={{ ...editInputStyle, width: "100%" }}
         />
+
+        {/* Audio upload */}
+        <div className="col gap-1">
+          <div className="row gap-2" style={{ alignItems: "center", flexWrap: "wrap" }}>
+            <label className="tiny muted" style={{ minWidth: 36 }}>audio</label>
+            <input
+              type="file"
+              accept="audio/*"
+              disabled={uploading}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) uploadAudio(f);
+                // Reset the input so the same file can be re-picked.
+                e.target.value = "";
+              }}
+              style={{ ...editInputStyle, padding: "3px 6px", flex: "1 1 200px" }}
+            />
+            {uploading && <span className="small muted">uploading…</span>}
+            {item.audioUrl && !uploading && (
+              <button
+                className="btn small ghost"
+                onClick={clearAudio}
+                style={{ color: "var(--accent)" }}
+              >
+                remove
+              </button>
+            )}
+          </div>
+          {item.audioUrl && (
+            <audio
+              src={item.audioUrl}
+              controls
+              preload="none"
+              style={{ width: "100%", height: 32, marginTop: 2 }}
+            />
+          )}
+          {uploadError && (
+            <div className="small" style={{ color: "var(--accent)" }}>{uploadError}</div>
+          )}
+        </div>
 
         {error && <div className="small" style={{ color: "var(--accent)" }}>{error}</div>}
 
