@@ -376,7 +376,14 @@ export function AccountPage() {
           style={{ gridTemplateColumns: "2fr 1fr", height: "100%", gap: 18 }}
         >
           {/* ── Left column ── */}
-          <div className="col gap-3 scroll" style={{ paddingRight: 4 }}>
+          <div
+            className="col gap-3"
+            style={{
+              paddingRight: 4,
+              minHeight: 0,
+              overflowY: "auto",
+            }}
+          >
             {/* Trial banner */}
             <div
               className="box"
