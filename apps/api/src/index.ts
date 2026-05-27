@@ -10,6 +10,7 @@ import { coachRoutes } from "./routes/coaches";
 import { coachSettingsRoutes } from "./routes/coach-settings";
 import { coachBusyRoutes } from "./routes/coach-busy";
 import { pathRoutes } from "./routes/paths";
+import { searchRoutes } from "./routes/search";
 import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
 import { initDb, initDbD1 } from "./lib/db";
@@ -70,6 +71,7 @@ app.route("/api/coaches", coachRoutes);
 app.route("/api/coach-settings", coachSettingsRoutes);
 app.route("/api/coach-busy", coachBusyRoutes);
 app.route("/api/paths", pathRoutes);
+app.route("/api/search", searchRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/skill-trees", skillTreeRoutes);
 

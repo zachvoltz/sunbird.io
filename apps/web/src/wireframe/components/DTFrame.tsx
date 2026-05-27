@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useSidebarStudents } from "../hooks/useSidebarStudents";
 import { useAuth } from "@/context/AuthContext";
+import { TopSearch } from "./TopSearch";
 
 export type SidebarStudent = {
   id: string;
@@ -43,11 +44,7 @@ function DTTopBar({
           </>
         )}
       </Link>
-      <div className="dt-search">
-        <span>⌕</span>
-        <span>jump to student, piece, exercise…</span>
-        <span className="kbd" style={{ marginLeft: "auto" }}>⌘K</span>
-      </div>
+      <TopSearch />
       <div className="grow" />
       {live && (
         <div
