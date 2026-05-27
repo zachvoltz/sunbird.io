@@ -325,12 +325,14 @@ function PathTreeSVG({
   selected,
   pathSlug,
   studentsOnIt,
+  onAddLesson,
 }: {
   nodes: PathLessonNode[];
   edges: PathEdge[];
   selected?: string;
   pathSlug: string;
   studentsOnIt: PathStudentRef[];
+  onAddLesson: () => void;
 }) {
   // Lay out columns dynamically based on the max col index in nodes.
   const maxCol = Math.max(0, ...nodes.map((n) => n.col));
@@ -342,7 +344,9 @@ function PathTreeSVG({
   const nodeW = 130;
   const nodeH = 48;
   const maxRow = Math.max(0, ...nodes.map((n) => n.row));
-  const totalH = rowY(maxRow) + nodeH + 30;
+  const lastNode = nodes[nodes.length - 1];
+  // Reserve one extra row at the bottom for the "+ add lesson" placeholder.
+  const totalH = rowY(maxRow + 1) + nodeH + 30;
 
   const pos = (id: string) => {
     const n = nodes.find((x) => x.id === id);
@@ -467,6 +471,54 @@ function PathTreeSVG({
           </g>
         );
       })}
+
+      {/* "+ add lesson" placeholder slot — sits one row below the last
+          node so the affordance lives inside the tree the coach is
+          already looking at. Dashed connector telegraphs where the new
+          node will land. */}
+      {lastNode && (() => {
+        const addX = colX(lastNode.col);
+        const addY = rowY(lastNode.row + 1);
+        const fromX = colX(lastNode.col);
+        const fromY = rowY(lastNode.row) + nodeH / 2;
+        const toY = addY - nodeH / 2;
+        const midY = (fromY + toY) / 2;
+        return (
+          <g
+            style={{ cursor: "pointer" }}
+            onClick={onAddLesson}
+          >
+            <path
+              d={`M ${fromX} ${fromY} C ${fromX} ${midY}, ${addX} ${midY}, ${addX} ${toY}`}
+              stroke="var(--ink-faint)" strokeWidth="1.5" fill="none"
+              strokeDasharray="4 4" opacity="0.6"
+            />
+            <rect
+              x={addX - nodeW / 2} y={addY - nodeH / 2}
+              width={nodeW} height={nodeH} rx="6"
+              fill="transparent"
+              stroke="var(--accent)" strokeWidth="1.5"
+              strokeDasharray="5 4"
+            />
+            <text
+              x={addX} y={addY + 2}
+              textAnchor="middle"
+              fontSize="14" fontFamily="var(--hand)"
+              fill="var(--accent)" fontWeight="700"
+            >
+              ＋ add lesson
+            </text>
+            <text
+              x={addX} y={addY + 18}
+              textAnchor="middle"
+              fontSize="10" fontFamily="var(--mono)"
+              fill="var(--ink-faint)" letterSpacing="0.04em"
+            >
+              click to add
+            </text>
+          </g>
+        );
+      })()}
     </svg>
   );
 }
@@ -669,6 +721,7 @@ export function PathEditorPage() {
                     selected={selected}
                     pathSlug={path.slug}
                     studentsOnIt={path.studentsOnIt}
+                    onAddLesson={addLesson}
                   />
                 )}
               </div>
