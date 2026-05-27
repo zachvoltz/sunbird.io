@@ -44,7 +44,7 @@ function DTTopBar({
           </>
         )}
       </Link>
-      <TopSearch />
+      <TopSearch placeholder="jump to student, path, lesson…" />
       <div className="grow" />
       {live && (
         <div

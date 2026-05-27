@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { TopSearch } from "./TopSearch";
 
 type NavId = "home" | "practice" | "lessons" | "notes" | "takes" | "curriculum" | "profile";
 
@@ -38,11 +39,7 @@ function STTopBar({ collapsed, onToggleSide }: { collapsed: boolean; onToggleSid
           </>
         )}
       </Link>
-      <div className="dt-search">
-        <span>⌕</span>
-        <span>search your lessons, notes, takes…</span>
-        <span className="kbd" style={{ marginLeft: "auto" }}>⌘K</span>
-      </div>
+      <TopSearch placeholder="jump to coach, lesson, note…" />
       <div className="grow" />
       <Link to="/book" className="btn small primary">＋ book a lesson</Link>
       <button

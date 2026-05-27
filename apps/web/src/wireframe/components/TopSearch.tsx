@@ -1,7 +1,7 @@
-// Coach-scoped jump-to search. Lives in the DTFrame topbar. Backed by
-// GET /api/search?q= which returns three categories: students (people
-// the coach has booked with), paths (their library paths), and lessons
-// (path-node titles).
+// Jump-to search for the wireframe topbars. Generic over scope — the
+// backend (/api/search) branches on the caller's role and returns a
+// uniform { categories: [{ label, hits: [...] }] } shape, so this
+// component is the same for coach and student.
 //
 // Interactions:
 //   - ⌘K / Ctrl+K from anywhere on the page focuses the input.
@@ -13,21 +13,29 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 
-type StudentHit = { id: string; name: string; avatarUrl: string | null; lastLessonAt: string };
-type PathHit    = { id: string; slug: string; title: string; sub: string | null; status: string };
-type LessonHit  = { pathSlug: string; pathTitle: string; nodeId: string; title: string; titleB: string };
+type IconKind = "person" | "path" | "lesson" | "note" | "booking";
 
-type SearchResults = {
-  students: StudentHit[];
-  paths: PathHit[];
-  lessons: LessonHit[];
+type SearchHit = {
+  id: string;
+  title: string;
+  sub?: string;
+  href: string;
+  iconKind: IconKind;
 };
 
-const EMPTY: SearchResults = { students: [], paths: [], lessons: [] };
+type SearchCategory = { label: string; hits: SearchHit[] };
 
-export function TopSearch() {
+type SearchResponse = { categories: SearchCategory[] };
+
+const EMPTY: SearchResponse = { categories: [] };
+
+export function TopSearch({
+  placeholder = "jump to anything…",
+}: {
+  placeholder?: string;
+}) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<SearchResults>(EMPTY);
+  const [results, setResults] = useState<SearchResponse>(EMPTY);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -73,7 +81,7 @@ export function TopSearch() {
     }
     setLoading(true);
     const handle = setTimeout(() => {
-      apiFetch<{ data: SearchResults }>(`/api/search?q=${encodeURIComponent(trimmed)}`)
+      apiFetch<{ data: SearchResponse }>(`/api/search?q=${encodeURIComponent(trimmed)}`)
         .then((r) => setResults(r.data))
         .catch(() => setResults(EMPTY))
         .finally(() => setLoading(false));
@@ -88,7 +96,7 @@ export function TopSearch() {
     inputRef.current?.blur();
   }, [navigate]);
 
-  const total = results.students.length + results.paths.length + results.lessons.length;
+  const total = results.categories.reduce((n, c) => n + c.hits.length, 0);
   const showDropdown = open && (query.trim().length > 0 || loading);
 
   return (
@@ -104,7 +112,7 @@ export function TopSearch() {
         value={query}
         onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
         onFocus={() => { if (query.trim()) setOpen(true); }}
-        placeholder="jump to student, path, lesson…"
+        placeholder={placeholder}
         style={{
           flex: 1,
           minWidth: 0,
@@ -145,50 +153,50 @@ export function TopSearch() {
             </div>
           )}
 
-          {results.students.length > 0 && (
-            <Section label="STUDENTS">
-              {results.students.map((s) => (
+          {results.categories.map((cat) => (
+            <Section key={cat.label} label={cat.label.toUpperCase()}>
+              {cat.hits.map((h) => (
                 <ResultRow
-                  key={s.id}
-                  onClick={() => go(`/coach/student/${s.id}`)}
-                  icon={<Avatar name={s.name} />}
-                  title={s.name}
-                  meta={`last lesson ${new Date(s.lastLessonAt).toLocaleDateString()}`}
+                  key={`${cat.label}:${h.id}`}
+                  onClick={() => go(h.href)}
+                  icon={<HitIcon kind={h.iconKind} title={h.title} />}
+                  title={h.title}
+                  meta={h.sub}
                 />
               ))}
             </Section>
-          )}
-
-          {results.paths.length > 0 && (
-            <Section label="PATHS">
-              {results.paths.map((p) => (
-                <ResultRow
-                  key={p.id}
-                  onClick={() => go(`/coach/library/paths/${p.slug}`)}
-                  icon={<span className="path-icon" style={{ width: 22, height: 22, fontSize: 14, lineHeight: "20px" }}>⤳</span>}
-                  title={p.title}
-                  meta={p.sub ?? p.status}
-                />
-              ))}
-            </Section>
-          )}
-
-          {results.lessons.length > 0 && (
-            <Section label="LESSONS">
-              {results.lessons.map((l) => (
-                <ResultRow
-                  key={`${l.pathSlug}:${l.nodeId}`}
-                  onClick={() => go(`/coach/library/paths/${l.pathSlug}/lessons/${l.nodeId}`)}
-                  icon={<span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>¶</span>}
-                  title={`${l.title} ${l.titleB}`.trim()}
-                  meta={`in ${l.pathTitle}`}
-                />
-              ))}
-            </Section>
-          )}
+          ))}
         </div>
       )}
     </div>
+  );
+}
+
+function HitIcon({ kind, title }: { kind: IconKind; title: string }) {
+  if (kind === "person") return <Avatar name={title} />;
+  if (kind === "path") {
+    return (
+      <span
+        className="path-icon"
+        style={{ width: 22, height: 22, fontSize: 14, lineHeight: "20px" }}
+      >
+        ⤳
+      </span>
+    );
+  }
+  if (kind === "note") {
+    return (
+      <span style={{ fontFamily: "var(--scrawl)", fontSize: 16, color: "var(--ink-soft)" }}>✎</span>
+    );
+  }
+  if (kind === "booking") {
+    return (
+      <span style={{ fontFamily: "var(--mono)", fontSize: 12, color: "var(--ink-faint)" }}>♪</span>
+    );
+  }
+  // lesson
+  return (
+    <span style={{ fontFamily: "var(--mono)", fontSize: 11, color: "var(--ink-faint)" }}>¶</span>
   );
 }
 
