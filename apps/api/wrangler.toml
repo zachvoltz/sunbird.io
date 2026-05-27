@@ -20,11 +20,6 @@ database_name = "sunbird-db"
 database_id = "0b13755a-6061-4f94-a548-8d212b00ea33"
 
 # R2 bucket for library audio (and future media uploads).
-# To enable in prod:
-#   1) Enable R2 in the Cloudflare dashboard (one-time per account)
-#   2) `npx wrangler r2 bucket create sunbird-media`
-#   3) Uncomment the binding below + redeploy
-# The audio upload endpoint gracefully 501s until the binding is live.
-# [[r2_buckets]]
-# binding = "MEDIA_BUCKET"
-# bucket_name = "sunbird-media"
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "sunbird-media"
