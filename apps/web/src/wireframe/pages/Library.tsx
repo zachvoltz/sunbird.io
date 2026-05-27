@@ -21,18 +21,13 @@ const KIND_ICON: Record<LibraryItemKind, "metro" | "note" | "mic"> = {
   song: "mic",
 };
 
-// Render the item metadata under each row the same way the design
-// mocked it: "<kind> · <bpm range> · <duration> · <MIDI?>".
+// Render the item metadata under each row. If the coach wrote
+// freeform notes, surface those; otherwise derive a short summary
+// from structured fields (kind + duration + PDF flag).
 function formatItemSubtitle(it: LibraryItemPublic): string {
   if (it.subtitle && it.subtitle.trim().length > 0) return it.subtitle;
   const parts: string[] = [it.kind];
-  if (it.bpmStart != null && it.bpmEnd != null && it.bpmStart !== it.bpmEnd) {
-    parts.push(`${it.bpmStart}→${it.bpmEnd} bpm`);
-  } else if (it.bpmStart != null) {
-    parts.push(`${it.bpmStart} bpm`);
-  }
   if (it.durationMin != null) parts.push(`${it.durationMin} min`);
-  if (it.hasMidi) parts.push("MIDI");
   if (it.pdfUrl) parts.push("PDF");
   return parts.join(" · ");
 }
@@ -365,23 +360,7 @@ function LibraryRow({
         </div>
 
         <div className="row gap-2" style={{ alignItems: "center", flexWrap: "wrap" }}>
-          <label className="tiny muted">bpm</label>
-          <input
-            type="number"
-            value={draft.bpmStart ?? ""}
-            onChange={(e) => setDraft((d) => ({ ...d, bpmStart: e.target.value ? Number(e.target.value) : null }))}
-            placeholder="start"
-            style={{ ...editInputStyle, width: 80 }}
-          />
-          <span className="muted small">→</span>
-          <input
-            type="number"
-            value={draft.bpmEnd ?? ""}
-            onChange={(e) => setDraft((d) => ({ ...d, bpmEnd: e.target.value ? Number(e.target.value) : null }))}
-            placeholder="end"
-            style={{ ...editInputStyle, width: 80 }}
-          />
-          <label className="tiny muted" style={{ marginLeft: 12 }}>min</label>
+          <label className="tiny muted">min</label>
           <input
             type="number"
             value={draft.durationMin ?? ""}
@@ -389,14 +368,6 @@ function LibraryRow({
             placeholder=""
             style={{ ...editInputStyle, width: 70 }}
           />
-          <label className="row gap-1 small" style={{ alignItems: "center", marginLeft: 12 }}>
-            <input
-              type="checkbox"
-              checked={draft.hasMidi}
-              onChange={(e) => setDraft((d) => ({ ...d, hasMidi: e.target.checked }))}
-            />
-            MIDI
-          </label>
         </div>
 
         <input
@@ -406,12 +377,16 @@ function LibraryRow({
           style={{ ...editInputStyle, width: "100%" }}
         />
 
-        <input
-          value={draft.subtitle ?? ""}
-          onChange={(e) => setDraft((d) => ({ ...d, subtitle: e.target.value || null }))}
-          placeholder="subtitle (optional — overrides the auto-derived line)"
-          style={{ ...editInputStyle, width: "100%" }}
-        />
+        <div className="col gap-1">
+          <label className="tiny muted">notes</label>
+          <textarea
+            value={draft.subtitle ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, subtitle: e.target.value || null }))}
+            placeholder="anything you want to remember about this item…"
+            rows={2}
+            style={{ ...editInputStyle, width: "100%", resize: "vertical" }}
+          />
+        </div>
 
         {/* Audio upload */}
         <div className="col gap-1">
