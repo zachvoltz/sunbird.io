@@ -68,6 +68,7 @@ model User {
   studentPathAssignments PathAssignment[] @relation("studentPathAssignments")
   coachPathAssignments   PathAssignment[] @relation("coachPathAssignments")
   libraryItems       LibraryItem[]       @relation("coachLibraryItems")
+  messageReads       SessionMessageRead[]
   recurringSchedules RecurringSchedule[] @relation("studentSchedules")
   coachSchedules     RecurringSchedule[] @relation("coachSchedules")
   coachResources     CoachResource[]     @relation("coachResources")
@@ -571,8 +572,25 @@ model SessionMessage {
   content   String
   createdAt DateTime @default(now())
 
-  booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  sender  User    @relation(fields: [senderId], references: [id])
+  booking Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender  User                 @relation(fields: [senderId], references: [id])
+  reads   SessionMessageRead[]
+}
+
+// Per-user read receipts on a SessionMessage. Combined with the
+// User.lastInboxViewedAt timestamp this lets us support both "mark
+// all read" (cheap bulk stamp) and per-item "mark read" toggles.
+model SessionMessageRead {
+  id        String   @id @default(cuid())
+  messageId String
+  userId    String
+  readAt    DateTime @default(now())
+
+  message SessionMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, userId])
+  @@index([userId])
 }
 
 model SessionResource {

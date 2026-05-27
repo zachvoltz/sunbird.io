@@ -286,29 +286,31 @@ me.post("/takes", requireAuth, async (c) => {
 });
 
 // GET /api/me/inbox-count — unread incoming SessionMessages for the
-// calling user (treated as a student). "Unread" = arrived after
-// lastInboxViewedAt, or all if never opened. Powers the student
-// sidebar's Inbox badge.
+// calling user (treated as a student). A message is unread when it
+// arrived after lastInboxViewedAt (or never set) AND has no per-item
+// read receipt for this user.
 me.get("/inbox-count", requireAuth, async (c) => {
   const user = c.get("user")!;
   const db = getDb();
-  const me = await db.user.findUnique({
+  const meRow = await db.user.findUnique({
     where: { id: user.id },
     select: { lastInboxViewedAt: true },
   });
-  const since = me?.lastInboxViewedAt ?? null;
+  const since = meRow?.lastInboxViewedAt ?? null;
   const count = await db.sessionMessage.count({
     where: {
       booking: { userId: user.id },
       NOT: { senderId: user.id },
       ...(since ? { createdAt: { gt: since } } : {}),
+      reads: { none: { userId: user.id } },
     },
   });
   return c.json({ data: { count } });
 });
 
 // POST /api/me/inbox-viewed — stamp the user's lastInboxViewedAt to
-// now. The student Inbox page calls this on mount.
+// now. Behaves as a "mark all read" — the per-item reads stay in
+// place but cease to be load-bearing.
 me.post("/inbox-viewed", requireAuth, async (c) => {
   const user = c.get("user")!;
   const db = getDb();
@@ -317,6 +319,39 @@ me.post("/inbox-viewed", requireAuth, async (c) => {
     data: { lastInboxViewedAt: new Date() },
   });
   return c.json({ data: { count: 0 } });
+});
+
+// POST /api/me/inbox/:messageId/read — mark a single message read
+// from the student side. Only valid for messages on bookings the
+// caller owns as the student.
+me.post("/inbox/:messageId/read", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const messageId = c.req.param("messageId");
+  const db = getDb();
+  const msg = await db.sessionMessage.findUnique({
+    where: { id: messageId },
+    include: { booking: { select: { userId: true } } },
+  });
+  if (!msg) return c.json({ error: "Not found" }, 404);
+  if (msg.booking.userId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  await db.sessionMessageRead.upsert({
+    where: { messageId_userId: { messageId, userId: user.id } },
+    update: { readAt: new Date() },
+    create: { messageId, userId: user.id },
+  });
+  return c.json({ data: { ok: true } });
+});
+
+me.delete("/inbox/:messageId/read", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const messageId = c.req.param("messageId");
+  const db = getDb();
+  await db.sessionMessageRead.deleteMany({
+    where: { messageId, userId: user.id },
+  });
+  return c.json({ data: { ok: true } });
 });
 
 export { me as meRoutes };

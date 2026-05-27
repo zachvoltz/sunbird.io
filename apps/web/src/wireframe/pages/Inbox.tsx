@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
@@ -25,28 +25,51 @@ type InboxItem = {
 
 type Filter = "all" | "unread";
 
-// Inform the server (and the sidebar badge) that the coach has opened
-// the inbox. Fires once per page mount.
-function useMarkInboxViewed() {
-  useEffect(() => {
-    apiFetch("/api/coaches/inbox-viewed", { method: "POST" })
-      .then(() => {
-        window.dispatchEvent(new Event("sunbird:inbox-viewed"));
-      })
-      .catch(() => { /* non-fatal */ });
-  }, []);
-}
-
 function useInbox() {
   const [items, setItems] = useState<InboxItem[] | undefined>();
   const [loading, setLoading] = useState(true);
-  useEffect(() => {
+
+  const refresh = useCallback(() => {
+    setLoading(true);
     apiFetch<{ data: { items: InboxItem[] } }>("/api/coaches/inbox")
       .then((r) => setItems(r.data.items))
       .catch(() => setItems([]))
       .finally(() => setLoading(false));
   }, []);
-  return { items, loading };
+  useEffect(() => { refresh(); }, [refresh]);
+
+  // Optimistic local toggle so the checkbox feels instant; the
+  // backend write is fire-and-forget but errors surface via alert.
+  const setRead = useCallback(async (id: string, read: boolean) => {
+    setItems((prev) =>
+      prev ? prev.map((it) => (it.id === id ? { ...it, unread: !read } : it)) : prev,
+    );
+    try {
+      await apiFetch(`/api/coaches/inbox/${id}/read`, {
+        method: read ? "POST" : "DELETE",
+      });
+      window.dispatchEvent(new Event("sunbird:inbox-viewed"));
+    } catch (err: any) {
+      // Roll back and tell the user.
+      setItems((prev) =>
+        prev ? prev.map((it) => (it.id === id ? { ...it, unread: read } : it)) : prev,
+      );
+      window.alert(err?.body?.error ?? "Couldn't update read state");
+    }
+  }, []);
+
+  const markAllRead = useCallback(async () => {
+    setItems((prev) => (prev ? prev.map((it) => ({ ...it, unread: false })) : prev));
+    try {
+      await apiFetch("/api/coaches/inbox-viewed", { method: "POST" });
+      window.dispatchEvent(new Event("sunbird:inbox-viewed"));
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't mark all read");
+      refresh();
+    }
+  }, [refresh]);
+
+  return { items, loading, setRead, markAllRead };
 }
 
 function relativeTime(iso: string, now: number): string {
@@ -99,7 +122,15 @@ function InboxEmpty({ what }: { what: string }) {
   );
 }
 
-function InboxRow({ item, now }: { item: InboxItem; now: number }) {
+function InboxRow({
+  item,
+  now,
+  onToggleRead,
+}: {
+  item: InboxItem;
+  now: number;
+  onToggleRead: (id: string, read: boolean) => void;
+}) {
   const studentName = item.booking.student?.name ?? item.sender.name;
   const category = item.booking.category?.title;
   const lessonAt = new Date(item.booking.startsAt).toLocaleDateString([], {
@@ -109,54 +140,77 @@ function InboxRow({ item, now }: { item: InboxItem; now: number }) {
     minute: "2-digit",
   });
   return (
-    <Link
-      to={`/coach/session/${item.bookingId}`}
+    <div
       className={"box small row gap-3" + (item.unread ? " accent" : "")}
       style={{
         borderWidth: item.unread ? 2 : 1.5,
         position: "relative",
-        textDecoration: "none",
-        color: "inherit",
         padding: 12,
       }}
     >
-      <Avatar name={studentName} size={36} />
-      <div className="grow" style={{ minWidth: 0 }}>
-        <div className="row gap-2" style={{ alignItems: "baseline" }}>
-          <span className="bold">{studentName}</span>
-          {item.unread && (
-            <span
-              className="chip tiny"
-              style={{
-                background: "var(--accent)",
-                color: "var(--paper)",
-                borderColor: "var(--accent)",
-                padding: "0 6px",
-                fontSize: 9,
-              }}
-            >
-              new
-            </span>
-          )}
-          <span className="grow" />
-          <span className="tiny muted">{relativeTime(item.createdAt, now)}</span>
+      {/* Read checkbox — wrapped so clicks don't bubble to the row link. */}
+      <label
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          flex: "0 0 auto",
+          paddingTop: 2,
+        }}
+        title={item.unread ? "mark read" : "mark unread"}
+      >
+        <input
+          type="checkbox"
+          checked={!item.unread}
+          onChange={(e) => onToggleRead(item.id, e.target.checked)}
+          style={{ width: 16, height: 16, accentColor: "var(--accent)" }}
+        />
+      </label>
+
+      <Link
+        to={`/coach/session/${item.bookingId}`}
+        className="row gap-3 grow"
+        style={{ textDecoration: "none", color: "inherit", minWidth: 0 }}
+      >
+        <Avatar name={studentName} size={36} />
+        <div className="grow" style={{ minWidth: 0 }}>
+          <div className="row gap-2" style={{ alignItems: "baseline" }}>
+            <span className="bold">{studentName}</span>
+            {item.unread && (
+              <span
+                className="chip tiny"
+                style={{
+                  background: "var(--accent)",
+                  color: "var(--paper)",
+                  borderColor: "var(--accent)",
+                  padding: "0 6px",
+                  fontSize: 9,
+                }}
+              >
+                new
+              </span>
+            )}
+            <span className="grow" />
+            <span className="tiny muted">{relativeTime(item.createdAt, now)}</span>
+          </div>
+          <div className="small" style={{ marginTop: 2, whiteSpace: "pre-wrap" }}>
+            {item.content}
+          </div>
+          <div className="tiny muted" style={{ marginTop: 4 }}>
+            {category ? `${category} · ` : ""}
+            {lessonAt}
+          </div>
         </div>
-        <div className="small" style={{ marginTop: 2, whiteSpace: "pre-wrap" }}>
-          {item.content}
-        </div>
-        <div className="tiny muted" style={{ marginTop: 4 }}>
-          {category ? `${category} · ` : ""}
-          {lessonAt}
-        </div>
-      </div>
-      <Icon name="chev" size={11} />
-    </Link>
+        <Icon name="chev" size={11} />
+      </Link>
+    </div>
   );
 }
 
 function InboxDesktop() {
-  useMarkInboxViewed();
-  const { items, loading } = useInbox();
+  const { items, loading, setRead, markAllRead } = useInbox();
   const [filter, setFilter] = useState<Filter>("all");
   const now = Date.now();
 
@@ -194,6 +248,14 @@ function InboxDesktop() {
               unread{unreadCount > 0 ? ` · ${unreadCount}` : ""}
             </span>
           </div>
+          <button
+            className="btn small ghost"
+            onClick={markAllRead}
+            disabled={unreadCount === 0}
+            title={unreadCount === 0 ? "nothing to mark" : "mark every item read"}
+          >
+            mark all read
+          </button>
         </div>
       </div>
 
@@ -212,7 +274,7 @@ function InboxDesktop() {
               </div>
             )}
             {visible.map((item) => (
-              <InboxRow key={item.id} item={item} now={now} />
+              <InboxRow key={item.id} item={item} now={now} onToggleRead={setRead} />
             ))}
           </div>
         </div>
@@ -222,9 +284,9 @@ function InboxDesktop() {
 }
 
 function InboxMobile() {
-  useMarkInboxViewed();
-  const { items, loading } = useInbox();
+  const { items, loading, setRead, markAllRead } = useInbox();
   const now = Date.now();
+  const unreadCount = (items ?? []).filter((i) => i.unread).length;
 
   return (
     <WFFrame navActive="notes">
@@ -236,6 +298,11 @@ function InboxMobile() {
         <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
       </div>
       <div className="wf-body col gap-3 scroll-y" style={{ alignItems: "stretch" }}>
+        {!loading && unreadCount > 0 && (
+          <button className="btn small ghost" onClick={markAllRead} style={{ alignSelf: "flex-end" }}>
+            mark all read
+          </button>
+        )}
         {loading && !items && (
           <div className="small muted center" style={{ padding: 20 }}>loading…</div>
         )}
@@ -245,7 +312,7 @@ function InboxMobile() {
           </div>
         )}
         {(items ?? []).map((item) => (
-          <InboxRow key={item.id} item={item} now={now} />
+          <InboxRow key={item.id} item={item} now={now} onToggleRead={setRead} />
         ))}
       </div>
     </WFFrame>

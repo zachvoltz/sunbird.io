@@ -111,9 +111,9 @@ coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (
 });
 
 // GET /api/coaches/inbox-count — number of unread incoming
-// SessionMessages for this coach. "Unread" = the message arrived after
-// the user's lastInboxViewedAt (or they've never opened the inbox).
-// Powers the badge on the coach sidebar's Inbox item.
+// SessionMessages for this coach. A message is unread when it arrived
+// after the user's lastInboxViewedAt (or never set) AND has no
+// per-item read receipt for this user. Powers the sidebar badge.
 coachRoutes.get("/inbox-count", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
   const db = getDb();
@@ -128,9 +128,48 @@ coachRoutes.get("/inbox-count", requireAuth, requireRole("COACH", "ADMIN"), asyn
       booking: bookingFilter,
       NOT: { senderId: user.id },
       ...(since ? { createdAt: { gt: since } } : {}),
+      reads: { none: { userId: user.id } },
     },
   });
   return c.json({ data: { count } });
+});
+
+// POST /api/coaches/inbox/:messageId/read — mark a single message read.
+// Upsert is idempotent; calling it on an already-read message is fine.
+coachRoutes.post("/inbox/:messageId/read", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const messageId = c.req.param("messageId");
+  const db = getDb();
+  // Verify the message exists and belongs to a booking this coach
+  // owns — otherwise we'd be writing read receipts for other coaches'
+  // inboxes via guessed IDs.
+  const msg = await db.sessionMessage.findUnique({
+    where: { id: messageId },
+    include: { booking: { select: { coachId: true } } },
+  });
+  if (!msg) return c.json({ error: "Not found" }, 404);
+  if (user.role === "COACH" && msg.booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  await db.sessionMessageRead.upsert({
+    where: { messageId_userId: { messageId, userId: user.id } },
+    update: { readAt: new Date() },
+    create: { messageId, userId: user.id },
+  });
+  return c.json({ data: { ok: true } });
+});
+
+// DELETE /api/coaches/inbox/:messageId/read — un-mark (toggle back to
+// unread). Note: the message can still be hidden from the count by an
+// older lastInboxViewedAt; this only undoes the per-item receipt.
+coachRoutes.delete("/inbox/:messageId/read", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const messageId = c.req.param("messageId");
+  const db = getDb();
+  await db.sessionMessageRead.deleteMany({
+    where: { messageId, userId: user.id },
+  });
+  return c.json({ data: { ok: true } });
 });
 
 // GET /api/coaches/inbox — list incoming SessionMessages on this
@@ -166,31 +205,40 @@ coachRoutes.get("/inbox", requireAuth, requireRole("COACH", "ADMIN"), async (c) 
           user:     { select: { id: true, name: true } },
         },
       },
+      // Just the receipt for the calling user, if any.
+      reads: {
+        where: { userId: user.id },
+        select: { readAt: true },
+      },
     },
   });
 
   return c.json({
     data: {
-      items: messages.map((m) => ({
-        id: m.id,
-        bookingId: m.bookingId,
-        content: m.content,
-        createdAt: m.createdAt.toISOString(),
-        unread: lastViewedAt ? m.createdAt > lastViewedAt : true,
-        sender: {
-          id: m.sender.id,
-          name: m.sender.name,
-          avatarUrl: m.sender.avatarUrl ?? null,
-        },
-        booking: {
-          id: m.booking.id,
-          startsAt: m.booking.startsAt.toISOString(),
-          category: m.booking.category ? { title: m.booking.category.title } : null,
-          student: m.booking.user
-            ? { id: m.booking.user.id, name: m.booking.user.name }
-            : null,
-        },
-      })),
+      items: messages.map((m) => {
+        const hasReceipt = Array.isArray(m.reads) && m.reads.length > 0;
+        const beforeViewed = lastViewedAt ? m.createdAt <= lastViewedAt : false;
+        return {
+          id: m.id,
+          bookingId: m.bookingId,
+          content: m.content,
+          createdAt: m.createdAt.toISOString(),
+          unread: !hasReceipt && !beforeViewed,
+          sender: {
+            id: m.sender.id,
+            name: m.sender.name,
+            avatarUrl: m.sender.avatarUrl ?? null,
+          },
+          booking: {
+            id: m.booking.id,
+            startsAt: m.booking.startsAt.toISOString(),
+            category: m.booking.category ? { title: m.booking.category.title } : null,
+            student: m.booking.user
+              ? { id: m.booking.user.id, name: m.booking.user.name }
+              : null,
+          },
+        };
+      }),
       lastViewedAt: lastViewedAt ? lastViewedAt.toISOString() : null,
     },
   });

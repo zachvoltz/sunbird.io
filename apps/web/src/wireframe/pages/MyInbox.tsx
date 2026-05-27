@@ -5,7 +5,7 @@
 //   - POSTs /api/me/inbox-viewed once on mount and dispatches
 //     "sunbird:inbox-viewed" so the sidebar badge clears immediately.
 
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { STFrame } from "../components/STFrame";
 import { WFFrame } from "../components/WFFrame";
@@ -14,14 +14,29 @@ import { Squiggle } from "../components/Squiggle";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { apiFetch } from "@/lib/api";
 
-function useMarkInboxViewed() {
-  useEffect(() => {
-    apiFetch("/api/me/inbox-viewed", { method: "POST" })
-      .then(() => {
-        window.dispatchEvent(new Event("sunbird:inbox-viewed"));
-      })
-      .catch(() => { /* non-fatal */ });
+// Pulls the unread count from /api/me/inbox-count and exposes a
+// markAll action — used by the "mark all read" button.
+function useUnreadCountAndMarkAll() {
+  const [count, setCount] = useState(0);
+  const refresh = useCallback(() => {
+    apiFetch<{ data: { count: number } }>("/api/me/inbox-count")
+      .then((r) => setCount(r.data.count))
+      .catch(() => { /* leave at last known */ });
   }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const markAll = useCallback(async () => {
+    setCount(0); // optimistic
+    try {
+      await apiFetch("/api/me/inbox-viewed", { method: "POST" });
+      window.dispatchEvent(new Event("sunbird:inbox-viewed"));
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't mark all read");
+      refresh();
+    }
+  }, [refresh]);
+
+  return { count, markAll };
 }
 
 function InboxEmpty() {
@@ -63,7 +78,7 @@ function InboxEmpty() {
 }
 
 function MyInboxDesktop() {
-  useMarkInboxViewed();
+  const { count, markAll } = useUnreadCountAndMarkAll();
   return (
     <STFrame side="inbox">
       <div className="dt-main-head">
@@ -74,9 +89,16 @@ function MyInboxDesktop() {
         <div className="row gap-2">
           <div className="pill-row">
             <span className="p on">all</span>
-            <span className="p">unread</span>
+            <span className="p">unread{count > 0 ? ` · ${count}` : ""}</span>
           </div>
-          <button className="btn small ghost">mark all read</button>
+          <button
+            className="btn small ghost"
+            onClick={markAll}
+            disabled={count === 0}
+            title={count === 0 ? "nothing to mark" : "mark every item read"}
+          >
+            mark all read
+          </button>
         </div>
       </div>
 
@@ -90,7 +112,7 @@ function MyInboxDesktop() {
 }
 
 function MyInboxMobile() {
-  useMarkInboxViewed();
+  const { count, markAll } = useUnreadCountAndMarkAll();
   return (
     <WFFrame navActive="notes">
       <div className="wf-header">
@@ -101,6 +123,15 @@ function MyInboxMobile() {
         <Link to="/today" className="btn icon ghost"><Icon name="back" size={14} /></Link>
       </div>
       <div className="wf-body col gap-3 scroll-y" style={{ alignItems: "stretch" }}>
+        {count > 0 && (
+          <button
+            className="btn small ghost"
+            onClick={markAll}
+            style={{ alignSelf: "flex-end" }}
+          >
+            mark all read
+          </button>
+        )}
         <div className="box dashed" style={{ paddingBottom: 24 }}>
           <InboxEmpty />
         </div>
