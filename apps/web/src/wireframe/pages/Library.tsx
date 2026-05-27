@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Icon } from "../components/Icon";
+import { Tag } from "../components/Tag";
 import { LibItem } from "../components/LibItem";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { PathsBrowsePane, PathsMobile, useCoachPaths } from "./Paths";
@@ -193,14 +194,209 @@ function ExerciseTypeFilter({
   );
 }
 
+// Inline-edit row for a library item. View mode renders like LibItem
+// but with an "edit" button; edit mode expands the row into a small
+// form with save / cancel / delete. Saves PUT, deletes DELETE; both
+// call `onChange` (typically refreshItems) so the list re-fetches.
+const editInputStyle: React.CSSProperties = {
+  fontFamily: "var(--hand)",
+  fontSize: 14,
+  padding: "4px 8px",
+  border: "1.5px solid var(--ink-faint)",
+  borderRadius: 6,
+  background: "var(--paper)",
+  color: "var(--ink)",
+  outline: "none",
+};
+
+function LibraryRow({
+  item,
+  onChange,
+}: {
+  item: LibraryItemPublic;
+  onChange: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<LibraryItemPublic>(item);
+  const [tagsInput, setTagsInput] = useState<string>(item.tags.join(", "));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Re-sync local draft if the parent's item reference changes (e.g.
+  // after refresh) — but only when we're not in the middle of an edit.
+  useEffect(() => {
+    if (!editing) {
+      setDraft(item);
+      setTagsInput(item.tags.join(", "));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item.id, item.updatedAt]);
+
+  const cancel = () => {
+    setDraft(item);
+    setTagsInput(item.tags.join(", "));
+    setError(null);
+    setEditing(false);
+  };
+
+  const save = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const tags = tagsInput
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0);
+      await apiFetch(`/api/library/${item.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          kind: draft.kind,
+          title: draft.title,
+          subtitle: draft.subtitle ?? undefined,
+          tags,
+          bpmStart: draft.bpmStart ?? undefined,
+          bpmEnd: draft.bpmEnd ?? undefined,
+          durationMin: draft.durationMin ?? undefined,
+          hasMidi: draft.hasMidi,
+        }),
+      });
+      setEditing(false);
+      onChange();
+    } catch (err: any) {
+      setError(err?.body?.error ?? "Couldn't save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const del = async () => {
+    if (!window.confirm(`Delete "${item.title}"?`)) return;
+    try {
+      await apiFetch(`/api/library/${item.id}`, { method: "DELETE" });
+      onChange();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't delete");
+    }
+  };
+
+  if (!editing) {
+    return (
+      <div className="box small mb-2">
+        <div className="row gap-3" style={{ alignItems: "center" }}>
+          <span className="drag-handle">⋮⋮</span>
+          <Icon name={KIND_ICON[item.kind]} size={16} />
+          <div className="grow" style={{ minWidth: 0 }}>
+            <div className="bold">{item.title}</div>
+            <div className="tiny muted">{formatItemSubtitle(item)}</div>
+          </div>
+          {item.tags.map((t) => <Tag key={t}>{t}</Tag>)}
+          <button className="btn small ghost" onClick={() => setEditing(true)}>edit</button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="box small mb-2" style={{ borderColor: "var(--accent)", borderWidth: 2 }}>
+      <div className="col gap-2">
+        <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+          <input
+            value={draft.title}
+            onChange={(e) => setDraft((d) => ({ ...d, title: e.target.value }))}
+            placeholder="Title"
+            style={{ ...editInputStyle, flex: "1 1 200px", minWidth: 0 }}
+          />
+          <select
+            value={draft.kind}
+            onChange={(e) => setDraft((d) => ({ ...d, kind: e.target.value as LibraryItemKind }))}
+            style={{ ...editInputStyle, flex: "0 0 auto" }}
+          >
+            <option value="warmup">warmup</option>
+            <option value="exercise">exercise</option>
+            <option value="song">song</option>
+          </select>
+        </div>
+
+        <div className="row gap-2" style={{ alignItems: "center", flexWrap: "wrap" }}>
+          <label className="tiny muted">bpm</label>
+          <input
+            type="number"
+            value={draft.bpmStart ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, bpmStart: e.target.value ? Number(e.target.value) : null }))}
+            placeholder="start"
+            style={{ ...editInputStyle, width: 80 }}
+          />
+          <span className="muted small">→</span>
+          <input
+            type="number"
+            value={draft.bpmEnd ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, bpmEnd: e.target.value ? Number(e.target.value) : null }))}
+            placeholder="end"
+            style={{ ...editInputStyle, width: 80 }}
+          />
+          <label className="tiny muted" style={{ marginLeft: 12 }}>min</label>
+          <input
+            type="number"
+            value={draft.durationMin ?? ""}
+            onChange={(e) => setDraft((d) => ({ ...d, durationMin: e.target.value ? Number(e.target.value) : null }))}
+            placeholder=""
+            style={{ ...editInputStyle, width: 70 }}
+          />
+          <label className="row gap-1 small" style={{ alignItems: "center", marginLeft: 12 }}>
+            <input
+              type="checkbox"
+              checked={draft.hasMidi}
+              onChange={(e) => setDraft((d) => ({ ...d, hasMidi: e.target.checked }))}
+            />
+            MIDI
+          </label>
+        </div>
+
+        <input
+          value={tagsInput}
+          onChange={(e) => setTagsInput(e.target.value)}
+          placeholder="tags, comma, separated"
+          style={{ ...editInputStyle, width: "100%" }}
+        />
+
+        <input
+          value={draft.subtitle ?? ""}
+          onChange={(e) => setDraft((d) => ({ ...d, subtitle: e.target.value || null }))}
+          placeholder="subtitle (optional — overrides the auto-derived line)"
+          style={{ ...editInputStyle, width: "100%" }}
+        />
+
+        {error && <div className="small" style={{ color: "var(--accent)" }}>{error}</div>}
+
+        <div className="row gap-2" style={{ alignItems: "center" }}>
+          <button className="btn small primary" onClick={save} disabled={saving || !draft.title.trim()}>
+            {saving ? "saving…" : "save"}
+          </button>
+          <button className="btn small ghost" onClick={cancel}>cancel</button>
+          <span className="grow" />
+          <button
+            className="btn small ghost"
+            onClick={del}
+            style={{ color: "var(--accent)" }}
+          >
+            delete
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ExercisesPane({
   items,
   loading,
   onCreate,
+  onChange,
 }: {
   items: LibraryItemPublic[] | undefined;
   loading: boolean;
   onCreate: () => void;
+  onChange: () => void;
 }) {
   const [kindFilter, setKindFilter] = useState<ExerciseKindFilter>("all");
 
@@ -265,13 +461,7 @@ function ExercisesPane({
             <div key={kind}>
               <div className="small muted mt-3 mb-2">{KIND_LABEL[kind]}</div>
               {list.map((it) => (
-                <LibItem
-                  key={it.id}
-                  icon={KIND_ICON[it.kind]}
-                  title={it.title}
-                  sub={formatItemSubtitle(it)}
-                  tags={it.tags}
-                />
+                <LibraryRow key={it.id} item={it} onChange={onChange} />
               ))}
             </div>
           );
@@ -356,6 +546,7 @@ function LibraryDesktop() {
               items={items}
               loading={itemsLoading}
               onCreate={handleCreateItem}
+              onChange={refreshItems}
             />
           )}
         </div>
