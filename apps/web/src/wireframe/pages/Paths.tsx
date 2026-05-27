@@ -3,8 +3,10 @@
 // Reads from the API (/api/paths) backed by the Path + PathAssignment
 // tables. Three views:
 //
-//   PathsBrowsePane   — middle column + right rail for the Library page
-//                       when the "paths" tab is active.
+//   PathsBrowsePane   — grid of path cards rendered inside the Library
+//                       page when the "paths" tab is active. Library
+//                       owns surrounding chrome (header, tabs, search);
+//                       this owns the filter strip + grid.
 //   PathEditorPage    — full page: tree editor at /coach/library/paths/:slug
 //   PathLessonDetailPage — full page: focused lesson editor at
 //                       /coach/library/paths/:slug/lessons/:lessonId
@@ -26,7 +28,6 @@ import type {
 import { apiFetch } from "@/lib/api";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
-import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
 import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
@@ -168,88 +169,118 @@ export function PathMini({ shape = "linear", h = 80 }: { shape?: PathShape; h?: 
   );
 }
 
-// ── PathsBrowsePane — middle + right column for the Library when
-// the "paths" tab is active. Library owns DTFrame + filter rail. ────
+// ── PathsBrowsePane — grid of path cards. Library owns the outer
+// chrome (header, tabs, search); this owns the status-filter strip
+// and the card grid. ───────────────────────────────────────────────
+
+type PathStatusFilter = "all" | "published" | "draft";
+
+function PathStatusBar({
+  active,
+  onChange,
+  counts,
+}: {
+  active: PathStatusFilter;
+  onChange: (s: PathStatusFilter) => void;
+  counts: { all: number; published: number; draft: number };
+}) {
+  const opts: Array<{ id: PathStatusFilter; label: string }> = [
+    { id: "all", label: "all" },
+    { id: "published", label: "published" },
+    { id: "draft", label: "draft" },
+  ];
+  return (
+    <div className="row gap-3" style={{ alignItems: "center", flexWrap: "wrap" }}>
+      <span className="small muted" style={{ letterSpacing: "0.08em" }}>STATUS</span>
+      <div className="pill-row" style={{ marginBottom: 0 }}>
+        {opts.map((o) => {
+          const n = o.id === "all" ? counts.all : counts[o.id];
+          return (
+            <span
+              key={o.id}
+              className={"p" + (active === o.id ? " on" : "")}
+              onClick={() => onChange(o.id)}
+              style={{ cursor: "pointer" }}
+            >
+              {o.label}
+              {n > 0 ? ` · ${n}` : ""}
+            </span>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 export function PathsBrowsePane({
-  activeFilters,
   paths,
   loading,
   onCreate,
 }: {
-  activeFilters?: React.ReactNode;
   paths: PathSummary[] | undefined;
   loading: boolean;
   onCreate: () => void;
 }) {
-  const studentsOnPaths = useMemo(
-    () => (paths ?? []).flatMap((p) =>
-      Array.from({ length: p.students }).map((_, i) => ({
-        pathTitle: p.title,
-        key: `${p.id}-${i}`,
-      })),
-    ),
-    [paths],
-  );
+  const [status, setStatus] = useState<PathStatusFilter>("all");
+
+  const counts = useMemo(() => {
+    const c = { all: 0, published: 0, draft: 0 };
+    for (const p of paths ?? []) {
+      c.all++;
+      if (p.status === "published" || p.status === "draft") c[p.status]++;
+    }
+    return c;
+  }, [paths]);
+
+  const visible = useMemo(() => {
+    if (!paths) return [];
+    return status === "all" ? paths : paths.filter((p) => p.status === status);
+  }, [paths, status]);
 
   return (
     <>
-      {/* paths grid (middle column) */}
-      <div className="panel" style={{ padding: "10px 14px" }}>
-        <div className="row between mb-2">
-          <div className="row gap-2">
-            {activeFilters}
-            <div className="dt-search" style={{ flex: "0 0 200px", padding: "4px 12px" }}>
-              <span>⌕</span><span>search paths…</span>
-            </div>
-          </div>
-          <div className="row gap-2">
-            <div className="pill-row">
-              <span className="p on">recent</span>
-              <span className="p">A–Z</span>
-              <span className="p">most used</span>
-            </div>
-          </div>
-        </div>
+      <PathStatusBar active={status} onChange={setStatus} counts={counts} />
 
-        <div className="panel-body scroll">
-          {loading && !paths && (
-            <div className="small muted" style={{ padding: "24px 4px" }}>loading paths…</div>
-          )}
+      <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", marginTop: 12 }}>
+        {loading && !paths && (
+          <div className="small muted" style={{ padding: "24px 4px" }}>loading paths…</div>
+        )}
 
-          <div className="paths-grid">
-            {(paths ?? []).map((p, i) => (
-              <Link
-                key={p.id}
-                to={`/coach/library/paths/${p.slug}`}
-                className={"path-card" + (p.coral ? " coral" : "")}
-                style={{ transform: `rotate(${i % 2 === 0 ? -0.3 : 0.4}deg)` }}
-              >
-                <div className="path-card-head">
-                  <div className="row gap-2" style={{ alignItems: "flex-start" }}>
-                    <span className="path-icon">⤳</span>
-                    <div className="grow">
-                      <div className="bold">{p.title}</div>
-                      {p.sub && <div className="tiny muted">{p.sub}</div>}
-                    </div>
-                    {p.status === "draft" && <Tag>draft</Tag>}
+        <div className="paths-grid">
+          {visible.map((p, i) => (
+            <Link
+              key={p.id}
+              to={`/coach/library/paths/${p.slug}`}
+              className={"path-card" + (p.coral ? " coral" : "")}
+              style={{ transform: `rotate(${i % 2 === 0 ? -0.3 : 0.4}deg)` }}
+            >
+              <div className="path-card-head">
+                <div className="row gap-2" style={{ alignItems: "flex-start" }}>
+                  <span className="path-icon">⤳</span>
+                  <div className="grow">
+                    <div className="bold">{p.title}</div>
+                    {p.sub && <div className="tiny muted">{p.sub}</div>}
                   </div>
+                  {p.status === "draft" && <Tag>draft</Tag>}
                 </div>
+              </div>
 
-                <PathMini shape={p.shape} />
+              <PathMini shape={p.shape} />
 
-                <div className="path-card-foot row gap-2 small">
-                  <Tag>{p.lessons} lesson{p.lessons === 1 ? "" : "s"}</Tag>
-                  {p.students > 0
-                    ? <Tag color="coral">{p.students} on it</Tag>
-                    : <span className="muted tiny">no students yet</span>}
-                  <span className="grow" />
-                  <span className="btn small ghost">open →</span>
-                </div>
-              </Link>
-            ))}
+              <div className="path-card-foot row gap-2 small">
+                <Tag>{p.lessons} lesson{p.lessons === 1 ? "" : "s"}</Tag>
+                {p.students > 0
+                  ? <Tag color="coral">{p.students} on it</Tag>
+                  : <span className="muted tiny">no students yet</span>}
+                <span className="grow" />
+                <span className="btn small ghost">open →</span>
+              </div>
+            </Link>
+          ))}
 
-            {/* "new path" tile */}
+          {/* "new path" tile — only on the "all" filter so the create
+              affordance doesn't drift into a filtered subset */}
+          {status === "all" && (
             <button
               className="path-card path-card--new"
               onClick={(e) => { e.preventDefault(); onCreate(); }}
@@ -264,54 +295,19 @@ export function PathsBrowsePane({
                 <span className="btn small primary mt-1">create →</span>
               </div>
             </button>
-          </div>
-
-          {!loading && paths && paths.length === 0 && (
-            <div className="small muted center" style={{ marginTop: 18 }}>
-              No paths yet — click <b>New path</b> above to start one.
-            </div>
           )}
         </div>
-      </div>
 
-      {/* right rail · explain + drag-to-assign + who's on what */}
-      <div className="panel tinted">
-        <div className="panel-head">
-          <div className="panel-title">Assign a path…</div>
-        </div>
-        <div className="panel-body scroll col gap-2">
-          <div className="dropzone">
-            <div style={{ fontSize: 16, marginBottom: 2 }}>drag a path onto a student ↓</div>
-            <div className="small muted" style={{ fontFamily: "var(--hand)" }}>they'll start at lesson 1 · you can branch later</div>
+        {!loading && paths && paths.length === 0 && (
+          <div className="small muted center" style={{ marginTop: 18 }}>
+            No paths yet — click <b>+ new path</b> above to start one.
           </div>
-
-          <div className="postit" style={{ transform: "rotate(-1.2deg)", padding: 12 }}>
-            <div className="bold small">what's a path?</div>
-            <Squiggle w={50} color="var(--ink-faint)" />
-            <div className="small" style={{ marginTop: 4, lineHeight: 1.45 }}>
-              A path is a tree of lessons. Each lesson has notes, attachments, and exercises.
-              Students walk through them at their own pace — you nudge from the side.
-            </div>
+        )}
+        {!loading && paths && paths.length > 0 && visible.length === 0 && (
+          <div className="small muted center" style={{ marginTop: 18 }}>
+            No {status} paths.
           </div>
-
-          <div className="small muted mt-2">CURRENTLY ON A PATH</div>
-          {studentsOnPaths.length === 0 ? (
-            <div className="small muted">No students assigned yet.</div>
-          ) : (
-            studentsOnPaths.slice(0, 6).map((s) => (
-              <div key={s.key} className="box small row gap-2">
-                <Avatar name={"·"} size={24} />
-                <div className="grow" style={{ minWidth: 0 }}>
-                  <div className="bold tiny" style={{ fontSize: 12 }}>—</div>
-                  <div className="tiny muted" style={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {s.pathTitle}
-                  </div>
-                </div>
-                <span className="chip tiny">·</span>
-              </div>
-            ))
-          )}
-        </div>
+        )}
       </div>
     </>
   );

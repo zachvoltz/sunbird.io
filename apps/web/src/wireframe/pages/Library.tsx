@@ -2,9 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
-import { Avatar } from "../components/Avatar";
 import { Icon } from "../components/Icon";
-import { Tag } from "../components/Tag";
 import { LibItem } from "../components/LibItem";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { PathsBrowsePane, PathsMobile, useCoachPaths } from "./Paths";
@@ -22,7 +20,7 @@ const KIND_ICON: Record<LibraryItemKind, "metro" | "note" | "mic"> = {
   song: "mic",
 };
 
-// Render the booking metadata under each item the same way the design
+// Render the item metadata under each row the same way the design
 // mocked it: "<kind> · <bpm range> · <duration> · <MIDI?>".
 function formatItemSubtitle(it: LibraryItemPublic): string {
   if (it.subtitle && it.subtitle.trim().length > 0) return it.subtitle;
@@ -73,58 +71,6 @@ async function promptCreateLibraryItem(): Promise<LibraryItemPublic | null> {
   }
 }
 
-type LibTab = "exercises" | "paths";
-
-function useLibTab(): [LibTab, (t: LibTab) => void] {
-  const [params, setParams] = useSearchParams();
-  const fromUrl = params.get("tab");
-  const initial: LibTab = fromUrl === "paths" ? "paths" : "exercises";
-  const [tab, setTab] = useState<LibTab>(initial);
-  const update = (t: LibTab) => {
-    setTab(t);
-    const next = new URLSearchParams(params);
-    if (t === "paths") next.set("tab", "paths");
-    else next.delete("tab");
-    setParams(next, { replace: true });
-  };
-  return [tab, update];
-}
-
-// Pill toggle reused in both the filter rail's VIEW section and the
-// middle-column header so the active subview is unambiguous.
-function TabPills({
-  tab,
-  onChange,
-  itemCount,
-  pathCount,
-}: {
-  tab: LibTab;
-  onChange: (t: LibTab) => void;
-  itemCount: number;
-  pathCount: number;
-}) {
-  return (
-    <div className="pill-row" style={{ marginBottom: 0 }}>
-      <span
-        className={"p" + (tab === "exercises" ? " on" : "")}
-        onClick={() => onChange("exercises")}
-        style={{ cursor: "pointer" }}
-      >
-        items · {itemCount}
-      </span>
-      <span
-        className={"p" + (tab === "paths" ? " on" : "")}
-        onClick={() => onChange("paths")}
-        style={{ cursor: "pointer" }}
-      >
-        paths · {pathCount}
-      </span>
-      <span className="p muted" style={{ opacity: 0.6 }}>tags</span>
-      <span className="p muted" style={{ opacity: 0.6 }}>shared</span>
-    </div>
-  );
-}
-
 async function promptCreatePath(): Promise<string | null> {
   const title = window.prompt("Name this path:")?.trim();
   if (!title) return null;
@@ -156,70 +102,94 @@ async function promptCreatePath(): Promise<string | null> {
   }
 }
 
-function ExercisesFilterRail({ items }: { items: LibraryItemPublic[] | undefined }) {
-  const counts = useMemo(() => {
-    const c = { all: 0, warmup: 0, exercise: 0, song: 0 };
-    for (const it of items ?? []) {
-      c.all++;
-      if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") c[it.kind]++;
-    }
-    return c;
-  }, [items]);
+type LibTab = "exercises" | "paths";
+
+function useLibTab(): [LibTab, (t: LibTab) => void] {
+  const [params, setParams] = useSearchParams();
+  const fromUrl = params.get("tab");
+  const initial: LibTab = fromUrl === "paths" ? "paths" : "exercises";
+  const [tab, setTab] = useState<LibTab>(initial);
+  const update = (t: LibTab) => {
+    setTab(t);
+    const next = new URLSearchParams(params);
+    if (t === "paths") next.set("tab", "paths");
+    else next.delete("tab");
+    setParams(next, { replace: true });
+  };
+  return [tab, update];
+}
+
+// Top-level tab pills (items vs paths) — sits in the panel header.
+function TabPills({
+  tab,
+  onChange,
+  itemCount,
+  pathCount,
+}: {
+  tab: LibTab;
+  onChange: (t: LibTab) => void;
+  itemCount: number;
+  pathCount: number;
+}) {
   return (
-    <>
-      <div className="small muted mb-2">TYPE</div>
-      <div className="col gap-1 small">
-        <div className="row gap-2"><div className="checkbox done" style={{ width: 16, height: 16 }} /> all <span className="muted" style={{ marginLeft: "auto" }}>{counts.all}</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> warmups <span className="muted" style={{ marginLeft: "auto" }}>{counts.warmup}</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> exercises <span className="muted" style={{ marginLeft: "auto" }}>{counts.exercise}</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 16, height: 16 }} /> songs <span className="muted" style={{ marginLeft: "auto" }}>{counts.song}</span></div>
-      </div>
-
-      <div className="small muted mt-3 mb-2">FOR</div>
-      <div className="col gap-1 small">
-        <div>♪ beginner · 14</div>
-        <div>♪ intermediate · 20</div>
-        <div>♪ advanced · 8</div>
-      </div>
-
-      <div className="small muted mt-3 mb-2">TAGS</div>
-      <div className="row gap-1" style={{ flexWrap: "wrap" }}>
-        <Tag>scales</Tag><Tag>finger ind.</Tag><Tag color="coral">phrasing</Tag>
-        <Tag>sight-read</Tag><Tag>dynamics</Tag><Tag>technique</Tag>
-        <Tag color="yellow">recital</Tag>
-      </div>
-
-      <div className="hr-hand" />
-      <div className="small muted mb-1">SHARED WITH YOU</div>
-      <div className="small">· M. Ortega · 6</div>
-      <div className="small">· Suzuki packet · 11</div>
-    </>
+    <div className="pill-row" style={{ marginBottom: 0 }}>
+      <span
+        className={"p" + (tab === "exercises" ? " on" : "")}
+        onClick={() => onChange("exercises")}
+        style={{ cursor: "pointer" }}
+      >
+        items · {itemCount}
+      </span>
+      <span
+        className={"p" + (tab === "paths" ? " on" : "")}
+        onClick={() => onChange("paths")}
+        style={{ cursor: "pointer" }}
+      >
+        paths · {pathCount}
+      </span>
+    </div>
   );
 }
 
-function PathsFilterRail() {
+// Horizontal type/kind filter strip — sits above the list. Wired to
+// real filtering so the chips do something rather than just decorate.
+type ExerciseKindFilter = LibraryItemKind | "all";
+
+function ExerciseTypeFilter({
+  active,
+  onChange,
+  counts,
+}: {
+  active: ExerciseKindFilter;
+  onChange: (k: ExerciseKindFilter) => void;
+  counts: { all: number; warmup: number; exercise: number; song: number };
+}) {
+  const opts: Array<{ id: ExerciseKindFilter; label: string }> = [
+    { id: "all", label: "all" },
+    { id: "warmup", label: "warmups" },
+    { id: "exercise", label: "exercises" },
+    { id: "song", label: "songs" },
+  ];
   return (
-    <>
-      <div className="small muted mb-2">STATUS</div>
-      <div className="col gap-1 small">
-        <div className="row gap-2"><div className="checkbox done" style={{ width: 14, height: 14 }} /> all</div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 14, height: 14 }} /> published <span className="muted" style={{ marginLeft: "auto" }}>4</span></div>
-        <div className="row gap-2"><div className="checkbox" style={{ width: 14, height: 14 }} /> draft <span className="muted" style={{ marginLeft: "auto" }}>2</span></div>
+    <div className="row gap-3" style={{ alignItems: "center", flexWrap: "wrap" }}>
+      <span className="small muted" style={{ letterSpacing: "0.08em" }}>TYPE</span>
+      <div className="pill-row" style={{ marginBottom: 0 }}>
+        {opts.map((o) => {
+          const n = o.id === "all" ? counts.all : counts[o.id];
+          return (
+            <span
+              key={o.id}
+              className={"p" + (active === o.id ? " on" : "")}
+              onClick={() => onChange(o.id)}
+              style={{ cursor: "pointer" }}
+            >
+              {o.label}
+              {n > 0 ? ` · ${n}` : ""}
+            </span>
+          );
+        })}
       </div>
-
-      <div className="small muted mt-3 mb-2">FOR</div>
-      <div className="col gap-1 small">
-        <div>♪ piano · 4</div>
-        <div>♪ voice · 1</div>
-        <div>♪ any · 1</div>
-      </div>
-
-      <div className="hr-hand" />
-      <div className="small muted mb-1">TEMPLATES</div>
-      <div className="small">· Suzuki bk 1</div>
-      <div className="small">· Bastien primer</div>
-      <div className="small">· Voice · sing speech</div>
-    </>
+    </div>
   );
 }
 
@@ -232,117 +202,80 @@ function ExercisesPane({
   loading: boolean;
   onCreate: () => void;
 }) {
-  // Group by kind so each section renders in the expected order.
+  const [kindFilter, setKindFilter] = useState<ExerciseKindFilter>("all");
+
+  const counts = useMemo(() => {
+    const c = { all: 0, warmup: 0, exercise: 0, song: 0 };
+    for (const it of items ?? []) {
+      c.all++;
+      if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") c[it.kind]++;
+    }
+    return c;
+  }, [items]);
+
+  // Group by kind so each section renders in the expected order. The
+  // kindFilter narrows which sections are shown.
   const grouped = useMemo(() => {
     const map: Record<LibraryItemKind, LibraryItemPublic[]> = {
       warmup: [], exercise: [], song: [],
     };
     for (const it of items ?? []) {
+      if (kindFilter !== "all" && it.kind !== kindFilter) continue;
       if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") {
         map[it.kind].push(it);
       }
     }
     return map;
-  }, [items]);
+  }, [items, kindFilter]);
 
+  const visibleCount = grouped.warmup.length + grouped.exercise.length + grouped.song.length;
   const total = items?.length ?? 0;
 
   return (
     <>
-      {/* item grid */}
-      <div className="panel" style={{ padding: "10px 14px" }}>
-        <div className="row between mb-2">
-          <div className="row gap-2">
-            <div className="dt-search" style={{ flex: "0 0 220px", padding: "4px 12px" }}>
-              <span>⌕</span><span>search library…</span>
+      <ExerciseTypeFilter active={kindFilter} onChange={setKindFilter} counts={counts} />
+
+      <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", marginTop: 12 }}>
+        {loading && !items && (
+          <div className="small muted" style={{ padding: "20px 4px" }}>loading library…</div>
+        )}
+
+        {!loading && total === 0 && (
+          <div className="box dashed" style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-soft)" }}>
+            <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
+              Empty library.
             </div>
-            <div className="pill-row">
-              <span className="p on">recent</span>
-              <span className="p">A–Z</span>
-              <span className="p">most-used</span>
+            <div className="small muted mt-2 mb-3">
+              Add a warmup, exercise, or song to get started.
             </div>
+            <button className="btn primary" onClick={onCreate}>＋ add an item</button>
           </div>
-          <div className="row gap-2">
-            <button className="btn small ghost" onClick={onCreate}>＋ quick add</button>
-            <span className="tiny muted">{total} item{total === 1 ? "" : "s"}</span>
+        )}
+
+        {!loading && total > 0 && visibleCount === 0 && (
+          <div className="small muted center" style={{ padding: "20px 4px" }}>
+            No {kindFilter === "all" ? "items" : kindFilter + "s"} match this filter.
           </div>
-        </div>
+        )}
 
-        <div className="panel-body scroll">
-          {loading && !items && (
-            <div className="small muted" style={{ padding: "20px 4px" }}>loading library…</div>
-          )}
-
-          {!loading && total === 0 && (
-            <div className="box dashed" style={{ textAlign: "center", padding: "32px 16px", color: "var(--ink-soft)" }}>
-              <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
-                Empty library.
-              </div>
-              <div className="small muted mt-2 mb-3">
-                Add a warmup, exercise, or song to get started.
-              </div>
-              <button className="btn primary" onClick={onCreate}>＋ add an item</button>
+        {(["warmup", "exercise", "song"] as LibraryItemKind[]).map((kind) => {
+          const list = grouped[kind];
+          if (list.length === 0) return null;
+          return (
+            <div key={kind}>
+              <div className="small muted mt-3 mb-2">{KIND_LABEL[kind]}</div>
+              {list.map((it) => (
+                <LibItem
+                  key={it.id}
+                  icon={KIND_ICON[it.kind]}
+                  title={it.title}
+                  sub={formatItemSubtitle(it)}
+                  tags={it.tags}
+                />
+              ))}
             </div>
-          )}
-
-          {(["warmup", "exercise", "song"] as LibraryItemKind[]).map((kind) => {
-            const list = grouped[kind];
-            if (list.length === 0) return null;
-            return (
-              <div key={kind}>
-                <div className="small muted mt-3 mb-2">{KIND_LABEL[kind]}</div>
-                {list.map((it) => (
-                  <LibItem
-                    key={it.id}
-                    icon={KIND_ICON[it.kind]}
-                    title={it.title}
-                    sub={formatItemSubtitle(it)}
-                    tags={it.tags}
-                  />
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* assign-to rail */}
-      <div className="panel tinted">
-        <div className="panel-head">
-          <div className="panel-title">Assign to…</div>
-        </div>
-        <div className="panel-body scroll col gap-2">
-          <div className="small muted">QUICK · drag here</div>
-          <div className="dropzone">
-            <div style={{ fontSize: 18, marginBottom: 4 }}>drop on a student's week ↓</div>
-            <div className="small muted" style={{ fontFamily: "var(--hand)" }}>or pick from list</div>
-          </div>
-
-          {[
-            { n: "Maya R.", when: "this week", drop: true },
-            { n: "Theo P.", when: "this week" },
-            { n: "Lina S.", when: "next week" },
-            { n: "Jonas K.", when: "this week" },
-            { n: "Sam W.", when: "next week" },
-            { n: "Ana B.", when: "next week" },
-          ].map((s) => (
-            <div
-              key={s.n}
-              className={"box small row gap-2" + (s.drop ? " accent" : "")}
-              style={{ borderWidth: s.drop ? 2 : 1.5, position: "relative" }}
-            >
-              <Avatar name={s.n} size={26} />
-              <div className="grow">
-                <div className="bold small">{s.n}</div>
-                <div className="tiny muted">{s.when}</div>
-              </div>
-              {s.drop && <span className="chip tiny accent">drop ↓</span>}
-            </div>
-          ))}
-
-          <div className="hr-hand" />
-          <button className="btn small ghost">＋ multi-select students</button>
-        </div>
+          );
+        })}
       </div>
     </>
   );
@@ -371,8 +304,6 @@ function LibraryDesktop() {
     if (created) refreshItems();
   };
 
-  const handleCreate = isPaths ? handleCreatePath : handleCreateItem;
-
   return (
     <DTFrame side="library">
       <div className="dt-main-head">
@@ -380,62 +311,42 @@ function LibraryDesktop() {
           <h2 className="dt-title">Library</h2>
           <div className="dt-sub">
             {isPaths
-              ? "your collection — items + paths · drag onto a student's week"
-              : "42 items · your collection · drag onto a student's week →"}
+              ? "your paths — drag onto a student's week"
+              : "your warmups, exercises, and songs"}
           </div>
         </div>
         <div className="row gap-2">
-          <button className="btn small ghost">import MIDI / PDF</button>
           {isPaths ? (
-            <button className="btn small primary" onClick={handleCreate}>＋ new path</button>
+            <button className="btn small primary" onClick={handleCreatePath}>＋ new path</button>
           ) : (
-            <Link to="/coach/midi/capture" className="btn small primary">＋ record new</Link>
+            <>
+              <button className="btn small ghost" onClick={handleCreateItem}>＋ quick add</button>
+              <Link to="/coach/midi/capture" className="btn small primary">＋ record new</Link>
+            </>
           )}
         </div>
       </div>
 
       <div className="dt-main-body">
-        <div className="dt-cols" style={{ gridTemplateColumns: "180px 1fr 320px", height: "100%", gap: 14 }}>
-          {/* filter rail — VIEW pill toggle on top, then context-specific filters */}
-          <div className="panel" style={{ padding: "12px 10px" }}>
-            <div className="small muted mb-2">VIEW</div>
-            <div className="col gap-1 small mb-2">
-              <div
-                className={"row gap-2"}
-                style={{
-                  cursor: "pointer",
-                  padding: "1px 2px",
-                  borderRadius: 3,
-                  background: tab === "exercises" ? "var(--highlight)" : undefined,
-                }}
-                onClick={() => setTab("exercises")}
-              >
-                <span style={{ width: 14 }}>{tab === "exercises" ? "▸" : "·"}</span>
-                <b style={{ fontWeight: tab === "exercises" ? 700 : 500 }}>items</b>
-                <span className="muted" style={{ marginLeft: "auto" }}>42</span>
+        <div className="panel" style={{ height: "100%", padding: "12px 16px" }}>
+          {/* Top header row: tab pills + search + sort */}
+          <div className="row between mb-3" style={{ flexWrap: "wrap", gap: 12 }}>
+            <TabPills tab={tab} onChange={setTab} itemCount={itemCount} pathCount={pathCount} />
+            <div className="row gap-2">
+              <div className="dt-search" style={{ flex: "0 0 220px", padding: "4px 12px" }}>
+                <span>⌕</span>
+                <span>search {isPaths ? "paths" : "library"}…</span>
               </div>
-              <div
-                className="row gap-2"
-                style={{
-                  cursor: "pointer",
-                  padding: "1px 2px",
-                  borderRadius: 3,
-                  background: tab === "paths" ? "var(--highlight)" : undefined,
-                }}
-                onClick={() => setTab("paths")}
-              >
-                <span style={{ width: 14 }}>{tab === "paths" ? "▸" : "·"}</span>
-                <b style={{ fontWeight: tab === "paths" ? 700 : 500 }}>paths</b>
-                <span className="muted" style={{ marginLeft: "auto" }}>{pathCount}</span>
+              <div className="pill-row">
+                <span className="p on">recent</span>
+                <span className="p">A–Z</span>
+                <span className="p">most-used</span>
               </div>
             </div>
-
-            {isPaths ? <PathsFilterRail /> : <ExercisesFilterRail items={items} />}
           </div>
 
           {isPaths ? (
             <PathsBrowsePane
-              activeFilters={<TabPills tab={tab} onChange={setTab} itemCount={itemCount} pathCount={pathCount} />}
               paths={paths}
               loading={pathsLoading}
               onCreate={handleCreatePath}
