@@ -248,7 +248,7 @@ export function Workshops() {
             Workshops
           </p>
           <h1 className="font-display text-4xl md:text-6xl font-bold mb-6 leading-tight">
-            A month at a time
+            What can you discover in a month?
           </h1>
           <p className="text-lg text-text-secondary max-w-xl leading-relaxed">
             Each workshop is a four-week arc — a daily practice, weekly sessions,
