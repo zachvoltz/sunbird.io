@@ -56,12 +56,8 @@ function useCoachPath(slug: string | undefined) {
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  useEffect(() => {
-    if (!slug) {
-      setLoading(false);
-      setNotFound(true);
-      return;
-    }
+  const refresh = useCallback(() => {
+    if (!slug) return;
     setLoading(true);
     setNotFound(false);
     apiFetch<{ data: PathDetail }>(`/api/paths/${slug}`)
@@ -73,7 +69,25 @@ function useCoachPath(slug: string | undefined) {
       .finally(() => setLoading(false));
   }, [slug]);
 
-  return { path, loading, notFound };
+  useEffect(() => {
+    if (!slug) {
+      setLoading(false);
+      setNotFound(true);
+      return;
+    }
+    refresh();
+  }, [slug, refresh]);
+
+  return { path, loading, notFound, refresh };
+}
+
+// Pick a fresh `n{N}` id that isn't already used in the node list. We
+// keep the sequential pattern so seed data + new lessons read the same.
+function nextNodeId(existing: PathLessonNode[]): string {
+  const ids = new Set(existing.map((n) => n.id));
+  let i = existing.length + 1;
+  while (ids.has(`n${i}`)) i++;
+  return `n${i}`;
 }
 
 // Minimal create flow — uses prompt() for now so we ship without a
@@ -466,7 +480,7 @@ function findCurrentLessonId(nodes: PathLessonNode[]): string | undefined {
 export function PathEditorPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
-  const { path, loading, notFound } = useCoachPath(slug);
+  const { path, loading, notFound, refresh } = useCoachPath(slug);
   const { paths } = useCoachPaths();
 
   const selected = useMemo(
@@ -474,6 +488,35 @@ export function PathEditorPage() {
     [path],
   );
   const selectedNode = path?.nodes.find((n) => n.id === selected);
+
+  const addLesson = useCallback(async () => {
+    if (!path) return;
+    const title = window.prompt("Lesson title:")?.trim();
+    if (!title) return;
+    const id = nextNodeId(path.nodes);
+    const lastNode = path.nodes[path.nodes.length - 1];
+    const newNode: PathLessonNode = {
+      id,
+      col: lastNode ? lastNode.col : 1,
+      row: lastNode ? lastNode.row + 1 : 0,
+      title,
+      titleB: "",
+      meta: "",
+    };
+    const nextNodes = [...path.nodes, newNode];
+    const nextEdges: PathEdge[] = lastNode
+      ? [...path.edges, [lastNode.id, id]]
+      : path.edges;
+    try {
+      await apiFetch(`/api/paths/${path.slug}`, {
+        method: "PUT",
+        body: JSON.stringify({ nodes: nextNodes, edges: nextEdges }),
+      });
+      refresh();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't add lesson.");
+    }
+  }, [path, refresh]);
 
   if (notFound) {
     return (
@@ -528,7 +571,7 @@ export function PathEditorPage() {
         <div className="row gap-2">
           <button className="btn small ghost">duplicate</button>
           <button className="btn small ghost">preview as student</button>
-          <button className="btn small primary">＋ add lesson</button>
+          <button className="btn small primary" onClick={addLesson}>＋ add lesson</button>
         </div>
       </div>
 
@@ -612,9 +655,12 @@ export function PathEditorPage() {
                     <div className="wf-scrawl bold" style={{ fontSize: 22, color: "var(--ink)" }}>
                       Empty path.
                     </div>
-                    <div className="small muted mt-2">
-                      Click <b>＋ add lesson</b> above to drop in your first node.
+                    <div className="small muted mt-2 mb-3">
+                      No lessons yet — drop in your first one.
                     </div>
+                    <button className="btn primary" onClick={addLesson}>
+                      ＋ add lesson
+                    </button>
                   </div>
                 ) : (
                   <PathTreeSVG
@@ -650,8 +696,13 @@ export function PathEditorPage() {
             </div>
             <div className="panel-body scroll col gap-3">
               {!selectedNode ? (
-                <div className="small muted">
-                  This path has no lessons yet. Add one above to get started.
+                <div className="col gap-3">
+                  <div className="small muted">
+                    This path has no lessons yet.
+                  </div>
+                  <button className="btn small primary" onClick={addLesson} style={{ alignSelf: "flex-start" }}>
+                    ＋ add lesson
+                  </button>
                 </div>
               ) : (
                 <>
