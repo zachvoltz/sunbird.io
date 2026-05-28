@@ -56,6 +56,14 @@ function studentIdSlug(name: string, fallback: string): string {
   return slug || fallback;
 }
 
+// Small per-card tilt for the .box.wobble cards. Alternates direction
+// and uses a couple of magnitudes so a column doesn't look like a
+// perfectly-spaced fan. Snaps to 0 on hover via CSS.
+function wobbleRotation(i: number): string {
+  const angles = [-0.4, 0.3, -0.25, 0.45];
+  return `rotate(${angles[i % angles.length]}deg)`;
+}
+
 function RosterDesktop({
   bookings,
   students,
@@ -135,7 +143,7 @@ function RosterDesktop({
                 </div>
               ) : (
                 todayBookings.map((b, i) => (
-                  <TodayBookingCard key={b.id} booking={b} prominent={i === 0} now={now} />
+                  <TodayBookingCard key={b.id} booking={b} prominent={i === 0} now={now} index={i} />
                 ))
               )}
             </div>
@@ -189,23 +197,23 @@ function NeedsYouPanel({
           </div>
         )}
 
-        {takes.map((t) => (
-          <UnreviewedTakeCard key={t.take.id} item={t} />
+        {takes.map((t, i) => (
+          <UnreviewedTakeCard key={t.take.id} item={t} index={i} />
         ))}
 
-        {missingNotes.map((m) => (
-          <MissingNotesCard key={m.booking.id} item={m} />
+        {missingNotes.map((m, i) => (
+          <MissingNotesCard key={m.booking.id} item={m} index={takes.length + i} />
         ))}
 
-        {planGaps.map((g) => (
-          <PlanGapCard key={g.student.id} item={g} now={now} />
+        {planGaps.map((g, i) => (
+          <PlanGapCard key={g.student.id} item={g} now={now} index={takes.length + missingNotes.length + i} />
         ))}
       </div>
     </div>
   );
 }
 
-function UnreviewedTakeCard({ item }: { item: UnreviewedTakeItem }) {
+function UnreviewedTakeCard({ item, index }: { item: UnreviewedTakeItem; index: number }) {
   const t = item.take;
   const heights = waveHeights(t.id.charCodeAt(0) + t.id.length, 28);
   const ageLabel =
@@ -216,7 +224,7 @@ function UnreviewedTakeCard({ item }: { item: UnreviewedTakeItem }) {
       : `${Math.floor(item.ageHours / 24)}d ago`;
   const dur = `${Math.floor(t.durationSec / 60)}:${String(t.durationSec % 60).padStart(2, "0")}`;
   return (
-    <div className="box accent">
+    <div className="box accent wobble" style={{ transform: wobbleRotation(index) }}>
       <div className="row between">
         <div className="row gap-2">
           <Avatar name={item.student.name} size={32} />
@@ -246,14 +254,14 @@ function UnreviewedTakeCard({ item }: { item: UnreviewedTakeItem }) {
   );
 }
 
-function MissingNotesCard({ item }: { item: MissingNotesItem }) {
+function MissingNotesCard({ item, index }: { item: MissingNotesItem; index: number }) {
   const b = item.booking;
   const name = b.user?.name ?? "Student";
   const slug = b.user?.id ?? b.id;
   const ageLabel =
     item.daysAgo === 0 ? "today" : item.daysAgo === 1 ? "yesterday" : `${item.daysAgo}d ago`;
   return (
-    <div className="box">
+    <div className="box wobble" style={{ transform: wobbleRotation(index) }}>
       <div className="row between">
         <div className="row gap-2">
           <Avatar name={name} size={32} />
@@ -270,12 +278,12 @@ function MissingNotesCard({ item }: { item: MissingNotesItem }) {
   );
 }
 
-function PlanGapCard({ item, now }: { item: PlanGapItem; now: Date }) {
+function PlanGapCard({ item, now, index }: { item: PlanGapItem; now: Date; index: number }) {
   const daysSince = item.lastBookingAt
     ? Math.max(0, Math.floor((now.getTime() - new Date(item.lastBookingAt).getTime()) / 86_400_000))
     : null;
   return (
-    <div className="box dashed">
+    <div className="box dashed wobble" style={{ transform: wobbleRotation(index) }}>
       <div className="row gap-2">
         <Avatar name={item.student.name} size={32} />
         <div className="grow">
@@ -439,10 +447,12 @@ function TodayBookingCard({
   booking,
   prominent,
   now,
+  index,
 }: {
   booking: BookingPublic;
   prominent: boolean;
   now: Date;
+  index: number;
 }) {
   const name = booking.user?.name ?? "Student";
   const slug = booking.user?.id ?? studentIdSlug(name, booking.id);
@@ -457,7 +467,10 @@ function TodayBookingCard({
   const cornerLabel = isLive ? "live now" : relativeFromNow(booking.startsAt, now);
 
   return (
-    <div className={prominent ? "box thick" : "box"} style={{ position: "relative" }}>
+    <div
+      className={(prominent ? "box thick wobble" : "box wobble")}
+      style={{ position: "relative", transform: wobbleRotation(index) }}
+    >
       <div className="corner">{prominent ? cornerLabel : startTime}</div>
       <div className="row gap-3">
         <Avatar name={name} size={prominent ? 46 : 40} />

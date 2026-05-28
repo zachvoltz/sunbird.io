@@ -137,6 +137,17 @@ html[data-theme="dark"] .wireframe-root .onb-success {
 .wireframe-root .box.filled { background: var(--paper-2); }
 .wireframe-root .box.accent { border-color: var(--accent); }
 .wireframe-root .box.thick { border-width: 2.5px; }
+/* Hand-drawn wobble — small per-card rotation set inline on the call
+   site, snaps straight + lifts on hover (matches .path-card). Use on
+   list-style cards to give them tactile feedback. */
+.wireframe-root .box.wobble {
+  box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.08);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.wireframe-root .box.wobble:hover {
+  transform: rotate(0) translateY(-2px) !important;
+  box-shadow: 3px 3px 0 rgba(0, 0, 0, 0.14);
+}
 
 /* ── buttons ───────────────────────────────────────────── */
 .wireframe-root .btn {
@@ -592,6 +603,12 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
 .wireframe-root .dt .panel,
 .wireframe-root .dt .box { border: 0; }
 .wireframe-root .dt .box { box-shadow: 1.5px 1.5px 0 rgba(0,0,0,0.08); }
+/* Wobble cards opt back into the hand-drawn border (the dashboard
+   "material" rule above strips it from all .box elements inside .dt). */
+.wireframe-root .dt .box.wobble { border: 1.5px solid var(--ink); }
+.wireframe-root .dt .box.wobble.thick { border-width: 2.5px; }
+.wireframe-root .dt .box.wobble.accent { border-color: var(--accent); }
+.wireframe-root .dt .box.wobble.dashed { border-style: dashed; }
 
 /* ── inbox: email-style flat list ──────────────────────── */
 .wireframe-root .inbox-list { display: flex; flex-direction: column; }
