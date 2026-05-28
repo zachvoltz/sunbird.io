@@ -565,5 +565,31 @@ export interface StudentDetailPublic {
   latestNoteReadCount: number;
   latestLessonSummary: LessonSummaryPublic | null;
   latestNoteVoiceMemos: NoteVoiceMemoPublic[];
+  routine: RoutinePublic;
+}
+
+// ── Current Routine ──
+//
+// Ordered list of exercises the coach has set for the student. Stored
+// on the student User row as a JSON blob (see User.currentRoutine) so
+// reorders/edits are atomic. Items are snapshots — copying title/tempo
+// at the time the coach drops them from the library — so a renamed or
+// deleted library item doesn't corrupt the routine.
+
+export interface RoutineItem {
+  id: string;
+  libraryItemId: string | null;
+  kind: LibraryItemKind;
+  title: string;
+  bars: string | null;
+  bpmStart: number | null;
+  bpmEnd: number | null;
+  durationMin: number | null;
+  note: string | null;
+}
+
+export interface RoutinePublic {
+  items: RoutineItem[];
+  updatedAt: string | null;
 }
 

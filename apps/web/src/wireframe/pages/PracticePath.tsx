@@ -1,5 +1,5 @@
 import { Link, useSearchParams } from "react-router-dom";
-import type { AssignmentPublic, StudentDetailPublic } from "@sunbird/shared";
+import type { AssignmentPublic, LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
@@ -22,12 +22,20 @@ const PATH_SLOTS: Array<{ x: number; y: number }> = [
 
 type Stop = {
   label: string;
+  /** Routine-driven stops carry a routineItemId; assignment-driven ones carry assignmentId. */
+  routineItemId?: string;
   assignmentId?: string;
   type?: AssignmentPublic["type"];
   status?: AssignmentPublic["status"];
   bars?: string | null;
   tempo?: string | null;
   durationMin?: number | null;
+};
+
+const KIND_TO_ASSIGNMENT_TYPE: Record<LibraryItemKind, AssignmentPublic["type"]> = {
+  warmup: "WARMUP",
+  exercise: "EXERCISE",
+  song: "SONG",
 };
 
 function PathSvg({
@@ -182,20 +190,24 @@ function thisWeeksAssignments(detail: StudentDetailPublic | undefined): Assignme
     .sort((a, b) => a.sortOrder - b.sortOrder);
 }
 
-function buildStops(detail: StudentDetailPublic | undefined): Stop[] {
-  const weekly = thisWeeksAssignments(detail);
-  if (weekly.length === 0) {
-    // Fallback to the design's labels so a fresh student still sees the shape.
-    return [
-      { label: "Breathing" },
-      { label: "C scale" },
-      { label: "Hanon 4" },
-      { label: "Arpeggios" },
-      { label: "Sight read" },
-      { label: "River Flows" },
-    ];
-  }
-  return weekly.slice(0, PATH_SLOTS.length).map((a) => ({
+function routineStop(it: RoutineItem): Stop {
+  return {
+    label: it.title.length > 18 ? it.title.slice(0, 16) + "…" : it.title,
+    routineItemId: it.id,
+    type: KIND_TO_ASSIGNMENT_TYPE[it.kind],
+    bars: it.bars,
+    tempo:
+      it.bpmStart && it.bpmEnd && it.bpmStart !== it.bpmEnd
+        ? `${it.bpmStart} → ${it.bpmEnd} bpm`
+        : it.bpmStart
+        ? `${it.bpmStart} bpm`
+        : null,
+    durationMin: it.durationMin,
+  };
+}
+
+function assignmentStop(a: AssignmentPublic): Stop {
+  return {
     label: a.title.length > 18 ? a.title.slice(0, 16) + "…" : a.title,
     assignmentId: a.id,
     type: a.type,
@@ -208,7 +220,30 @@ function buildStops(detail: StudentDetailPublic | undefined): Stop[] {
         ? `${a.tempoBpmStart} bpm`
         : null,
     durationMin: a.durationMin,
-  }));
+  };
+}
+
+function buildStops(detail: StudentDetailPublic | undefined): Stop[] {
+  // Prefer the coach-set routine — it's the source of truth for what
+  // the student should practice today. Fall back to this-week's
+  // assignments (legacy) and then the design's placeholder labels so a
+  // brand-new student still sees the shape of the page.
+  const routine = detail?.routine?.items ?? [];
+  if (routine.length > 0) {
+    return routine.slice(0, PATH_SLOTS.length).map(routineStop);
+  }
+  const weekly = thisWeeksAssignments(detail);
+  if (weekly.length > 0) {
+    return weekly.slice(0, PATH_SLOTS.length).map(assignmentStop);
+  }
+  return [
+    { label: "Breathing" },
+    { label: "C scale" },
+    { label: "Hanon 4" },
+    { label: "Arpeggios" },
+    { label: "Sight read" },
+    { label: "River Flows" },
+  ];
 }
 
 function deriveProgress(stops: Stop[]): { progress: number; current: number; completedAll: boolean } {

@@ -4,13 +4,16 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
 import { DTFrame } from "@/wireframe/components/DTFrame";
+import { CurrentRoutine } from "@/components/coach/CurrentRoutine";
 import type {
   BookingPublic,
   NoteSections,
+  RoutinePublic,
   SessionMessagePublic,
   SessionResourcePublic,
   SessionResourceType,
   SkillTreeFull,
+  StudentDetailPublic,
   StudentProgressPublic,
 } from "@sunbird/shared";
 
@@ -119,7 +122,7 @@ type Phase = "upcoming" | "live" | "next";
 const PHASES: readonly Phase[] = ["upcoming", "live", "next"] as const;
 
 const PHASE_LABELS: Record<Phase, string> = {
-  upcoming: "Upcoming",
+  upcoming: "Plan",
   live: "Live",
   next: "Next",
 };
@@ -205,6 +208,11 @@ export function CoachSession() {
   const [curriculum, setCurriculum] = useState<SkillTreeFull | null>(null);
   const [progress, setProgress] = useState<StudentProgressPublic[]>([]);
 
+  // Current routine — fetched after the booking loads so we know the
+  // student. Plan-tab read-only; Next-tab editable (coach updates it
+  // as part of the post-lesson plan).
+  const [routine, setRoutine] = useState<RoutinePublic | null>(null);
+
   // Resource form state
   const [showResourceForm, setShowResourceForm] = useState(false);
   const [resType, setResType] = useState<SessionResourceType>("LINK");
@@ -280,6 +288,15 @@ export function CoachSession() {
     setSavedSections(next);
     seededFromBooking.current = true;
   }, [booking]);
+
+  // Load the student's current routine once we know who they are.
+  useEffect(() => {
+    const studentId = booking?.user?.id;
+    if (!studentId) return;
+    apiFetch<{ data: StudentDetailPublic }>(`/api/coaches/students/${studentId}`)
+      .then((res) => setRoutine(res.data.routine))
+      .catch(() => {});
+  }, [booking?.user?.id]);
 
   // Load skill tree + student progress once booking is loaded
   useEffect(() => {
@@ -644,6 +661,23 @@ export function CoachSession() {
         </section>
         )}
 
+        {/* Current routine — editable on Next as part of the post-lesson
+            plan. Sits between the lesson notes and the next-week
+            scheduler so the coach naturally tunes practice before
+            booking. */}
+        {phase === "next" && booking.user?.id && (
+          <section className="mb-10">
+            <CurrentRoutine
+              routine={routine ?? { items: [], updatedAt: null }}
+              editable
+              startInEditMode
+              saveUrl={`/api/coaches/students/${booking.user.id}/routine`}
+              onSaved={setRoutine}
+              title="Routine for next time"
+            />
+          </section>
+        )}
+
         {/* Schedule next week — Next-tab quick action. One click books
             the same student at the same time + 7 days; on conflict, the
             coach falls back to /coach/calendar via the secondary link. */}
@@ -714,6 +748,20 @@ export function CoachSession() {
             </section>
           );
         })()}
+
+        {/* Current routine — view-only on Plan so the coach can prep
+            against what the student is actively practicing. Editing
+            happens on the Next tab as part of the post-lesson plan. */}
+        {phase === "upcoming" && booking.user?.id && (
+          <section className="mb-10">
+            <CurrentRoutine
+              routine={routine ?? { items: [], updatedAt: null }}
+              editable={false}
+              title="Current routine"
+              emptyHint="No routine set yet — set one on the Next tab after the lesson."
+            />
+          </section>
+        )}
 
         {/* Last time — recap of the most recent completed session with
             this student. Upcoming-only prep card; renders an empty state

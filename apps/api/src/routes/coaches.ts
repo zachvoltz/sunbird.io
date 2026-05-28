@@ -1,6 +1,8 @@
 import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
+import { parseRoutine, serializeRoutine } from "../lib/routine";
+import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
 
 export const coachRoutes = new Hono();
 
@@ -489,7 +491,7 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
       where: { id: studentId },
       select: {
         id: true, name: true, email: true, avatarUrl: true, bio: true,
-        age: true, instrument: true,
+        age: true, instrument: true, currentRoutine: true,
       },
     }),
     db.booking.findMany({
@@ -669,9 +671,58 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
         createdAt: v.createdAt.toISOString(),
         addedBy: v.addedBy,
       })) ?? [],
+    routine: parseRoutine((student as any).currentRoutine),
   };
 
   return c.json({ data });
+});
+
+// PUT /api/coaches/students/:id/routine — replace a student's current
+// routine with the supplied ordered list. The caller must coach this
+// student (i.e. own at least one booking with them) unless they're an
+// admin. Items are stored as snapshots so renaming/deleting a library
+// item later doesn't corrupt the routine.
+coachRoutes.put("/students/:id/routine", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const studentId = c.req.param("id");
+  const db = getDb();
+
+  if (user.role === "COACH") {
+    const hasBooking = await db.booking.findFirst({
+      where: { userId: studentId, coachId: user.id },
+      select: { id: true },
+    });
+    if (!hasBooking) return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const body = (await c.req.json().catch(() => null)) as { items?: Array<Partial<RoutineItem>> } | null;
+  if (!body || !Array.isArray(body.items)) {
+    return c.json({ error: "items array required" }, 400);
+  }
+
+  const ALLOWED_KINDS: ReadonlySet<LibraryItemKind> = new Set(["warmup", "exercise", "song"]);
+  const cleaned: RoutineItem[] = [];
+  for (const raw of body.items) {
+    if (!raw || typeof raw !== "object") continue;
+    const kind = raw.kind as LibraryItemKind | undefined;
+    const title = typeof raw.title === "string" ? raw.title.trim() : "";
+    if (!kind || !ALLOWED_KINDS.has(kind) || !title) continue;
+    cleaned.push({
+      id: typeof raw.id === "string" && raw.id ? raw.id : Math.random().toString(36).slice(2, 10),
+      libraryItemId: typeof raw.libraryItemId === "string" ? raw.libraryItemId : null,
+      kind,
+      title,
+      bars: typeof raw.bars === "string" ? raw.bars : null,
+      bpmStart: typeof raw.bpmStart === "number" ? raw.bpmStart : null,
+      bpmEnd: typeof raw.bpmEnd === "number" ? raw.bpmEnd : null,
+      durationMin: typeof raw.durationMin === "number" ? raw.durationMin : null,
+      note: typeof raw.note === "string" ? raw.note : null,
+    });
+  }
+
+  const stored = serializeRoutine(cleaned);
+  await db.user.update({ where: { id: studentId }, data: { currentRoutine: stored } });
+  return c.json({ data: parseRoutine(stored) });
 });
 
 // GET /api/coaches/:slug — public coach profile

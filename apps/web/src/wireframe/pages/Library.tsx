@@ -10,11 +10,6 @@ import { PathsBrowsePane, PathsMobile, useCoachPaths } from "./Paths";
 import { apiFetch } from "@/lib/api";
 import type { LibraryItemKind, LibraryItemPublic, PathSummary } from "@sunbird/shared";
 
-const KIND_LABEL: Record<LibraryItemKind, string> = {
-  warmup: "WARMUPS",
-  exercise: "EXERCISES",
-  song: "SONGS & PIECES",
-};
 const KIND_ICON: Record<LibraryItemKind, "metro" | "note" | "mic"> = {
   warmup: "metro",
   exercise: "note",
@@ -47,7 +42,7 @@ function useLibraryItems() {
 }
 
 async function promptCreateLibraryItem(): Promise<LibraryItemPublic | null> {
-  const title = window.prompt("Title for the new library item:")?.trim();
+  const title = window.prompt("Title for the new exercise:")?.trim();
   if (!title) return null;
   const kindRaw = window
     .prompt("Kind — warmup / exercise / song:", "exercise")
@@ -62,7 +57,7 @@ async function promptCreateLibraryItem(): Promise<LibraryItemPublic | null> {
     });
     return res.data;
   } catch (err: any) {
-    window.alert(err?.body?.error ?? "Couldn't create item.");
+    window.alert(err?.body?.error ?? "Couldn't create exercise.");
     return null;
   }
 }
@@ -134,7 +129,7 @@ function TabPills({
         onClick={() => onChange("exercises")}
         style={{ cursor: "pointer" }}
       >
-        items · {itemCount}
+        exercises · {itemCount}
       </span>
       <span
         className={"p" + (tab === "paths" ? " on" : "")}
@@ -147,46 +142,85 @@ function TabPills({
   );
 }
 
-// Horizontal type/kind filter strip — sits above the list. Wired to
-// real filtering so the chips do something rather than just decorate.
-type ExerciseKindFilter = LibraryItemKind | "all";
-
-function ExerciseTypeFilter({
+// Horizontal tag filter strip — sits above the list. The set of chips
+// is derived from whatever tags the coach has actually applied to
+// their library items, so the filter grows organically as they add
+// more. Filter is single-select; `null` shows everything.
+function TagFilter({
   active,
   onChange,
-  counts,
+  tags,
+  totalCount,
 }: {
-  active: ExerciseKindFilter;
-  onChange: (k: ExerciseKindFilter) => void;
-  counts: { all: number; warmup: number; exercise: number; song: number };
+  active: string | null;
+  onChange: (t: string | null) => void;
+  /** Tags in display order, paired with how many items carry each one. */
+  tags: Array<{ tag: string; count: number }>;
+  totalCount: number;
 }) {
-  const opts: Array<{ id: ExerciseKindFilter; label: string }> = [
-    { id: "all", label: "all" },
-    { id: "warmup", label: "warmups" },
-    { id: "exercise", label: "exercises" },
-    { id: "song", label: "songs" },
-  ];
   return (
     <div className="row gap-3" style={{ alignItems: "center", flexWrap: "wrap" }}>
-      <span className="small muted" style={{ letterSpacing: "0.08em" }}>TYPE</span>
-      <div className="pill-row" style={{ marginBottom: 0 }}>
-        {opts.map((o) => {
-          const n = o.id === "all" ? counts.all : counts[o.id];
-          return (
-            <span
-              key={o.id}
-              className={"p" + (active === o.id ? " on" : "")}
-              onClick={() => onChange(o.id)}
-              style={{ cursor: "pointer" }}
-            >
-              {o.label}
-              {n > 0 ? ` · ${n}` : ""}
-            </span>
-          );
-        })}
+      <span className="small muted" style={{ letterSpacing: "0.08em" }}>TAGS</span>
+      <div className="pill-row" style={{ marginBottom: 0, flexWrap: "wrap" }}>
+        <span
+          className={"p" + (active === null ? " on" : "")}
+          onClick={() => onChange(null)}
+          style={{ cursor: "pointer" }}
+        >
+          all{totalCount > 0 ? ` · ${totalCount}` : ""}
+        </span>
+        {tags.map(({ tag, count }) => (
+          <span
+            key={tag}
+            className={"p" + (active === tag ? " on" : "")}
+            onClick={() => onChange(active === tag ? null : tag)}
+            style={{ cursor: "pointer" }}
+          >
+            #{tag} · {count}
+          </span>
+        ))}
+        {tags.length === 0 && (
+          <span className="small muted" style={{ marginLeft: 4 }}>
+            No tags yet — add #yourtag in the item editor.
+          </span>
+        )}
       </div>
     </div>
   );
+}
+
+// Parse a hashtag-style input ("#scales #warmup #used-18x") OR the
+// legacy comma format ("scales, warmup") into a clean string[]. We
+// store tag values without the leading `#`; the UI prepends it for
+// display.
+function parseTagsInput(raw: string): string[] {
+  const trimmed = raw.trim();
+  if (!trimmed) return [];
+  // If the user wrote any '#' anywhere, treat the whole field as
+  // hashtag-style. Otherwise fall back to comma-separated for the
+  // small bit of legacy seed data that used that form.
+  if (trimmed.includes("#")) {
+    return Array.from(
+      new Set(
+        trimmed
+          .split(/[\s,]+/)
+          .map((t) => t.replace(/^#+/, "").trim())
+          .filter((t) => t.length > 0),
+      ),
+    );
+  }
+  return Array.from(
+    new Set(
+      trimmed
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t.length > 0),
+    ),
+  );
+}
+
+function tagsToInputValue(tags: string[]): string {
+  return tags.map((t) => `#${t}`).join(" ");
 }
 
 function formatRecElapsed(seconds: number): string {
@@ -219,7 +253,7 @@ function LibraryRow({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<LibraryItemPublic>(item);
-  const [tagsInput, setTagsInput] = useState<string>(item.tags.join(", "));
+  const [tagsInput, setTagsInput] = useState<string>(tagsToInputValue(item.tags));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -343,14 +377,14 @@ function LibraryRow({
   useEffect(() => {
     if (!editing) {
       setDraft(item);
-      setTagsInput(item.tags.join(", "));
+      setTagsInput(tagsToInputValue(item.tags));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item.id, item.updatedAt]);
 
   const cancel = () => {
     setDraft(item);
-    setTagsInput(item.tags.join(", "));
+    setTagsInput(tagsToInputValue(item.tags));
     setError(null);
     setEditing(false);
   };
@@ -359,10 +393,7 @@ function LibraryRow({
     setSaving(true);
     setError(null);
     try {
-      const tags = tagsInput
-        .split(",")
-        .map((t) => t.trim())
-        .filter((t) => t.length > 0);
+      const tags = parseTagsInput(tagsInput);
       await apiFetch(`/api/library/${item.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -405,7 +436,7 @@ function LibraryRow({
             <div className="bold">{item.title}</div>
             <div className="tiny muted">{formatItemSubtitle(item)}</div>
           </div>
-          {item.tags.map((t) => <Tag key={t}>{t}</Tag>)}
+          {item.tags.map((t) => <Tag key={t}>#{t}</Tag>)}
           <button className="btn small ghost" onClick={() => setEditing(true)}>edit</button>
         </div>
         {item.audioUrl && (
@@ -457,7 +488,7 @@ function LibraryRow({
         <input
           value={tagsInput}
           onChange={(e) => setTagsInput(e.target.value)}
-          placeholder="tags, comma, separated"
+          placeholder="#scales #warmup #recital"
           style={{ ...editInputStyle, width: "100%" }}
         />
 
@@ -567,38 +598,46 @@ function ExercisesPane({
   onCreate: () => void;
   onChange: () => void;
 }) {
-  const [kindFilter, setKindFilter] = useState<ExerciseKindFilter>("all");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
-  const counts = useMemo(() => {
-    const c = { all: 0, warmup: 0, exercise: 0, song: 0 };
+  // Tag chip set + counts. Sorted by frequency desc so the most-used
+  // tags are reachable first — the rest fall through naturally.
+  const tagOptions = useMemo(() => {
+    const counts = new Map<string, number>();
     for (const it of items ?? []) {
-      c.all++;
-      if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") c[it.kind]++;
+      for (const t of it.tags) counts.set(t, (counts.get(t) ?? 0) + 1);
     }
-    return c;
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+      .map(([tag, count]) => ({ tag, count }));
   }, [items]);
 
-  // Group by kind so each section renders in the expected order. The
-  // kindFilter narrows which sections are shown.
-  const grouped = useMemo(() => {
-    const map: Record<LibraryItemKind, LibraryItemPublic[]> = {
-      warmup: [], exercise: [], song: [],
-    };
-    for (const it of items ?? []) {
-      if (kindFilter !== "all" && it.kind !== kindFilter) continue;
-      if (it.kind === "warmup" || it.kind === "exercise" || it.kind === "song") {
-        map[it.kind].push(it);
-      }
+  // If the active tag disappears (last item with it deleted or
+  // renamed), drop the filter so the user doesn't end up staring at an
+  // empty list with no obvious way out.
+  useEffect(() => {
+    if (tagFilter && !tagOptions.some((t) => t.tag === tagFilter)) {
+      setTagFilter(null);
     }
-    return map;
-  }, [items, kindFilter]);
+  }, [tagOptions, tagFilter]);
 
-  const visibleCount = grouped.warmup.length + grouped.exercise.length + grouped.song.length;
+  const filtered = useMemo(() => {
+    const all = items ?? [];
+    if (!tagFilter) return all;
+    return all.filter((it) => it.tags.includes(tagFilter));
+  }, [items, tagFilter]);
+
   const total = items?.length ?? 0;
+  const visibleCount = filtered.length;
 
   return (
     <>
-      <ExerciseTypeFilter active={kindFilter} onChange={setKindFilter} counts={counts} />
+      <TagFilter
+        active={tagFilter}
+        onChange={setTagFilter}
+        tags={tagOptions}
+        totalCount={total}
+      />
 
       <div style={{ flex: "1 1 auto", minHeight: 0, overflowY: "auto", marginTop: 12 }}>
         {loading && !items && (
@@ -611,30 +650,21 @@ function ExercisesPane({
               Empty library.
             </div>
             <div className="small muted mt-2 mb-3">
-              Add a warmup, exercise, or song to get started.
+              Add an exercise — tag it with #scales, #warmup, etc. to organize.
             </div>
-            <button className="btn primary" onClick={onCreate}>＋ add an item</button>
+            <button className="btn primary" onClick={onCreate}>＋ add an exercise</button>
           </div>
         )}
 
         {!loading && total > 0 && visibleCount === 0 && (
           <div className="small muted center" style={{ padding: "20px 4px" }}>
-            No {kindFilter === "all" ? "items" : kindFilter + "s"} match this filter.
+            No exercises tagged #{tagFilter}.
           </div>
         )}
 
-        {(["warmup", "exercise", "song"] as LibraryItemKind[]).map((kind) => {
-          const list = grouped[kind];
-          if (list.length === 0) return null;
-          return (
-            <div key={kind}>
-              <div className="small muted mt-3 mb-2">{KIND_LABEL[kind]}</div>
-              {list.map((it) => (
-                <LibraryRow key={it.id} item={it} onChange={onChange} />
-              ))}
-            </div>
-          );
-        })}
+        {filtered.map((it) => (
+          <LibraryRow key={it.id} item={it} onChange={onChange} />
+        ))}
       </div>
     </>
   );
@@ -671,7 +701,7 @@ function LibraryDesktop() {
           <div className="dt-sub">
             {isPaths
               ? "your paths — drag onto a student's week"
-              : "your warmups, exercises, and songs"}
+              : "your exercises, organized by tag — type #yourtag to categorize"}
           </div>
         </div>
         <div className="row gap-2">
@@ -738,7 +768,7 @@ function LibraryMobile() {
         <div>
           <h2 className="wf-title">Library</h2>
           <div className="wf-subtitle">
-            {loading ? "loading…" : `${count} item${count === 1 ? "" : "s"}`}
+            {loading ? "loading…" : `${count} exercise${count === 1 ? "" : "s"}`}
           </div>
         </div>
         <button
@@ -756,14 +786,14 @@ function LibraryMobile() {
           <span>⌕</span><span>search…</span>
         </div>
         <div className="seg">
-          <div className="s on" onClick={() => setTab("exercises")}>items</div>
+          <div className="s on" onClick={() => setTab("exercises")}>exercises</div>
           <div className="s" onClick={() => setTab("paths")}>paths</div>
           <div className="s">shared</div>
         </div>
 
         {!loading && count === 0 && (
           <div className="small muted center" style={{ marginTop: 18 }}>
-            No items yet — tap ＋ to add one.
+            No exercises yet — tap ＋ to add one.
           </div>
         )}
 
@@ -773,7 +803,7 @@ function LibraryMobile() {
             icon={KIND_ICON[it.kind]}
             title={it.title}
             sub={formatItemSubtitle(it)}
-            tags={it.tags}
+            tags={it.tags.map((t) => `#${t}`)}
           />
         ))}
 

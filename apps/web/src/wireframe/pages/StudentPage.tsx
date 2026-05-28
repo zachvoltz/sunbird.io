@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import type { AssignmentPublic, NoteSections, StudentDetailPublic, TakePublic } from "@sunbird/shared";
+import type { AssignmentPublic, NoteSections, RoutinePublic, StudentDetailPublic, TakePublic } from "@sunbird/shared";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
 import { Avatar } from "../components/Avatar";
@@ -11,6 +12,7 @@ import { Staff } from "../components/Staff";
 import { MockTag } from "../components/MockTag";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useStudentDetail } from "../hooks/useCoachData";
+import { CurrentRoutine } from "@/components/coach/CurrentRoutine";
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -195,6 +197,10 @@ function TakeCard({ take, prominent }: { take: TakePublic; prominent: boolean })
 }
 
 function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | undefined; loading: boolean }) {
+  // Locally track the routine so save edits show immediately without
+  // having to refetch the entire StudentDetail aggregate.
+  const [routine, setRoutine] = useState<RoutinePublic | null>(null);
+  const liveRoutine = routine ?? detail?.routine ?? { items: [], updatedAt: null };
   if (loading && !detail) {
     return (
       <DTFrame side="student">
@@ -226,7 +232,6 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
   const firstName = detail.name.split(" ")[0];
   const streak = detail.streak;
   const sections = detail.latestNoteSections;
-  const summary = detail.latestLessonSummary;
   const noteDay = detail.latestNoteStartsAt
     ? new Date(detail.latestNoteStartsAt).toLocaleDateString([], { weekday: "long" })
     : null;
@@ -309,32 +314,6 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
                   </div>
                 )}
 
-                {/* AI summary — REAL (stub schema, manual edit) */}
-                {summary && (
-                  <div className="ai-summary mt-2">
-                    <div className="ai-summary-head">
-                      <span className="ai-badge">✦ AI</span>
-                      <span className="ai-title">lesson summary</span>
-                      <span className="ai-meta">
-                        {summary.durationMin ? `${summary.durationMin} min · ` : ""}
-                        {summary.status === "READY" ? "auto-generated" : summary.status.toLowerCase()}
-                      </span>
-                    </div>
-                    <ul className="ai-bullets">
-                      {summary.bullets.map((b, i) => (
-                        <li key={i}>{b}</li>
-                      ))}
-                    </ul>
-                    <div className="ai-foot">
-                      <span className="tiny muted">
-                        visible to {firstName} · K can edit before send
-                      </span>
-                      <button className="btn small ghost" style={{ marginLeft: "auto" }}>✎ edit summary</button>
-                      <span className="tiny"><MockTag>generation deferred</MockTag></span>
-                    </div>
-                  </div>
-                )}
-
                 <div className="row gap-2 mt-2">
                   <button className="btn small ghost">✎ edit</button>
                   <button className="btn small ghost">＋ add voice memo</button>
@@ -344,6 +323,19 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
                     </span>
                   )}
                 </div>
+              </div>
+
+              {/* Current routine — coach-managed, ordered list of exercises
+                  the student practices between lessons. Saves call PUT
+                  /api/coaches/students/:id/routine. */}
+              <div className="mt-3">
+                <CurrentRoutine
+                  routine={liveRoutine}
+                  editable
+                  saveUrl={`/api/coaches/students/${detail.id}/routine`}
+                  onSaved={setRoutine}
+                  emptyHint={`No routine set for ${firstName} yet. Add items from the library →`}
+                />
               </div>
 
               {/* Assignments — REAL */}
@@ -416,20 +408,6 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
                   <NoteRow label="next time" body={<span className="muted" style={{ fontStyle: "italic" }}>…</span>} draft />
                 </div>
 
-                <div className="ai-summary pending">
-                  <div className="ai-summary-head">
-                    <span className="ai-badge">✦ AI</span>
-                    <span className="ai-title">lesson summary</span>
-                    <span className="ai-meta">listening · 14:22 elapsed</span>
-                  </div>
-                  <div className="ai-pending-body">
-                    <div className="dots-anim">• • •</div>
-                    <div className="tiny muted">
-                      summary will appear here when the lesson ends — you'll be able to edit it before sending to {firstName}
-                    </div>
-                  </div>
-                </div>
-
                 <div className="small muted mt-1">ATTACH TO NEXT WEEK</div>
                 <div className="box small row gap-2">
                   <Icon name="note" size={14} />
@@ -464,7 +442,6 @@ function StudentMobile({ detail, loading }: { detail: StudentDetailPublic | unde
   }
   const firstName = detail.name.split(" ")[0];
   const sections = detail.latestNoteSections;
-  const summary = detail.latestLessonSummary;
   const prominentTake = detail.takes.find((t) => t.status === "UNREVIEWED") ?? detail.takes[0];
 
   return (
@@ -507,21 +484,6 @@ function StudentMobile({ detail, loading }: { detail: StudentDetailPublic | unde
             <div className="small muted">No practice note attached to a completed lesson yet.</div>
           )}
         </div>
-
-        {summary && (
-          <div className="ai-summary compact">
-            <div className="ai-summary-head">
-              <span className="ai-badge">✦ AI</span>
-              <span className="ai-title">lesson summary</span>
-              {summary.durationMin && <span className="ai-meta">{summary.durationMin} min</span>}
-            </div>
-            <ul className="ai-bullets">
-              {summary.bullets.slice(0, 3).map((b, i) => (
-                <li key={i}>{b}</li>
-              ))}
-            </ul>
-          </div>
-        )}
 
         <div className="small muted">
           THIS WEEK · {detail.assignments.length}

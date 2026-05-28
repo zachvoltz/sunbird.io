@@ -496,7 +496,7 @@ function TodayBookingCard({
         </div>
       )}
       <div className="row gap-2 mt-2">
-        <Link to={`/coach/student/${slug}`} className="btn small grow">
+        <Link to={`/coach/session/${booking.id}`} className="btn small grow">
           open lesson page
         </Link>
         {booking.mode === "ONLINE" && (

@@ -36,6 +36,11 @@ model User {
   instrument     String?
   lastInboxViewedAt DateTime?
 
+  // Current routine — JSON-stringified RoutineItem[] (see shared/types.ts).
+  // Coach-managed; rendered on the student's Practice path and the
+  // coach's Plan/Next tabs. Stored as JSON to avoid a separate table.
+  currentRoutine String?
+
   // Stripe Connect (Express) — set once the coach starts the
   // onboarding flow. Flags mirror Stripe's account.{charges,payouts,
   // details_submitted} so the dashboard can render the right stage

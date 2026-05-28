@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
+import { parseRoutine } from "../lib/routine";
 
 type MeEnv = {
   Variables: {
@@ -41,7 +42,7 @@ me.get("/student-data", requireAuth, async (c) => {
       where: { id: user.id },
       select: {
         id: true, name: true, email: true, avatarUrl: true, bio: true,
-        age: true, instrument: true,
+        age: true, instrument: true, currentRoutine: true,
       },
     }),
     db.booking.findMany({
@@ -220,6 +221,7 @@ me.get("/student-data", requireAuth, async (c) => {
         addedBy: v.addedBy,
       })) ?? [],
     latestNoteCoach: latestSentNote?.coach ?? null,
+    routine: parseRoutine((student as any).currentRoutine),
   };
 
   return c.json({ data });
