@@ -554,12 +554,102 @@ export function CoachSession() {
         {/* (Live video lives in the SessionShell background layer above —
             rendered once per page when phase === "live".) */}
 
+        {/* Schedule next week — Next-tab quick action, placed above the
+            routine/notes columns so the coach books the follow-up first.
+            One click books the same student at the same time + 7 days; on
+            conflict, the coach falls back to /coach/calendar. */}
+        {phase === "next" && (() => {
+          const nextStart = new Date(new Date(booking.startsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+          const nextEnd = new Date(new Date(booking.endsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+          const studentFirst = student?.name?.split(" ")[0] ?? "student";
+          return (
+            <section className="mb-10">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+                  Next time
+                </h2>
+              </div>
+              <div className="bg-surface rounded-card shadow-card p-5">
+                {nextWeekBooking ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-sm font-medium text-charcoal">
+                        Scheduled with {studentFirst}.
+                      </p>
+                      <p className="text-[12px] text-text-secondary mt-1">
+                        {formatDate(nextWeekBooking.startsAt)} &middot;{" "}
+                        {formatTime(nextWeekBooking.startsAt)} – {formatTime(nextWeekBooking.endsAt)}
+                        {nextWeekBooking.mode === "ONLINE" ? " · online" : " · in person"}
+                      </p>
+                    </div>
+                    <Link
+                      to={`/coach/session/${nextWeekBooking.id}`}
+                      className="text-[13px] font-medium text-iris hover:text-iris-hover transition-colors"
+                    >
+                      open new session →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-sm text-charcoal">
+                        Same lesson, same time, next week.
+                      </p>
+                      <p className="text-[12px] text-text-secondary mt-1">
+                        {formatDate(nextStart.toISOString())} &middot;{" "}
+                        {formatTime(nextStart.toISOString())} – {formatTime(nextEnd.toISOString())}
+                        {booking.mode === "ONLINE" ? " · online" : " · in person"}
+                      </p>
+                      {nextWeekError && (
+                        <p className="text-[12px] text-coral mt-2">{nextWeekError}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Link
+                        to="/coach/calendar"
+                        className="text-[12px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+                      >
+                        pick another time →
+                      </Link>
+                      <button
+                        onClick={bookSameTimeNextWeek}
+                        disabled={bookingNextWeek}
+                        className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+                      >
+                        {bookingNextWeek ? "Booking…" : "Book same time next week"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
+
         {/* Lesson notes — drafted on the Next tab as the coach wraps up.
             Hidden during Live (the lesson itself) and Upcoming (the
             pre-lesson prep view). Saves to booking.noteSections and
             emails the student via PATCH /api/bookings/:id/notes. */}
         {phase === "next" && (
-        <section className="mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start mb-10">
+          {/* Routine for next time — editable post-lesson plan, narrow
+              column beside the wider lesson-notes editor. */}
+          {booking.user?.id && (
+          <section className="md:col-span-4">
+            <CurrentRoutine
+              routine={routine ?? { items: [], updatedAt: null }}
+              editable
+              startInEditMode
+              saveUrl={`/api/coaches/students/${booking.user.id}/routine`}
+              bookingId={booking.id}
+              onSaved={setRoutine}
+              title="Routine for next time"
+            />
+          </section>
+          )}
+
+          {/* Lesson notes */}
+          <section className={booking.user?.id ? "md:col-span-8" : "md:col-span-12"}>
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
               Lesson notes for {student?.name?.split(" ")[0] ?? "student"}
@@ -633,102 +723,17 @@ export function CoachSession() {
             </div>
           </div>
         </section>
+        </div>
         )}
 
-        {/* Current routine — editable on Next as part of the post-lesson
-            plan. Sits between the lesson notes and the next-week
-            scheduler so the coach naturally tunes practice before
-            booking. */}
-        {phase === "next" && booking.user?.id && (
-          <section className="mb-10">
-            <CurrentRoutine
-              routine={routine ?? { items: [], updatedAt: null }}
-              editable
-              startInEditMode
-              saveUrl={`/api/coaches/students/${booking.user.id}/routine`}
-              bookingId={booking.id}
-              onSaved={setRoutine}
-              title="Routine for next time"
-            />
-          </section>
-        )}
-
-        {/* Schedule next week — Next-tab quick action. One click books
-            the same student at the same time + 7 days; on conflict, the
-            coach falls back to /coach/calendar via the secondary link. */}
-        {phase === "next" && (() => {
-          const nextStart = new Date(new Date(booking.startsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
-          const nextEnd = new Date(new Date(booking.endsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
-          const studentFirst = student?.name?.split(" ")[0] ?? "student";
-          return (
-            <section className="mb-10">
-              <div className="flex items-baseline justify-between mb-4">
-                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
-                  Next time
-                </h2>
-              </div>
-              <div className="bg-surface rounded-card shadow-card p-5">
-                {nextWeekBooking ? (
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <div>
-                      <p className="text-sm font-medium text-charcoal">
-                        Scheduled with {studentFirst}.
-                      </p>
-                      <p className="text-[12px] text-text-secondary mt-1">
-                        {formatDate(nextWeekBooking.startsAt)} &middot;{" "}
-                        {formatTime(nextWeekBooking.startsAt)} – {formatTime(nextWeekBooking.endsAt)}
-                        {nextWeekBooking.mode === "ONLINE" ? " · online" : " · in person"}
-                      </p>
-                    </div>
-                    <Link
-                      to={`/coach/session/${nextWeekBooking.id}`}
-                      className="text-[13px] font-medium text-iris hover:text-iris-hover transition-colors"
-                    >
-                      open new session →
-                    </Link>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div>
-                      <p className="text-sm text-charcoal">
-                        Same lesson, same time, next week.
-                      </p>
-                      <p className="text-[12px] text-text-secondary mt-1">
-                        {formatDate(nextStart.toISOString())} &middot;{" "}
-                        {formatTime(nextStart.toISOString())} – {formatTime(nextEnd.toISOString())}
-                        {booking.mode === "ONLINE" ? " · online" : " · in person"}
-                      </p>
-                      {nextWeekError && (
-                        <p className="text-[12px] text-coral mt-2">{nextWeekError}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4">
-                      <Link
-                        to="/coach/calendar"
-                        className="text-[12px] font-medium text-text-secondary hover:text-charcoal transition-colors"
-                      >
-                        pick another time →
-                      </Link>
-                      <button
-                        onClick={bookSameTimeNextWeek}
-                        disabled={bookingNextWeek}
-                        className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
-                      >
-                        {bookingNextWeek ? "Booking…" : "Book same time next week"}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* Current routine — view-only on Plan so the coach can prep
-            against what the student is actively practicing. Editing
-            happens on the Next tab as part of the post-lesson plan. */}
-        {phase === "upcoming" && booking.user?.id && (
-          <section className="mb-10">
+        {/* Plan-tab prep row — current routine (view-only; editing happens
+            on the Next tab) beside a wider "Last time" recap, side by side
+            so the coach can prep the routine against the prior session. */}
+        {phase === "upcoming" && (
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start mb-10">
+          {/* Current routine */}
+          {booking.user?.id && (
+          <section className="md:col-span-4">
             <CurrentRoutine
               routine={routine ?? { items: [], updatedAt: null }}
               editable={false}
@@ -736,13 +741,12 @@ export function CoachSession() {
               emptyHint="No routine set yet — set one on the Next tab after the lesson."
             />
           </section>
-        )}
+          )}
 
-        {/* Last time — recap of the most recent completed session with
-            this student. Upcoming-only prep card; renders an empty state
-            when there's no prior session. */}
-        {phase === "upcoming" && (
-          <section className="mb-10">
+          {/* Last time — recap of the most recent completed session with
+              this student. Renders an empty state when there's no prior
+              session. */}
+          <section className={booking.user?.id ? "md:col-span-8" : "md:col-span-12"}>
             <div className="flex items-baseline justify-between mb-4">
               <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
                 Last time
@@ -801,6 +805,7 @@ export function CoachSession() {
               )}
             </div>
           </section>
+        </div>
         )}
 
         {/* Two-column layout — left column widens when chat is hidden so
