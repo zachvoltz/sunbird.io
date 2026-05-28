@@ -354,11 +354,12 @@ html[data-theme="dark"] .wireframe-root .onb-success {
 
 .wireframe-root .dt-topbar {
   grid-area: topbar;
-  border-bottom: 1.5px solid var(--ink);
+  box-shadow: 0 1.5px 0 rgba(0,0,0,0.08);
   display: flex; align-items: center;
   padding: 0 18px;
   gap: 14px;
   background: var(--paper-2);
+  z-index: 1;
 }
 .wireframe-root .dt-brand {
   font-family: var(--scrawl);
@@ -391,8 +392,9 @@ html[data-theme="dark"] .wireframe-root .onb-success {
 
 .wireframe-root .dt-side {
   grid-area: side;
-  border-right: 1.5px solid var(--ink);
+  box-shadow: 1.5px 0 0 rgba(0,0,0,0.08);
   background: var(--paper-2);
+  z-index: 1;
   display: flex; flex-direction: column;
   padding: 14px 10px;
   gap: 4px;
@@ -570,6 +572,11 @@ html[data-theme="dark"] .wireframe-root .onb-success {
 .wireframe-root .panel-body { flex: 1 1 auto; overflow: hidden; min-height: 0; }
 .wireframe-root .panel-body.scroll { overflow-y: auto; }
 .wireframe-root .panel.tinted { background: var(--paper-2); }
+
+/* Dashboard "material" style: borderless columns, subtle drop shadow on cards. */
+.wireframe-root .dt .panel,
+.wireframe-root .dt .box { border: 0; }
+.wireframe-root .dt .box { box-shadow: 1.5px 1.5px 0 rgba(0,0,0,0.08); }
 
 .wireframe-root .roster-row {
   display: grid;

@@ -216,7 +216,7 @@ function UnreviewedTakeCard({ item }: { item: UnreviewedTakeItem }) {
       : `${Math.floor(item.ageHours / 24)}d ago`;
   const dur = `${Math.floor(t.durationSec / 60)}:${String(t.durationSec % 60).padStart(2, "0")}`;
   return (
-    <div className="box accent" style={{ borderWidth: 2 }}>
+    <div className="box accent">
       <div className="row between">
         <div className="row gap-2">
           <Avatar name={item.student.name} size={32} />
