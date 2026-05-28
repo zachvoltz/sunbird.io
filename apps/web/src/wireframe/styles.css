@@ -26,19 +26,49 @@
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Night mode palette: redefine the variables and everything that uses
-   them switches automatically. Scoped to .wireframe-root so the public
-   marketing pages (Tailwind) are unaffected. */
+/* Night mode palette: cool space-gray + violet. Redefine the variables
+   and everything that uses them switches automatically. Scoped to
+   .wireframe-root so the marketing pages (Tailwind) are unaffected. */
 html[data-theme="dark"] .wireframe-root {
-  --ink: #f0eee9;
-  --ink-soft: #c4bdb3;
-  --ink-faint: #7e766d;
-  --paper: #2a241e;
-  --paper-2: #1f1a15;
-  --bg-page: #15110d;
-  --accent: #f06b5a;
-  --accent-soft: #4a2620;
-  --highlight: #c9a83a;
+  /* Text — cool ivory tones */
+  --ink: #e9ecf3;
+  --ink-soft: #aab2c2;
+  --ink-faint: #6c7488;
+
+  /* Surfaces — space gray with a blue tint */
+  --paper: #1e2330;
+  --paper-2: #161a26;
+  --bg-page: #0d1018;
+
+  /* Accents — periwinkle violet for actions, soft lavender highlight */
+  --accent: #8b6ff0;
+  --accent-soft: #2a2348;
+  --highlight: #d4c2ff;
+}
+
+/* A few rules in the stylesheet hard-code coral rgba (for hatched
+   overlays + radial-glow backgrounds). Re-paint them violet in dark
+   mode so the warm tone doesn't sneak through. */
+html[data-theme="dark"] .wireframe-root .hatch.accent {
+  background-image: repeating-linear-gradient(
+    -45deg, transparent 0 4px, rgba(139, 111, 240, 0.30) 4px 5px
+  );
+}
+html[data-theme="dark"] .wireframe-root .ai-summary {
+  background-image: repeating-linear-gradient(135deg,
+    transparent 0 7px,
+    rgba(212, 194, 255, 0.05) 7px 8px);
+}
+html[data-theme="dark"] .wireframe-root .video-bg {
+  background:
+    radial-gradient(ellipse at 30% 40%, rgba(139, 111, 240, 0.18), transparent 60%),
+    repeating-linear-gradient(45deg, rgba(255,255,255,0.03) 0 6px, transparent 6px 12px),
+    var(--paper-2);
+}
+html[data-theme="dark"] .wireframe-root .onb-success {
+  background:
+    radial-gradient(circle at 18% 50%, rgba(139, 111, 240, 0.18), transparent 50%),
+    var(--paper);
 }
 
 .wireframe-root * { box-sizing: border-box; }
