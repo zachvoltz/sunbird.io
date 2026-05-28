@@ -622,6 +622,16 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
 .wireframe-root .inbox-row .ibx-check {
   flex: 0 0 auto;
   display: inline-flex; align-items: center;
+  cursor: pointer;
+}
+/* The rest of the row is one anchor so the entire body navigates,
+   while the checkbox stays outside it (otherwise the link's native
+   navigation runs before the checkbox state can update). */
+.wireframe-root .inbox-row .ibx-row-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex; align-items: center; gap: 10px;
+  text-decoration: none; color: inherit;
 }
 .wireframe-root .inbox-row .ibx-sender {
   flex: 0 0 160px;

@@ -166,16 +166,11 @@ function InboxRow({
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
   return (
-    <Link
-      to={`/coach/session/${item.bookingId}`}
+    <div
       className={"inbox-row" + (item.unread ? " unread" : "")}
       title={`${studentName} · ${lessonAt}`}
     >
-      <label
-        className="ibx-check"
-        onClick={(e) => e.stopPropagation()}
-        title={item.unread ? "mark read" : "mark unread"}
-      >
+      <label className="ibx-check" title={item.unread ? "mark read" : "mark unread"}>
         <input
           type="checkbox"
           checked={!item.unread}
@@ -183,14 +178,16 @@ function InboxRow({
           style={{ width: 14, height: 14, accentColor: "var(--accent)" }}
         />
       </label>
-      <Avatar name={studentName} size={28} />
-      <span className="ibx-sender">{studentName}</span>
-      <span className="ibx-snippet">
-        {category && <span className="ibx-tag">[{category}]</span>}
-        {snippet}
-      </span>
-      <span className="ibx-when">{inboxTime(item.createdAt, now)}</span>
-    </Link>
+      <Link to={`/coach/session/${item.bookingId}`} className="ibx-row-link">
+        <Avatar name={studentName} size={28} />
+        <span className="ibx-sender">{studentName}</span>
+        <span className="ibx-snippet">
+          {category && <span className="ibx-tag">[{category}]</span>}
+          {snippet}
+        </span>
+        <span className="ibx-when">{inboxTime(item.createdAt, now)}</span>
+      </Link>
+    </div>
   );
 }
 
