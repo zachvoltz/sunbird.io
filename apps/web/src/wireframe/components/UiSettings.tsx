@@ -52,7 +52,6 @@ export function UiSettings({ collapsed }: { collapsed: boolean }) {
         title={open ? "Hide settings" : "Show settings"}
       >
         <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⚙</span>
-        <span>Settings</span>
         <span className="dt-settings-chevron">{open ? "▾" : "▸"}</span>
       </button>
       {open && (
