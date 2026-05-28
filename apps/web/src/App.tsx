@@ -40,6 +40,7 @@ import { ExercisePlayerPage } from "@/wireframe/pages/ExercisePlayer";
 import { RecordTakePage } from "@/wireframe/pages/RecordTake";
 import { TodayPage } from "@/wireframe/pages/TodayPage";
 import { AccountPage } from "@/wireframe/pages/Account";
+import { ProfilePage } from "@/wireframe/pages/Profile";
 import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
 import { MyInboxPage } from "@/wireframe/pages/MyInbox";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
@@ -83,6 +84,7 @@ export function App() {
       <Route path="/coach/midi/:mode" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><MidiEditorPage /></RoleGate></AuthGate>} />
       <Route path="/coach/live/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LessonLivePage /></RoleGate></AuthGate>} />
       <Route path="/coach/account" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><AccountPage /></RoleGate></AuthGate>} />
+      <Route path="/coach/profile" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><ProfilePage /></RoleGate></AuthGate>} />
       <Route path="/coach/payments" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><PaymentsPage /></RoleGate></AuthGate>} />
       <Route path="/coach/session/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSession /></RoleGate></AuthGate>} />
 

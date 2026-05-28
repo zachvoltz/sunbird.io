@@ -17,6 +17,7 @@ import {
   GraduationCap,
   Headphones,
   Home,
+  IdCard,
   Inbox,
   Library,
   Map,
@@ -37,7 +38,7 @@ import type { LucideIcon } from "lucide-react";
 type IconName =
   | "play" | "pause" | "note" | "mic" | "record" | "fire" | "clock"
   | "chev" | "star" | "metro" | "plus" | "back" | "pin" | "headphones" | "send"
-  | "home" | "inbox" | "cal" | "lib" | "money" | "user" | "journal" | "map" | "cap";
+  | "home" | "inbox" | "cal" | "lib" | "money" | "user" | "profile" | "journal" | "map" | "cap";
 
 // Some icons read better filled (play triangle, record dot, gold
 // star) — keep that legacy treatment so visual weight stays close
@@ -70,6 +71,7 @@ const MAP: Record<IconName, LucideIcon> = {
   lib: Library,
   money: DollarSign,
   user: User,
+  profile: IdCard,
   journal: NotebookPen,
   map: Map,
   cap: GraduationCap,

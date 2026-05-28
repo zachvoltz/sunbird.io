@@ -141,6 +141,10 @@ function DTSidebar({
         <span className="nav-ico"><Icon name="money" size={18} /></span>
         {!collapsed && <span>Payments</span>}
       </Link>
+      <Link to="/coach/profile" className={"item" + (on === "profile" ? " on" : "")} title="Profile">
+        <span className="nav-ico"><Icon name="profile" size={18} /></span>
+        {!collapsed && <span>Profile</span>}
+      </Link>
       <Link to="/coach/account" className={"item" + (on === "account" ? " on" : "")} title="Account">
         <span className="nav-ico"><Icon name="user" size={18} /></span>
         {!collapsed && <span>Account</span>}
