@@ -3,6 +3,7 @@ import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { TopSearch } from "./TopSearch";
+import { UiSettings } from "./UiSettings";
 
 type NavId = "home" | "practice" | "lessons" | "inbox" | "notes" | "takes" | "curriculum" | "profile";
 
@@ -114,6 +115,7 @@ function STSidebar({ on, collapsed }: { on: NavId; collapsed: boolean }) {
           </Link>
         );
       })}
+      <UiSettings collapsed={collapsed} />
     </div>
   );
 }

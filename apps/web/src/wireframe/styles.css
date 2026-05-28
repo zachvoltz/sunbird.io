@@ -8,6 +8,7 @@
   --ink-faint: #8a8278;
   --paper: #fbf8f1;
   --paper-2: #f3eee2;
+  --bg-page: #f0eee9;
   --accent: #e85d4d;
   --accent-soft: #fce8e4;
   --highlight: #ffe168;
@@ -17,12 +18,27 @@
 
   font-family: var(--hand);
   color: var(--ink);
-  background: #f0eee9;
+  background: var(--bg-page);
   min-height: 100vh;
-  font-size: 14px;
+  font-size: calc(14px * var(--text-scale, 1));
   line-height: 1.4;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Night mode palette: redefine the variables and everything that uses
+   them switches automatically. Scoped to .wireframe-root so the public
+   marketing pages (Tailwind) are unaffected. */
+html[data-theme="dark"] .wireframe-root {
+  --ink: #f0eee9;
+  --ink-soft: #c4bdb3;
+  --ink-faint: #7e766d;
+  --paper: #2a241e;
+  --paper-2: #1f1a15;
+  --bg-page: #15110d;
+  --accent: #f06b5a;
+  --accent-soft: #4a2620;
+  --highlight: #c9a83a;
 }
 
 .wireframe-root * { box-sizing: border-box; }
@@ -401,6 +417,57 @@
   background: var(--paper);
   color: var(--ink);
   flex: 0 0 auto;
+}
+
+/* ── sidebar UI-settings panel (pinned to bottom) ────────── */
+.wireframe-root .dt-settings {
+  margin-top: auto;
+  padding-top: 12px;
+  border-top: 1.5px dashed var(--ink-faint);
+  display: flex; flex-direction: column;
+  gap: 6px;
+}
+.wireframe-root .dt-settings.collapsed {
+  margin-top: auto;
+  padding-top: 8px;
+  border-top: 1.5px dashed var(--ink-faint);
+  width: 100%;
+  display: flex; align-items: center; justify-content: center;
+}
+.wireframe-root .dt-settings .sec-label {
+  padding: 4px 4px 2px;
+}
+.wireframe-root .dt-settings-row {
+  display: flex; align-items: center; gap: 6px;
+  padding: 2px 4px;
+}
+.wireframe-root .dt-settings-label {
+  font-size: 12px;
+  color: var(--ink-faint);
+  flex: 0 0 36px;
+}
+.wireframe-root .dt-settings-controls {
+  display: flex; gap: 4px;
+  flex: 1;
+}
+.wireframe-root .dt-settings-btn {
+  flex: 1;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1.5px dashed var(--ink);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--hand);
+  font-size: 12px;
+  padding: 3px 6px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.wireframe-root .dt-settings-btn:hover { background: var(--paper-2); }
+.wireframe-root .dt-settings-btn.active {
+  background: var(--ink);
+  color: var(--paper);
+  border-style: solid;
 }
 
 .wireframe-root .dt-main {

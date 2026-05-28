@@ -3,6 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { useSidebarStudents } from "../hooks/useSidebarStudents";
 import { useAuth } from "@/context/AuthContext";
 import { TopSearch } from "./TopSearch";
+import { UiSettings } from "./UiSettings";
 import { apiFetch } from "@/lib/api";
 
 // Unread incoming SessionMessages for the calling coach. Used to
@@ -196,6 +197,7 @@ function DTSidebar({
           </Link>
         );
       })}
+      <UiSettings collapsed={collapsed} />
     </div>
   );
 }

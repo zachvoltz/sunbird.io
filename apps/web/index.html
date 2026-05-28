@@ -11,6 +11,22 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // Apply persisted UI prefs before React mounts so we don't flash the
+      // default theme/text-size on first paint. Mirrors UiPrefsContext.
+      (function () {
+        try {
+          var t = localStorage.getItem("sunbird:theme");
+          document.documentElement.setAttribute(
+            "data-theme",
+            t === "dark" ? "dark" : "light",
+          );
+          var s = localStorage.getItem("sunbird:textScale");
+          var v = s === "small" ? 0.9 : s === "large" ? 1.15 : 1;
+          document.documentElement.style.setProperty("--text-scale", String(v));
+        } catch (_) {}
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
