@@ -557,6 +557,10 @@ model Booking {
   // When practiceNotesSentAt is null the sections are still a draft; once set they
   // represent the sent note. Kept alongside practiceNotes for back-compat.
   noteSections        String?
+  // Snapshot of the student's routine as the coach set it at the end of this
+  // session — same JSON shape as User.currentRoutine. Lets past sessions show
+  // the routine that was current at that time and builds a routine history.
+  routineSnapshot     String?
   createdAt           DateTime  @default(now())
 
   user           User               @relation(fields: [userId], references: [id])

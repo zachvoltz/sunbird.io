@@ -646,6 +646,7 @@ export function CoachSession() {
               editable
               startInEditMode
               saveUrl={`/api/coaches/students/${booking.user.id}/routine`}
+              bookingId={booking.id}
               onSaved={setRoutine}
               title="Routine for next time"
             />

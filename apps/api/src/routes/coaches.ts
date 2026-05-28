@@ -695,9 +695,27 @@ coachRoutes.put("/students/:id/routine", requireAuth, requireRole("COACH", "ADMI
     if (!hasBooking) return c.json({ error: "Forbidden" }, 403);
   }
 
-  const body = (await c.req.json().catch(() => null)) as { items?: Array<Partial<RoutineItem>> } | null;
+  const body = (await c.req.json().catch(() => null)) as
+    | { items?: Array<Partial<RoutineItem>>; bookingId?: string }
+    | null;
   if (!body || !Array.isArray(body.items)) {
     return c.json({ error: "items array required" }, 400);
+  }
+
+  // Optional: when the routine is saved at the end of a session, the caller
+  // passes that session's bookingId so we snapshot the routine onto it. The
+  // booking must belong to this student (and this coach, unless admin).
+  const bookingId = typeof body.bookingId === "string" ? body.bookingId : null;
+  if (bookingId) {
+    const booking = await db.booking.findFirst({
+      where: {
+        id: bookingId,
+        userId: studentId,
+        ...(user.role === "COACH" ? { coachId: user.id } : {}),
+      },
+      select: { id: true },
+    });
+    if (!booking) return c.json({ error: "Booking not found" }, 404);
   }
 
   const ALLOWED_KINDS: ReadonlySet<LibraryItemKind> = new Set(["warmup", "exercise", "song"]);
@@ -722,6 +740,9 @@ coachRoutes.put("/students/:id/routine", requireAuth, requireRole("COACH", "ADMI
 
   const stored = serializeRoutine(cleaned);
   await db.user.update({ where: { id: studentId }, data: { currentRoutine: stored } });
+  if (bookingId) {
+    await db.booking.update({ where: { id: bookingId }, data: { routineSnapshot: stored } });
+  }
   return c.json({ data: parseRoutine(stored) });
 });
 

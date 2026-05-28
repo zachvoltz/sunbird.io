@@ -57,6 +57,8 @@ type Props = {
   editable: boolean;
   /** PUT endpoint, e.g. `/api/coaches/students/<id>/routine`. Required when editable. */
   saveUrl?: string;
+  /** When set, the save also snapshots the routine onto this session (booking). */
+  bookingId?: string;
   /** Called with the server-confirmed routine after a successful save. */
   onSaved?: (routine: RoutinePublic) => void;
   /** Section title; defaults to "Current routine". */
@@ -71,6 +73,7 @@ export function CurrentRoutine({
   routine,
   editable,
   saveUrl,
+  bookingId,
   onSaved,
   title = "Current routine",
   emptyHint,
@@ -155,7 +158,7 @@ export function CurrentRoutine({
     try {
       const res = await apiFetch<{ data: RoutinePublic }>(saveUrl, {
         method: "PUT",
-        body: JSON.stringify({ items: draft }),
+        body: JSON.stringify(bookingId ? { items: draft, bookingId } : { items: draft }),
       });
       onSaved?.(res.data);
       setEditing(false);

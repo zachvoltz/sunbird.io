@@ -5,6 +5,7 @@ import { createBookingSchema, createRecurringScheduleSchema, practiceNotesSchema
 import { createEmailService } from "../services/email.service";
 import { createCallsService } from "../services/calls.service";
 import { pushEventMirror, deleteEventMirror } from "./google-calendar";
+import { parseRoutine } from "../lib/routine";
 
 const LESSON_DURATION_MINS = 60;
 
@@ -74,6 +75,7 @@ function serializeBooking(b: any) {
     studentNote: b.studentNote,
     practiceNotes: b.practiceNotes,
     noteSections: parseNoteSections(b.noteSections),
+    routineSnapshot: b.routineSnapshot ? parseRoutine(b.routineSnapshot) : null,
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
     scheduleId: b.scheduleId ?? null,

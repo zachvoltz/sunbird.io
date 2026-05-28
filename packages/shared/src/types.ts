@@ -297,6 +297,9 @@ export interface BookingPublic {
   studentNote: string | null;
   practiceNotes: string | null;
   noteSections: NoteSections | null;
+  // Routine the coach set at the end of this session (snapshot at that time).
+  // Null for sessions saved before a routine was ever attached.
+  routineSnapshot: RoutinePublic | null;
   completedAt: string | null;
   usedSubscription: boolean;
   scheduleId: string | null;
