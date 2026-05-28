@@ -10,8 +10,6 @@ import type {
   NoteSections,
   RoutinePublic,
   SessionMessagePublic,
-  SessionResourcePublic,
-  SessionResourceType,
   SkillTreeFull,
   StudentDetailPublic,
   StudentProgressPublic,
@@ -62,7 +60,15 @@ const EMPTY_SECTIONS: Record<NoteSectionKey, string> = {
   nextTime: "",
 };
 
-function SessionShell({ children }: { children: React.ReactNode }) {
+function SessionShell({
+  children,
+  immersive = false,
+}: {
+  children: React.ReactNode;
+  /** Live-tab full-bleed layout: dark bg, no auto-scroll on the shell so the
+   *  page can use an absolute video layer + a separately-scrolling overlay. */
+  immersive?: boolean;
+}) {
   // Sidebar highlights Calendar — bookings are scheduled there, and the
   // coach lands on a session from a calendar event, so it's the natural
   // parent. There's no dedicated session item in the left nav.
@@ -72,8 +78,9 @@ function SessionShell({ children }: { children: React.ReactNode }) {
         style={{
           flex: 1,
           minHeight: 0,
-          overflowY: "auto",
-          background: "var(--color-cream)",
+          overflowY: immersive ? "hidden" : "auto",
+          position: "relative",
+          background: immersive ? "#1a1612" : "var(--color-cream)",
         }}
       >
         {children}
@@ -104,18 +111,6 @@ function formatTimestamp(iso: string): string {
     minute: "2-digit",
   });
 }
-
-const RESOURCE_TYPE_LABELS: Record<SessionResourceType, string> = {
-  LINK: "Link",
-  PDF: "PDF",
-  AUDIO: "Audio",
-};
-
-const RESOURCE_TYPE_ICONS: Record<SessionResourceType, string> = {
-  LINK: "\u{1F517}",
-  PDF: "\u{1F4C4}",
-  AUDIO: "\u{1F3B5}",
-};
 
 type Phase = "upcoming" | "live" | "next";
 
@@ -176,7 +171,6 @@ export function CoachSession() {
 
   const [booking, setBooking] = useState<BookingPublic | null>(null);
   const [messages, setMessages] = useState<SessionMessagePublic[]>([]);
-  const [resources, setResources] = useState<SessionResourcePublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
@@ -199,9 +193,11 @@ export function CoachSession() {
   const [bookingNextWeek, setBookingNextWeek] = useState(false);
   const [nextWeekError, setNextWeekError] = useState<string | null>(null);
 
-  // Chat state
+  // Chat state. `chatOpen` controls the Live-tab floating chat panel —
+  // collapsed it becomes a small toggle pill at the right edge.
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   // Curriculum state
@@ -212,13 +208,6 @@ export function CoachSession() {
   // student. Plan-tab read-only; Next-tab editable (coach updates it
   // as part of the post-lesson plan).
   const [routine, setRoutine] = useState<RoutinePublic | null>(null);
-
-  // Resource form state
-  const [showResourceForm, setShowResourceForm] = useState(false);
-  const [resType, setResType] = useState<SessionResourceType>("LINK");
-  const [resTitle, setResTitle] = useState("");
-  const [resUrl, setResUrl] = useState("");
-  const [addingResource, setAddingResource] = useState(false);
 
   // Lesson notes state — five labeled sections, persisted as
   // booking.noteSections (JSON) with a flattened practiceNotes string
@@ -239,14 +228,9 @@ export function CoachSession() {
       .then((res) => setMessages(res.data))
       .catch(() => {});
 
-  const loadResources = () =>
-    apiFetch<{ data: SessionResourcePublic[] }>(`/api/bookings/${bookingId}/resources`)
-      .then((res) => setResources(res.data))
-      .catch(() => {});
-
   useEffect(() => {
     if (!bookingId) return;
-    Promise.all([loadBooking(), loadMessages(), loadResources()]).finally(() =>
+    Promise.all([loadBooking(), loadMessages()]).finally(() =>
       setLoading(false),
     );
   }, [bookingId]);
@@ -367,28 +351,6 @@ export function CoachSession() {
     }
   };
 
-  const addResource = async () => {
-    if (!resTitle.trim() || !resUrl.trim() || addingResource) return;
-    setAddingResource(true);
-    try {
-      const res = await apiFetch<{ data: SessionResourcePublic }>(
-        `/api/bookings/${bookingId}/resources`,
-        {
-          method: "POST",
-          body: JSON.stringify({ type: resType, title: resTitle.trim(), url: resUrl.trim() }),
-        },
-      );
-      setResources((prev) => [res.data, ...prev]);
-      setResTitle("");
-      setResUrl("");
-      setResType("LINK");
-      setShowResourceForm(false);
-    } catch {
-    } finally {
-      setAddingResource(false);
-    }
-  };
-
   const saveNotes = async () => {
     if (!bookingId || savingNotes) return;
     const trimmed: Record<NoteSectionKey, string> = { ...EMPTY_SECTIONS };
@@ -446,15 +408,6 @@ export function CoachSession() {
     } finally {
       setBookingNextWeek(false);
     }
-  };
-
-  const deleteResource = async (resourceId: string) => {
-    try {
-      await apiFetch(`/api/bookings/${bookingId}/resources/${resourceId}`, {
-        method: "DELETE",
-      });
-      setResources((prev) => prev.filter((r) => r.id !== resourceId));
-    } catch {}
   };
 
   const completedNodeIds = new Set(progress.map((p) => p.nodeId));
@@ -523,11 +476,40 @@ export function CoachSession() {
   }
 
   const student = booking.user;
+  const isLive = phase === "live";
 
   return (
-    <SessionShell>
-      <div className="py-10 px-6 md:px-10">
-        <div className="mx-auto max-w-[1200px]">
+    <SessionShell immersive={isLive}>
+      {/* Live-tab background layer — video (when online & confirmed) or a
+          dark placeholder otherwise. Stays put while the overlay above
+          scrolls; the cards already use opaque bg-surface so they read
+          cleanly against the dark backdrop. */}
+      {isLive && (
+        <div className="absolute inset-0 z-0">
+          {booking.mode === "ONLINE" && booking.status === "CONFIRMED" ? (
+            <div className="w-full h-full p-4 md:p-6">
+              <VideoCall
+                bookingId={bookingId!}
+                localUserName={user?.name ?? "You"}
+                remoteUserName={student?.name ?? "Student"}
+              />
+            </div>
+          ) : (
+            <div className="w-full h-full" style={{ background: "#1a1612" }} />
+          )}
+        </div>
+      )}
+      <div
+        className={
+          isLive
+            ? "absolute inset-0 z-10 overflow-y-auto py-10 px-6 md:px-10 pointer-events-none"
+            : "py-10 px-6 md:px-10"
+        }
+      >
+        <div
+          className="mx-auto max-w-[1200px]"
+          style={isLive ? { pointerEvents: "auto" } : undefined}
+        >
         {/* Workflow phase — Upcoming | Live | Next. Default is time-aware
             (getDefaultPhase) but the coach can switch freely; the manual
             choice sticks for the rest of the visit. */}
@@ -569,22 +551,14 @@ export function CoachSession() {
           </span>
         </div>
 
-        {/* Video call for online sessions */}
-        {phase === "live" && booking.mode === "ONLINE" && booking.status === "CONFIRMED" && (
-          <div className="mb-8">
-            <VideoCall
-              bookingId={bookingId!}
-              localUserName={user?.name ?? "You"}
-              remoteUserName={student?.name ?? "Student"}
-            />
-          </div>
-        )}
+        {/* (Live video lives in the SessionShell background layer above —
+            rendered once per page when phase === "live".) */}
 
-        {/* Lesson notes — captured during Live, finalized/sent in Next.
-            Hidden in Upcoming so the pre-lesson view is prep-focused.
-            Saves to booking.noteSections and emails the student via
-            PATCH /api/bookings/:id/notes. */}
-        {(phase === "live" || phase === "next") && (
+        {/* Lesson notes — drafted on the Next tab as the coach wraps up.
+            Hidden during Live (the lesson itself) and Upcoming (the
+            pre-lesson prep view). Saves to booking.noteSections and
+            emails the student via PATCH /api/bookings/:id/notes. */}
+        {phase === "next" && (
         <section className="mb-10">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
@@ -831,76 +805,8 @@ export function CoachSession() {
         {/* Two-column layout — left column widens when chat is hidden so
             the sidebar cards don't sit next to dead space. */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-          {/* Left column — Lesson, Student, Curriculum, Resources */}
+          {/* Left column — Curriculum. */}
           <div className={`${phase === "live" ? "md:col-span-4" : "md:col-span-12 md:grid md:grid-cols-3 md:gap-8 md:space-y-0"} space-y-8`}>
-            {/* Lesson Info */}
-            <section>
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-                Lesson
-              </h2>
-              <div className="bg-surface rounded-card shadow-card p-6">
-                <h3 className="font-display text-lg font-semibold mb-1">
-                  {booking.category?.title ?? "Open"}
-                </h3>
-                {booking.skillTree && (
-                  <p className="text-sm text-gold font-medium mb-2">
-                    {booking.skillTree.title}
-                  </p>
-                )}
-                <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                  {booking.category?.description ?? ""}
-                </p>
-                <p className="text-[12px] text-text-secondary">
-                  {formatDate(booking.startsAt)}<br />
-                  {formatTime(booking.startsAt)} &ndash; {formatTime(booking.endsAt)}
-                </p>
-                {booking.mode === "IN_PERSON" && (
-                  <p className="text-[12px] text-text-secondary mt-3">
-                    In person
-                  </p>
-                )}
-              </div>
-            </section>
-
-            {/* Student Info */}
-            <section>
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-                Student
-              </h2>
-              <div className="bg-surface rounded-card shadow-card p-6">
-                <div className="flex items-start gap-4">
-                  <div className="shrink-0 w-10 h-10 rounded-full bg-warm-gray flex items-center justify-center">
-                    {student?.avatarUrl ? (
-                      <img
-                        src={student.avatarUrl}
-                        alt={student.name}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="font-display text-sm font-semibold text-text-secondary">
-                        {student?.name?.charAt(0) ?? "?"}
-                      </span>
-                    )}
-                  </div>
-                  <div>
-                    <h3 className="font-display text-base font-semibold">
-                      {student?.name ?? "Unknown student"}
-                    </h3>
-                    {student?.bio && (
-                      <p className="text-sm text-text-secondary mt-1">
-                        {student.bio}
-                      </p>
-                    )}
-                  </div>
-                </div>
-                {booking.studentNote && (
-                  <p className="text-sm text-text-secondary mt-4 pt-4 border-t border-charcoal/5 italic">
-                    "{booking.studentNote}"
-                  </p>
-                )}
-              </div>
-            </section>
-
             {/* Curriculum Progress */}
             {curriculum && curriculum.nodes.length > 0 && (
               <section className="mb-8">
@@ -951,124 +857,48 @@ export function CoachSession() {
               </section>
             )}
 
-            {/* Resources */}
-            <section>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
-                  Resources
-                </h2>
-                {!showResourceForm && (
-                  <button
-                    onClick={() => setShowResourceForm(true)}
-                    className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors"
-                  >
-                    + Add
-                  </button>
-                )}
-              </div>
-
-              {showResourceForm && (
-                <div className="bg-surface rounded-card shadow-card p-5 mb-3 space-y-3">
-                  <select
-                    value={resType}
-                    onChange={(e) => setResType(e.target.value as SessionResourceType)}
-                    className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
-                  >
-                    <option value="LINK">Link</option>
-                    <option value="PDF">PDF</option>
-                    <option value="AUDIO">Audio</option>
-                  </select>
-                  <input
-                    type="text"
-                    value={resTitle}
-                    onChange={(e) => setResTitle(e.target.value)}
-                    placeholder="Title"
-                    className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none transition-colors"
-                  />
-                  <input
-                    type="url"
-                    value={resUrl}
-                    onChange={(e) => setResUrl(e.target.value)}
-                    placeholder="URL (e.g. https://...)"
-                    className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none transition-colors"
-                  />
-                  <div className="flex gap-3">
-                    <button
-                      onClick={addResource}
-                      disabled={addingResource || !resTitle.trim() || !resUrl.trim()}
-                      className="text-[13px] font-medium text-cream bg-iris px-4 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
-                    >
-                      {addingResource ? "Adding..." : "Add"}
-                    </button>
-                    <button
-                      onClick={() => {
-                        setShowResourceForm(false);
-                        setResTitle("");
-                        setResUrl("");
-                      }}
-                      className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {resources.length === 0 && !showResourceForm ? (
-                <div className="bg-surface rounded-card shadow-card p-5">
-                  <p className="text-sm text-text-secondary text-center py-2">
-                    No resources shared yet.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {resources.map((r) => (
-                    <div
-                      key={r.id}
-                      className="bg-surface rounded-card shadow-card p-4 flex items-center gap-3"
-                    >
-                      <span className="text-base" title={RESOURCE_TYPE_LABELS[r.type]}>
-                        {RESOURCE_TYPE_ICONS[r.type]}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <a
-                          href={r.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-charcoal hover:text-iris transition-colors truncate block"
-                        >
-                          {r.title}
-                        </a>
-                        <p className="text-[11px] text-text-secondary">
-                          {RESOURCE_TYPE_LABELS[r.type]}
-                        </p>
-                      </div>
-                      <button
-                        onClick={() => deleteResource(r.id)}
-                        className="text-[11px] text-text-secondary hover:text-coral transition-colors shrink-0"
-                        title="Remove resource"
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
           </div>
 
-          {/* Right column — Chat. Live only: pre-lesson messaging
-              belongs in inbox, post-session messaging too. */}
-          {phase === "live" && (
-          <div className="md:col-span-8">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-              Chat
-            </h2>
-            <div className="bg-surface rounded-card shadow-card overflow-hidden flex flex-col" style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
+        </div>
+        </div>
+
+      </div>
+
+      {/* Floating chat — Live only. Anchored to the right edge of the
+          SessionShell so it stays put while the page content scrolls.
+          Collapses into a small pill at the same right edge so the
+          video has room to breathe. */}
+      {isLive && (
+        <div
+          className="absolute z-20"
+          style={{ right: 24, top: 96, bottom: 24, pointerEvents: "auto" }}
+        >
+          {chatOpen ? (
+            <div
+              className="flex flex-col rounded-card overflow-hidden border border-cream/10 backdrop-blur"
+              style={{
+                width: 320,
+                height: "min(520px, 100%)",
+                background: "rgba(26, 22, 18, 0.35)",
+              }}
+            >
+              <div className="flex items-center justify-between px-3 py-2 border-b border-cream/10">
+                <span className="text-[11px] font-medium uppercase tracking-wider text-cream/70">
+                  Chat{messages.length > 0 ? ` · ${messages.length}` : ""}
+                </span>
+                <button
+                  onClick={() => setChatOpen(false)}
+                  className="text-cream/70 hover:text-cream text-[16px] leading-none px-2"
+                  aria-label="Collapse chat"
+                  title="Collapse chat"
+                >
+                  ›
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-3 space-y-3">
                 {messages.length === 0 && (
-                  <p className="text-sm text-text-secondary text-center py-8">
-                    No messages yet. Start the conversation.
+                  <p className="text-[12px] text-cream/60 text-center py-6">
+                    No messages yet.
                   </p>
                 )}
                 {messages.map((m) => {
@@ -1079,18 +909,18 @@ export function CoachSession() {
                       className={`flex ${isMe ? "justify-end" : "justify-start"}`}
                     >
                       <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
+                        className={`max-w-[80%] rounded-2xl px-3 py-2 ${
                           isMe
                             ? "bg-iris text-cream"
-                            : "bg-warm-gray/60 text-charcoal"
+                            : "bg-warm-gray/70 text-charcoal"
                         }`}
                       >
                         {!isMe && (
-                          <p className="text-[11px] font-medium mb-0.5 opacity-70">
+                          <p className="text-[10px] font-medium mb-0.5 opacity-70">
                             {m.sender.name}
                           </p>
                         )}
-                        <p className="text-sm whitespace-pre-line">{m.content}</p>
+                        <p className="text-[13px] whitespace-pre-line">{m.content}</p>
                         <p
                           className={`text-[10px] mt-1 ${
                             isMe ? "text-cream/60" : "text-text-secondary"
@@ -1104,7 +934,7 @@ export function CoachSession() {
                 })}
                 <div ref={chatEndRef} />
               </div>
-              <div className="border-t border-charcoal/10 p-4 flex gap-3">
+              <div className="border-t border-cream/10 p-2 flex gap-2">
                 <input
                   type="text"
                   value={chatInput}
@@ -1115,23 +945,29 @@ export function CoachSession() {
                       sendMessage();
                     }
                   }}
-                  placeholder="Type a message..."
-                  className="flex-1 px-4 py-2.5 text-sm bg-cream border border-charcoal/10 rounded-full focus:border-charcoal/30 focus:outline-none transition-colors"
+                  placeholder="Message…"
+                  className="flex-1 px-3 py-1.5 text-[13px] bg-cream/90 border border-cream/10 rounded-full focus:border-cream/40 focus:outline-none transition-colors"
                 />
                 <button
                   onClick={sendMessage}
                   disabled={sendingChat || !chatInput.trim()}
-                  className="text-[13px] font-medium text-cream bg-iris px-5 py-2.5 rounded-full hover:bg-iris-hover transition-colors disabled:opacity-50"
+                  className="text-[12px] font-medium text-cream bg-iris px-3 py-1.5 rounded-full hover:bg-iris-hover transition-colors disabled:opacity-50"
                 >
                   Send
                 </button>
               </div>
             </div>
-          </div>
+          ) : (
+            <button
+              onClick={() => setChatOpen(true)}
+              className="text-[12px] font-medium text-cream bg-iris/90 backdrop-blur rounded-card shadow-card px-3 py-2 hover:bg-iris transition-colors"
+              aria-label="Open chat"
+            >
+              ‹ Chat{messages.length > 0 ? ` · ${messages.length}` : ""}
+            </button>
           )}
         </div>
-      </div>
-      </div>
+      )}
     </SessionShell>
   );
 }
