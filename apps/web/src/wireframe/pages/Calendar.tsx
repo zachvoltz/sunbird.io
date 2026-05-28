@@ -439,6 +439,9 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
               <span><LegendDot color="var(--ink)" /> completed</span>
               <span><LegendDot color="var(--ink-faint)" /> cancelled</span>
               <span><LegendDot color="var(--accent)" /> busy</span>
+              {googleStatus.connected && (
+                <span><LegendDot color="#3c5a8c" /> Google</span>
+              )}
             </div>
           </div>
           <div className="panel-body scroll">
@@ -447,6 +450,7 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
                 days={days}
                 bookings={weekBookings}
                 busy={busy}
+                googleShadows={googleShadows}
                 now={now}
                 editMode={editMode}
                 availKeys={availKeys}
@@ -589,6 +593,7 @@ function WeekGrid({
             now={now}
             bookings={bookings.filter((b) => sameDay(new Date(b.startsAt), d))}
             busy={busy.filter((bb) => sameDay(new Date(bb.startsAt), d))}
+            googleShadows={googleShadows.filter((g) => sameDay(new Date(g.startsAt), d))}
             editMode={editMode}
             availKeys={availKeys}
             onToggleAvailHour={onToggleAvailHour}
