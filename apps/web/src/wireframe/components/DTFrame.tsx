@@ -50,7 +50,7 @@ function DTTopBar({
   collapsed: boolean;
   onToggleSide: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const initial = user?.name?.trim().charAt(0).toUpperCase() || "?";
   return (
     <div className="dt-topbar">
@@ -84,6 +84,13 @@ function DTTopBar({
         </div>
       )}
       <button className="btn small ghost">＋ new</button>
+      <button
+        className="btn small ghost"
+        onClick={() => logout()}
+        title="sign out"
+      >
+        sign out
+      </button>
       <div className="wf-avatar" title={user?.name ?? "you"}>{initial}</div>
     </div>
   );

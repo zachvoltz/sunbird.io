@@ -12,7 +12,7 @@ Wireframe references:
 
 - [x] Email/password register, login, logout, session cookie
 - [x] Password reset via email
-- [ ] Final pass on logout UX — confirm logout button is wired in both coach and student left-nav
+- [x] Final pass on logout UX — "sign out" button in the topbar for both student (`STFrame.tsx`) and coach (`DTFrame.tsx`); coach also retains the Account-page logout
 - [ ] **Add a "student or coach?" step to the signup flow** — applies to both email/password and Google OAuth signup
   - [ ] Decide placement: pre-signup picker (role chosen before either auth method) vs. post-signup landing step that runs the first time a user has no role set yet
   - [ ] Persist the chosen role on the `User` record (`COACH` or `STUDENT`)
@@ -60,9 +60,9 @@ Wireframe references:
 - [x] Multi-step booking UI (`apps/web/src/pages/book/*`)
 - [x] One-time booking API (`POST /api/bookings`)
 - [x] Recurring booking API — weekly / biweekly / monthly (`POST /api/bookings/recurring`, `RecurringSchedule` model)
-- [ ] Recurring booking UI — surface the cadence picker in the booking flow and confirm pricing display
-- [ ] Confirmation screen post-booking (one-time + recurring variants)
-- [ ] Cancel / reschedule UI for student (API likely exists; verify)
+- [x] Recurring booking UI — cadence picker (weekly / biweekly) + session-count preview in `StepConfirm.tsx`; monthly not yet exposed in UI
+- [x] Confirmation screen post-booking (`pages/book/BookingSuccess.tsx`)
+- [~] Cancel / reschedule UI for student — **cancel** done (`MyBookings.tsx` → `PATCH /api/bookings/:id/cancel`, plus recurring-series cancel); **reschedule** still missing (no API or UI)
 
 ---
 
@@ -123,7 +123,7 @@ Wireframe references:
 - [x] Paths: Khan-style lesson trees inside the Library, persisted, with "+ add lesson" affordance in both the path editor and tree canvas
 - [ ] Wire library items + paths into the per-session `Assignment` UI — coach picks items from library to assign to a specific session
 - [ ] Carry-over logic: when coach opens a new session, pre-populate exercises from the previous lesson for that student, with edit affordance
-- [ ] Confirm notes are visible to student on their session page after the lesson
+- [x] Notes visible to student after the lesson — dedicated student notes views render full `noteSections` (intro / scales & exercises / topics / song work / suggestions / next time) with `practiceNotes` fallback (`/my-notes`, `/my-notes/:bookingId` in `wireframe/pages/MyNotes.tsx`). Note: not yet surfaced on the in-session page (`StudentSession.tsx`)
 
 ---
 
@@ -133,8 +133,8 @@ Wireframe references:
 - [x] `TakeAnnotation` + `TakeReply` data model
 - [x] Coach take-review wireframe with annotations (LOVE / WATCH / TRY_THIS)
 - [x] Student record-take wireframe
-- [ ] Move record-take UI into main student app routing
-- [ ] Move coach take-review UI into main coach app routing (`/takes/:id` or under session)
+- [x] Move record-take UI into main student app routing (`/practice/record/:assignmentId` → `RecordTakePage`)
+- [x] Move coach take-review UI into main coach app routing (`/coach/takes/:takeId` → `TakeReviewPage`)
 - [ ] Student "take history" view per lesson — **confirm mockup covers this**
 - [x] Audio storage backend: R2 bucket bound (proven on library audio) — reuse for takes
 - [ ] Confirm take audio max length + file size limits, error states on oversize uploads
@@ -149,11 +149,11 @@ Wireframe references:
 - [x] Practice-path wireframe (`apps/web/src/wireframe/pages/PracticePath.tsx`)
 - [x] Exercise player wireframe
 - [x] Calendar wireframe (`apps/web/src/wireframe/pages/Calendar.tsx`)
-- [ ] Move PracticePath into main routing — student lands here from dashboard
-- [ ] Move ExercisePlayer into main routing
-- [ ] Move Calendar into main routing; ensure it pulls real `PracticeStreak` + completed-assignment data
+- [x] Move PracticePath into main routing — `/practice` → `PracticePathPage`
+- [x] Move ExercisePlayer into main routing — `/practice/exercise/:assignmentId` → `ExercisePlayerPage`
+- [ ] Move Calendar into main routing; ensure it pulls real `PracticeStreak` + completed-assignment data — Calendar is currently routed for the **coach** only (`/coach/calendar`, pulls bookings/availability); a **student** calendar wired to `PracticeStreak`/assignment data is still missing
 - [ ] "Mark practiced" action on exercises → updates streak + calendar
-- [ ] Confirm exercises shown on PracticePath are pulled from the **latest** lesson's assignment set
+- [x] Confirm exercises shown on PracticePath are pulled from the **latest** lesson's assignment set — PracticePath prefers the coach-set `routine` (source of truth), falling back to current-week assignments (`PracticePath.tsx:227-237`)
 
 ---
 
@@ -164,8 +164,8 @@ Wireframe references:
 - [x] Live-ticking clocks on dashboards
 - [x] Topbar search wired for both coach and student
 - [x] Calendar (not Today) highlighted on the coach session page nav
-- [ ] Coach dashboard: today's lessons, takes awaiting review, upcoming bookings (inbox count ✓)
-- [ ] Student dashboard: next lesson, today's practice, streak, takes submitted (inbox count ✓)
+- [x] Coach dashboard: today's lessons, takes awaiting review, missing-notes/plan gaps (`/coach` Roster via `useCoachDashboard`)
+- [x] Student dashboard: today's/next lesson, this week's practice, streak, takes submitted/unreviewed (`/today` TodayPage via `useMyStudentDetail` + `/api/bookings`)
 - [ ] **Needs mockup confirmation:** final dashboard layouts for both roles
 
 ---
