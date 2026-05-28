@@ -72,16 +72,44 @@ function useInbox() {
   return { items, loading, setRead, markAllRead };
 }
 
-function relativeTime(iso: string, now: number): string {
-  const diff = Math.max(0, now - new Date(iso).getTime());
-  const m = Math.round(diff / 60_000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
-  const h = Math.round(m / 60);
-  if (h < 24) return `${h}h ago`;
-  const d = Math.round(h / 24);
-  if (d < 7) return `${d}d ago`;
-  return new Date(iso).toLocaleDateString();
+// Email-inbox "time" column: hour for today, weekday for this week,
+// date otherwise — mirrors Gmail / Apple Mail conventions.
+function inboxTime(iso: string, now: number): string {
+  const d = new Date(iso);
+  const sameDay = new Date(now).toDateString() === d.toDateString();
+  if (sameDay) {
+    return d.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  }
+  const diffDays = Math.floor((now - d.getTime()) / 86_400_000);
+  if (diffDays < 7) {
+    return d.toLocaleDateString([], { weekday: "short" });
+  }
+  return d.toLocaleDateString([], { month: "short", day: "numeric" });
+}
+
+type InboxBucket = "Today" | "Yesterday" | "This week" | "Earlier";
+const BUCKET_ORDER: InboxBucket[] = ["Today", "Yesterday", "This week", "Earlier"];
+
+function inboxBucket(iso: string, now: number): InboxBucket {
+  const d = new Date(iso);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const t = d.getTime();
+  if (t >= todayStart.getTime()) return "Today";
+  if (t >= todayStart.getTime() - 86_400_000) return "Yesterday";
+  if (t >= todayStart.getTime() - 7 * 86_400_000) return "This week";
+  return "Earlier";
+}
+
+function groupByBucket(items: InboxItem[], now: number): Array<[InboxBucket, InboxItem[]]> {
+  const map = new Map<InboxBucket, InboxItem[]>();
+  for (const it of items) {
+    const k = inboxBucket(it.createdAt, now);
+    const arr = map.get(k) ?? [];
+    arr.push(it);
+    map.set(k, arr);
+  }
+  return BUCKET_ORDER.filter((k) => map.has(k)).map((k) => [k, map.get(k)!]);
 }
 
 function InboxEmpty({ what }: { what: string }) {
@@ -133,79 +161,36 @@ function InboxRow({
 }) {
   const studentName = item.booking.student?.name ?? item.sender.name;
   const category = item.booking.category?.title;
+  const snippet = item.content.replace(/\s+/g, " ").trim();
   const lessonAt = new Date(item.booking.startsAt).toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
   });
   return (
-    <div
-      className={"box small row gap-3" + (item.unread ? " accent" : "")}
-      style={{
-        borderWidth: item.unread ? 2 : 1.5,
-        position: "relative",
-        padding: 12,
-      }}
+    <Link
+      to={`/coach/session/${item.bookingId}`}
+      className={"inbox-row" + (item.unread ? " unread" : "")}
+      title={`${studentName} · ${lessonAt}`}
     >
-      {/* Read checkbox — wrapped so clicks don't bubble to the row link. */}
       <label
+        className="ibx-check"
         onClick={(e) => e.stopPropagation()}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          flex: "0 0 auto",
-          paddingTop: 2,
-        }}
         title={item.unread ? "mark read" : "mark unread"}
       >
         <input
           type="checkbox"
           checked={!item.unread}
           onChange={(e) => onToggleRead(item.id, e.target.checked)}
-          style={{ width: 16, height: 16, accentColor: "var(--accent)" }}
+          style={{ width: 14, height: 14, accentColor: "var(--accent)" }}
         />
       </label>
-
-      <Link
-        to={`/coach/session/${item.bookingId}`}
-        className="row gap-3 grow"
-        style={{ textDecoration: "none", color: "inherit", minWidth: 0 }}
-      >
-        <Avatar name={studentName} size={36} />
-        <div className="grow" style={{ minWidth: 0 }}>
-          <div className="row gap-2" style={{ alignItems: "baseline" }}>
-            <span className="bold">{studentName}</span>
-            {item.unread && (
-              <span
-                className="chip tiny"
-                style={{
-                  background: "var(--accent)",
-                  color: "var(--paper)",
-                  borderColor: "var(--accent)",
-                  padding: "0 6px",
-                  fontSize: 9,
-                }}
-              >
-                new
-              </span>
-            )}
-            <span className="grow" />
-            <span className="tiny muted">{relativeTime(item.createdAt, now)}</span>
-          </div>
-          <div className="small" style={{ marginTop: 2, whiteSpace: "pre-wrap" }}>
-            {item.content}
-          </div>
-          <div className="tiny muted" style={{ marginTop: 4 }}>
-            {category ? `${category} · ` : ""}
-            {lessonAt}
-          </div>
-        </div>
-        <Icon name="chev" size={11} />
-      </Link>
-    </div>
+      <Avatar name={studentName} size={28} />
+      <span className="ibx-sender">{studentName}</span>
+      <span className="ibx-snippet">
+        {category && <span className="ibx-tag">[{category}]</span>}
+        {snippet}
+      </span>
+      <span className="ibx-when">{inboxTime(item.createdAt, now)}</span>
+    </Link>
   );
 }
 
@@ -260,8 +245,8 @@ function InboxDesktop() {
       </div>
 
       <div className="dt-main-body">
-        <div className="panel" style={{ height: "100%" }}>
-          <div className="panel-body scroll col gap-2" style={{ padding: 14 }}>
+        <div className="panel" style={{ height: "100%", padding: 0 }}>
+          <div className="panel-body scroll" style={{ padding: 0 }}>
             {loading && !items && (
               <div className="small muted" style={{ padding: 20 }}>loading inbox…</div>
             )}
@@ -273,9 +258,18 @@ function InboxDesktop() {
                 No unread items — switch to <b>all</b> above to see everything.
               </div>
             )}
-            {visible.map((item) => (
-              <InboxRow key={item.id} item={item} now={now} onToggleRead={setRead} />
-            ))}
+            {visible.length > 0 && (
+              <div className="inbox-list">
+                {groupByBucket(visible, now).map(([label, rows]) => (
+                  <div key={label} className="inbox-group">
+                    <div className="inbox-day-label">{label}</div>
+                    {rows.map((item) => (
+                      <InboxRow key={item.id} item={item} now={now} onToggleRead={setRead} />
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -297,9 +291,13 @@ function InboxMobile() {
         </div>
         <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
       </div>
-      <div className="wf-body col gap-3 scroll-y" style={{ alignItems: "stretch" }}>
+      <div className="wf-body col scroll-y" style={{ alignItems: "stretch", padding: 0 }}>
         {!loading && unreadCount > 0 && (
-          <button className="btn small ghost" onClick={markAllRead} style={{ alignSelf: "flex-end" }}>
+          <button
+            className="btn small ghost"
+            onClick={markAllRead}
+            style={{ alignSelf: "flex-end", margin: "8px 14px" }}
+          >
             mark all read
           </button>
         )}
@@ -307,13 +305,20 @@ function InboxMobile() {
           <div className="small muted center" style={{ padding: 20 }}>loading…</div>
         )}
         {!loading && (items?.length ?? 0) === 0 && (
-          <div className="box dashed" style={{ paddingBottom: 24 }}>
-            <InboxEmpty what="Inbox is quiet." />
+          <InboxEmpty what="Inbox is quiet." />
+        )}
+        {(items ?? []).length > 0 && (
+          <div className="inbox-list">
+            {groupByBucket(items ?? [], now).map(([label, rows]) => (
+              <div key={label} className="inbox-group">
+                <div className="inbox-day-label">{label}</div>
+                {rows.map((item) => (
+                  <InboxRow key={item.id} item={item} now={now} onToggleRead={setRead} />
+                ))}
+              </div>
+            ))}
           </div>
         )}
-        {(items ?? []).map((item) => (
-          <InboxRow key={item.id} item={item} now={now} onToggleRead={setRead} />
-        ))}
       </div>
     </WFFrame>
   );
