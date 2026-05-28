@@ -374,6 +374,125 @@ bookingRoutes.get("/:id", requireAuth, async (c) => {
   return c.json({ data: serializeBooking(booking) });
 });
 
+// GET /api/bookings/:id/previous — most recent COMPLETED session this
+// coach had with the same student, before the given booking. Used by
+// the coach session page to show a "Last time" recap card during prep.
+// Returns { data: null } when there's no prior session.
+bookingRoutes.get("/:id/previous", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const current = await db.booking.findUnique({
+    where: { id },
+    select: { coachId: true, userId: true, startsAt: true },
+  });
+  if (!current) {
+    return c.json({ error: "Booking not found" }, 404);
+  }
+  if (user.role === "COACH" && current.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const previous = await db.booking.findFirst({
+    where: {
+      coachId: current.coachId,
+      userId: current.userId,
+      status: "COMPLETED",
+      startsAt: { lt: current.startsAt },
+    },
+    orderBy: { startsAt: "desc" },
+    include: bookingInclude,
+  });
+
+  return c.json({ data: previous ? serializeBooking(previous) : null });
+});
+
+// POST /api/bookings/:id/next-week — coach quick-action that books the
+// same student at the same UTC time +7 days, reusing category / skill
+// tree / node / mode / coach. Used by the Next tab on the coach session
+// page as a one-click "lock in next week" affordance.
+//
+// We re-run the same conflict / availability / busy checks as the
+// student-facing POST /api/bookings so we never bypass the coach's
+// real schedule. On a conflict the coach is told to "pick another
+// time" and falls back to the calendar.
+bookingRoutes.post("/:id/next-week", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const source = await db.booking.findUnique({
+    where: { id },
+    include: { user: { select: { id: true } } },
+  });
+  if (!source) return c.json({ error: "Booking not found" }, 404);
+  if (user.role === "COACH" && source.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (!source.coachId) {
+    return c.json({ error: "Source booking has no coach" }, 400);
+  }
+
+  const startsAt = new Date(source.startsAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const endsAt = new Date(source.endsAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  if (startsAt <= new Date()) {
+    return c.json({ error: "Next-week slot is in the past" }, 400);
+  }
+
+  const conflict = await db.booking.findFirst({
+    where: {
+      coachId: source.coachId,
+      startsAt: { lt: endsAt },
+      endsAt: { gt: startsAt },
+      status: { not: "CANCELLED" },
+    },
+  });
+  if (conflict) {
+    return c.json({ error: "That slot is already booked next week" }, 409);
+  }
+
+  const dayOfWeek = startsAt.getUTCDay();
+  const timeStr = `${String(startsAt.getUTCHours()).padStart(2, "0")}:${String(startsAt.getUTCMinutes()).padStart(2, "0")}`;
+  const coachAvail = await db.coachAvailability.findFirst({
+    where: { coachId: source.coachId, dayOfWeek, startTime: timeStr, isActive: true },
+  });
+  if (!coachAvail) {
+    return c.json({ error: "Coach is no longer available at this time next week" }, 400);
+  }
+
+  const busyOverlap = await db.coachBusy.findFirst({
+    where: {
+      coachId: source.coachId,
+      startsAt: { lt: endsAt },
+      endsAt: { gt: startsAt },
+    },
+  });
+  if (busyOverlap) {
+    return c.json({ error: "Coach is marked busy at this time next week" }, 409);
+  }
+
+  const booking = await db.booking.create({
+    data: {
+      userId: source.userId,
+      coachId: source.coachId,
+      lessonTypeId: null,
+      categoryId: source.categoryId,
+      skillTreeId: source.skillTreeId,
+      nodeId: source.nodeId,
+      startsAt,
+      endsAt,
+      mode: source.mode,
+      studentNote: null,
+      status: "CONFIRMED",
+    },
+    include: bookingInclude,
+  });
+
+  return c.json({ data: serializeBooking(booking) }, 201);
+});
+
 // PATCH /api/bookings/:id/cancel — cancel a booking
 bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
   const { id } = c.req.param();

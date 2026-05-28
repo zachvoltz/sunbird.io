@@ -114,6 +114,59 @@ const RESOURCE_TYPE_ICONS: Record<SessionResourceType, string> = {
   AUDIO: "\u{1F3B5}",
 };
 
+type Phase = "upcoming" | "live" | "next";
+
+const PHASES: readonly Phase[] = ["upcoming", "live", "next"] as const;
+
+const PHASE_LABELS: Record<Phase, string> = {
+  upcoming: "Upcoming",
+  live: "Live",
+  next: "Next",
+};
+
+// 15-minute padding around the booking window — coaches typically join a
+// few minutes before, and "Live" should remain selected briefly after the
+// scheduled end so they can finish up notes/chat in the same flow.
+const LIVE_PAD_MS = 15 * 60 * 1000;
+
+function getDefaultPhase(booking: BookingPublic, now = Date.now()): Phase {
+  if (booking.status === "COMPLETED" || booking.status === "CANCELLED") {
+    return "next";
+  }
+  const start = new Date(booking.startsAt).getTime();
+  const end = new Date(booking.endsAt).getTime();
+  if (now < start - LIVE_PAD_MS) return "upcoming";
+  if (now > end + LIVE_PAD_MS) return "next";
+  return "live";
+}
+
+function formatRelative(ms: number, suffix: "from now" | "ago"): string {
+  const min = Math.max(1, Math.round(ms / 60000));
+  if (min < 60) return `${min}m ${suffix}`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr}h ${suffix}`;
+  const day = Math.round(hr / 24);
+  return `${day}d ${suffix}`;
+}
+
+function phaseHint(booking: BookingPublic, phase: Phase, now = Date.now()): string {
+  const start = new Date(booking.startsAt).getTime();
+  const end = new Date(booking.endsAt).getTime();
+  if (phase === "upcoming") {
+    if (now >= start) return "starts now";
+    return `starts ${formatRelative(start - now, "from now")}`;
+  }
+  if (phase === "live") {
+    if (now < start) return "starts shortly";
+    if (now > end) return "wrapping up";
+    return "live now";
+  }
+  if (booking.status === "CANCELLED") return "cancelled";
+  if (booking.status === "COMPLETED") return "completed";
+  if (now <= end) return "ready to wrap";
+  return `ended ${formatRelative(now - end, "ago")}`;
+}
+
 export function CoachSession() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const { user } = useAuth();
@@ -123,6 +176,25 @@ export function CoachSession() {
   const [resources, setResources] = useState<SessionResourcePublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+
+  // Workflow phase — defaults to whichever bucket the current time falls
+  // in (see getDefaultPhase) but the coach can switch freely. Seeded once
+  // from the booking; we don't keep snapping back to the auto value so a
+  // manual switch sticks.
+  const [phase, setPhase] = useState<Phase>("upcoming");
+  const seededPhase = useRef(false);
+
+  // Most recent COMPLETED session this coach had with this student
+  // before the current booking, used by the Upcoming tab's "Last time"
+  // recap. `undefined` = not loaded yet, `null` = no prior session.
+  const [lastSession, setLastSession] = useState<BookingPublic | null | undefined>(undefined);
+
+  // Next-week scheduling card state (Next tab). Optimistic: once the
+  // POST returns we stash the new booking so the card switches to a
+  // "scheduled" confirmation and links to the new session.
+  const [nextWeekBooking, setNextWeekBooking] = useState<BookingPublic | null>(null);
+  const [bookingNextWeek, setBookingNextWeek] = useState(false);
+  const [nextWeekError, setNextWeekError] = useState<string | null>(null);
 
   // Chat state
   const [chatInput, setChatInput] = useState("");
@@ -170,6 +242,22 @@ export function CoachSession() {
       setLoading(false),
     );
   }, [bookingId]);
+
+  useEffect(() => {
+    if (!booking || seededPhase.current) return;
+    setPhase(getDefaultPhase(booking));
+    seededPhase.current = true;
+  }, [booking]);
+
+  // Fetch the prior completed session once the booking is loaded. Cheap
+  // single query on the server; fine to fire even when the coach lands
+  // on Live/Next since they might still tab back to Upcoming.
+  useEffect(() => {
+    if (!bookingId || !booking) return;
+    apiFetch<{ data: BookingPublic | null }>(`/api/bookings/${bookingId}/previous`)
+      .then((res) => setLastSession(res.data))
+      .catch(() => setLastSession(null));
+  }, [bookingId, booking?.id]);
 
   // Seed the section textareas from the booking once it loads (without
   // clobbering whatever the coach has typed locally).
@@ -326,6 +414,23 @@ export function CoachSession() {
   );
   const hasPriorNotes = !!booking?.practiceNotes;
 
+  const bookSameTimeNextWeek = async () => {
+    if (!bookingId || bookingNextWeek || nextWeekBooking) return;
+    setBookingNextWeek(true);
+    setNextWeekError(null);
+    try {
+      const res = await apiFetch<{ data: BookingPublic }>(
+        `/api/bookings/${bookingId}/next-week`,
+        { method: "POST" },
+      );
+      setNextWeekBooking(res.data);
+    } catch (err: any) {
+      setNextWeekError(err?.body?.error ?? "Couldn't schedule next week. Try picking another time.");
+    } finally {
+      setBookingNextWeek(false);
+    }
+  };
+
   const deleteResource = async (resourceId: string) => {
     try {
       await apiFetch(`/api/bookings/${bookingId}/resources/${resourceId}`, {
@@ -406,13 +511,36 @@ export function CoachSession() {
     <SessionShell>
       <div className="py-10 px-6 md:px-10">
         <div className="mx-auto max-w-[1200px]">
-        {/* Header */}
-        <div className="mb-10 flex items-baseline justify-between">
-          <h1 className="font-display text-3xl md:text-4xl font-bold">
-            Session
-          </h1>
+        {/* Workflow phase — Upcoming | Live | Next. Default is time-aware
+            (getDefaultPhase) but the coach can switch freely; the manual
+            choice sticks for the rest of the visit. */}
+        <div className="mb-8 flex items-center gap-3 flex-wrap">
+          <div className="inline-flex items-center bg-warm-gray/30 rounded-card p-1">
+            {PHASES.map((p) => {
+              const active = phase === p;
+              return (
+                <button
+                  key={p}
+                  onClick={() => setPhase(p)}
+                  className={`text-[12px] font-medium uppercase tracking-[0.1em] px-4 py-1.5 rounded-card transition-colors ${
+                    active
+                      ? "bg-iris text-cream shadow-sm"
+                      : "text-text-secondary hover:text-charcoal"
+                  }`}
+                >
+                  {p === "live" && active && (
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-cream mr-2 align-middle animate-pulse" />
+                  )}
+                  {PHASE_LABELS[p]}
+                </button>
+              );
+            })}
+          </div>
+          <span className="text-[11px] text-text-secondary">
+            {phaseHint(booking, phase)}
+          </span>
           <span
-            className={`text-[11px] uppercase tracking-wider font-medium ${
+            className={`text-[11px] uppercase tracking-wider font-medium ml-auto ${
               booking.status === "COMPLETED"
                 ? "text-sage"
                 : booking.status === "CANCELLED"
@@ -425,7 +553,7 @@ export function CoachSession() {
         </div>
 
         {/* Video call for online sessions */}
-        {booking.mode === "ONLINE" && booking.status === "CONFIRMED" && (
+        {phase === "live" && booking.mode === "ONLINE" && booking.status === "CONFIRMED" && (
           <div className="mb-8">
             <VideoCall
               bookingId={bookingId!}
@@ -435,9 +563,11 @@ export function CoachSession() {
           </div>
         )}
 
-        {/* Lesson notes — five labeled sections, full width and prominent.
+        {/* Lesson notes — captured during Live, finalized/sent in Next.
+            Hidden in Upcoming so the pre-lesson view is prep-focused.
             Saves to booking.noteSections and emails the student via
             PATCH /api/bookings/:id/notes. */}
+        {(phase === "live" || phase === "next") && (
         <section className="mb-10">
           <div className="flex items-baseline justify-between mb-4">
             <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
@@ -512,11 +642,149 @@ export function CoachSession() {
             </div>
           </div>
         </section>
+        )}
 
-        {/* Two-column layout */}
+        {/* Schedule next week — Next-tab quick action. One click books
+            the same student at the same time + 7 days; on conflict, the
+            coach falls back to /coach/calendar via the secondary link. */}
+        {phase === "next" && (() => {
+          const nextStart = new Date(new Date(booking.startsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+          const nextEnd = new Date(new Date(booking.endsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
+          const studentFirst = student?.name?.split(" ")[0] ?? "student";
+          return (
+            <section className="mb-10">
+              <div className="flex items-baseline justify-between mb-4">
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+                  Next time
+                </h2>
+              </div>
+              <div className="bg-surface rounded-card shadow-card p-5">
+                {nextWeekBooking ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                      <p className="text-sm font-medium text-charcoal">
+                        Scheduled with {studentFirst}.
+                      </p>
+                      <p className="text-[12px] text-text-secondary mt-1">
+                        {formatDate(nextWeekBooking.startsAt)} &middot;{" "}
+                        {formatTime(nextWeekBooking.startsAt)} – {formatTime(nextWeekBooking.endsAt)}
+                        {nextWeekBooking.mode === "ONLINE" ? " · online" : " · in person"}
+                      </p>
+                    </div>
+                    <Link
+                      to={`/coach/session/${nextWeekBooking.id}`}
+                      className="text-[13px] font-medium text-iris hover:text-iris-hover transition-colors"
+                    >
+                      open new session →
+                    </Link>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-4 flex-wrap">
+                    <div>
+                      <p className="text-sm text-charcoal">
+                        Same lesson, same time, next week.
+                      </p>
+                      <p className="text-[12px] text-text-secondary mt-1">
+                        {formatDate(nextStart.toISOString())} &middot;{" "}
+                        {formatTime(nextStart.toISOString())} – {formatTime(nextEnd.toISOString())}
+                        {booking.mode === "ONLINE" ? " · online" : " · in person"}
+                      </p>
+                      {nextWeekError && (
+                        <p className="text-[12px] text-coral mt-2">{nextWeekError}</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <Link
+                        to="/coach/calendar"
+                        className="text-[12px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+                      >
+                        pick another time →
+                      </Link>
+                      <button
+                        onClick={bookSameTimeNextWeek}
+                        disabled={bookingNextWeek}
+                        className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+                      >
+                        {bookingNextWeek ? "Booking…" : "Book same time next week"}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </section>
+          );
+        })()}
+
+        {/* Last time — recap of the most recent completed session with
+            this student. Upcoming-only prep card; renders an empty state
+            when there's no prior session. */}
+        {phase === "upcoming" && (
+          <section className="mb-10">
+            <div className="flex items-baseline justify-between mb-4">
+              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
+                Last time
+              </h2>
+              {lastSession && (
+                <span className="text-[11px] text-text-secondary">
+                  {formatDate(lastSession.startsAt)} &middot; {formatTime(lastSession.startsAt)}
+                </span>
+              )}
+            </div>
+            <div className="bg-surface rounded-card shadow-card p-5">
+              {lastSession === undefined ? (
+                <p className="text-sm text-text-secondary text-center py-2">
+                  Loading…
+                </p>
+              ) : lastSession === null ? (
+                <p className="text-sm text-text-secondary text-center py-2">
+                  First session with {student?.name?.split(" ")[0] ?? "this student"}. No previous notes to recap.
+                </p>
+              ) : (
+                (() => {
+                  const prior = lastSession.noteSections as Partial<Record<NoteSectionKey, string>> | null;
+                  const filled = NOTE_SECTIONS.filter(
+                    ({ key }) => prior?.[key]?.trim(),
+                  );
+                  if (filled.length === 0 && !lastSession.practiceNotes) {
+                    return (
+                      <p className="text-sm text-text-secondary text-center py-2">
+                        Last session completed without notes.
+                      </p>
+                    );
+                  }
+                  if (filled.length === 0 && lastSession.practiceNotes) {
+                    // Legacy booking — only flat practiceNotes string.
+                    return (
+                      <p className="text-sm leading-relaxed whitespace-pre-line">
+                        {lastSession.practiceNotes}
+                      </p>
+                    );
+                  }
+                  return (
+                    <div className="note-sections" style={{ rowGap: 14, alignItems: "start" }}>
+                      {filled.map(({ key, label }) => (
+                        <div key={key} className="ns-row">
+                          <label className="ns-label" style={{ paddingTop: 2 }}>
+                            {label}
+                          </label>
+                          <p className="ns-body text-sm leading-relaxed whitespace-pre-line text-charcoal">
+                            {prior?.[key]}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          </section>
+        )}
+
+        {/* Two-column layout — left column widens when chat is hidden so
+            the sidebar cards don't sit next to dead space. */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-          {/* Left column — Lesson, Student, Resources */}
-          <div className="md:col-span-4 space-y-8">
+          {/* Left column — Lesson, Student, Curriculum, Resources */}
+          <div className={`${phase === "live" ? "md:col-span-4" : "md:col-span-12 md:grid md:grid-cols-3 md:gap-8 md:space-y-0"} space-y-8`}>
             {/* Lesson Info */}
             <section>
               <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
@@ -741,7 +1009,9 @@ export function CoachSession() {
             </section>
           </div>
 
-          {/* Right column — Chat */}
+          {/* Right column — Chat. Live only: pre-lesson messaging
+              belongs in inbox, post-session messaging too. */}
+          {phase === "live" && (
           <div className="md:col-span-8">
             <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
               Chat
@@ -810,6 +1080,7 @@ export function CoachSession() {
               </div>
             </div>
           </div>
+          )}
         </div>
       </div>
       </div>
