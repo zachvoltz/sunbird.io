@@ -434,6 +434,13 @@ html[data-theme="dark"] .wireframe-root .onb-success {
   text-decoration: none;
   color: inherit;
 }
+.wireframe-root .dt-side .item .nav-ico {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px;
+  flex: 0 0 18px;
+  color: var(--ink-soft);
+}
+.wireframe-root .dt-side .item.on .nav-ico { color: var(--paper); }
 .wireframe-root .dt-side .item:hover { background: var(--paper); }
 .wireframe-root .dt-side .item.on { background: var(--ink); color: var(--paper); }
 .wireframe-root .dt-side .item .dot {
@@ -572,6 +579,10 @@ html[data-theme="dark"] .wireframe-root .onb-success {
 .wireframe-root .panel-body { flex: 1 1 auto; overflow: hidden; min-height: 0; }
 .wireframe-root .panel-body.scroll { overflow-y: auto; }
 .wireframe-root .panel.tinted { background: var(--paper-2); }
+.wireframe-root .panel.panel-warm { background: #fbeee2; }
+.wireframe-root .panel.panel-cool { background: #e7eef0; }
+html[data-theme="dark"] .wireframe-root .panel.panel-warm { background: #2a221c; }
+html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1a2230; }
 
 /* Dashboard "material" style: borderless columns, subtle drop shadow on cards. */
 .wireframe-root .dt .panel,

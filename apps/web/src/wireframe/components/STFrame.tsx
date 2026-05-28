@@ -4,18 +4,20 @@ import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
+import { Icon } from "./Icon";
 
 type NavId = "home" | "practice" | "lessons" | "inbox" | "notes" | "takes" | "curriculum" | "profile";
+type NavIcon = "home" | "note" | "cap" | "inbox" | "journal" | "mic" | "map" | "user";
 
-const NAV: Array<{ id: NavId; label: string; icon: string; to: string }> = [
-  { id: "home", label: "Today", icon: "⌂", to: "/today" },
-  { id: "practice", label: "Practice", icon: "♪", to: "/practice" },
-  { id: "lessons", label: "Lessons", icon: "♬", to: "/my-bookings" },
-  { id: "inbox", label: "Inbox", icon: "✉", to: "/my-inbox" },
-  { id: "notes", label: "Journal", icon: "✎", to: "/my-notes" },
-  { id: "takes", label: "My takes", icon: "⌥", to: "/my-takes" },
-  { id: "curriculum", label: "Curriculum", icon: "▦", to: "/my-curriculum" },
-  { id: "profile", label: "Profile", icon: "☻", to: "/my-profile" },
+const NAV: Array<{ id: NavId; label: string; icon: NavIcon; to: string }> = [
+  { id: "home", label: "Today", icon: "home", to: "/today" },
+  { id: "practice", label: "Practice", icon: "note", to: "/practice" },
+  { id: "lessons", label: "Lessons", icon: "cap", to: "/my-bookings" },
+  { id: "inbox", label: "Inbox", icon: "inbox", to: "/my-inbox" },
+  { id: "notes", label: "Journal", icon: "journal", to: "/my-notes" },
+  { id: "takes", label: "My takes", icon: "mic", to: "/my-takes" },
+  { id: "curriculum", label: "Curriculum", icon: "map", to: "/my-curriculum" },
+  { id: "profile", label: "Profile", icon: "user", to: "/my-profile" },
 ];
 
 // Same shape as DTFrame's useInboxCount, just pointed at /api/me.
@@ -95,7 +97,7 @@ function STSidebar({ on, collapsed }: { on: NavId; collapsed: boolean }) {
             className={"item" + (n.id === on ? " on" : "")}
             title={showBadge ? `${n.label} (${inboxCount})` : n.label}
           >
-            <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>{n.icon}</span>
+            <span className="nav-ico"><Icon name={n.icon} size={18} /></span>
             {!collapsed && (
               <>
                 <span>{n.label}</span>

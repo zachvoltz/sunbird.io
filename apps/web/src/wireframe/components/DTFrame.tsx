@@ -4,6 +4,7 @@ import { useSidebarStudents } from "../hooks/useSidebarStudents";
 import { useAuth } from "@/context/AuthContext";
 import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
+import { Icon } from "./Icon";
 import { apiFetch } from "@/lib/api";
 
 // Unread incoming SessionMessages for the calling coach. Used to
@@ -102,7 +103,7 @@ function DTSidebar({
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
       <Link to="/coach" className={"item" + (on === "roster" ? " on" : "")} title="Today">
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⌂</span>
+        <span className="nav-ico"><Icon name="home" size={18} /></span>
         {!collapsed && <span>Today</span>}
       </Link>
       <Link
@@ -110,7 +111,7 @@ function DTSidebar({
         className={"item" + (on === "inbox" ? " on" : "")}
         title={inboxCount > 0 ? `Inbox (${inboxCount})` : "Inbox"}
       >
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>✉</span>
+        <span className="nav-ico"><Icon name="inbox" size={18} /></span>
         {!collapsed && (
           <>
             <span>Inbox</span>
@@ -129,19 +130,19 @@ function DTSidebar({
         )}
       </Link>
       <Link to="/coach/calendar" className={"item" + (on === "calendar" ? " on" : "")} title="Calendar">
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>▦</span>
+        <span className="nav-ico"><Icon name="cal" size={18} /></span>
         {!collapsed && <span>Calendar</span>}
       </Link>
       <Link to="/coach/library" className={"item" + (on === "library" ? " on" : "")} title="Library">
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>☱</span>
+        <span className="nav-ico"><Icon name="lib" size={18} /></span>
         {!collapsed && <span>Library</span>}
       </Link>
       <Link to="/coach/payments" className={"item" + (on === "payments" ? " on" : "")} title="Payments">
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>$</span>
+        <span className="nav-ico"><Icon name="money" size={18} /></span>
         {!collapsed && <span>Payments</span>}
       </Link>
       <Link to="/coach/account" className={"item" + (on === "account" ? " on" : "")} title="Account">
-        <span style={{ width: 18, textAlign: "center", flex: "0 0 18px" }}>⌥</span>
+        <span className="nav-ico"><Icon name="user" size={18} /></span>
         {!collapsed && <span>Account</span>}
       </Link>
 

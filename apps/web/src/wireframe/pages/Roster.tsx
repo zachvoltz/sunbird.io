@@ -106,7 +106,7 @@ function RosterDesktop({
       <div className="dt-main-body">
         <div className="dt-cols thirds" style={{ gridTemplateColumns: "1fr 1fr 1fr", height: "100%" }}>
           {/* Today's lessons */}
-          <div className="panel">
+          <div className="panel panel-cool">
             <div className="panel-head">
               <div className="panel-title">Lessons today</div>
               <span className="chip tiny">{todayBookings.length}</span>
@@ -167,7 +167,7 @@ function NeedsYouPanel({
   const total = takes.length + missingNotes.length + planGaps.length;
 
   return (
-    <div className="panel tinted">
+    <div className={"panel " + (total > 0 ? "panel-warm" : "tinted")}>
       <div className="panel-head">
         <div className="panel-title">Needs you</div>
         {total > 0 && <span className="chip tiny accent">{total}</span>}
@@ -314,7 +314,7 @@ function ThisWeekPanel({
       : "this week";
 
   return (
-    <div className="panel">
+    <div className="panel" style={{ background: "transparent" }}>
       <div className="panel-head">
         <div className="panel-title">This week</div>
         <div className="pill-row">
