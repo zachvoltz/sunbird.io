@@ -76,6 +76,19 @@ availabilityRoutes.get("/", async (c) => {
     select: { coachId: true, startsAt: true, endsAt: true },
   });
 
+  // Google Calendar shadows (events pulled from a coach's connected
+  // Google Calendar). These also block bookable slots so a coach's
+  // existing personal events aren't double-booked through Sunbird.
+  const googleShadows = await db.googleEvent.findMany({
+    where: {
+      bookingId: null,
+      busyId: null,
+      startsAt: { lt: dayEnd },
+      endsAt: { gt: dayStart },
+    },
+    select: { coachId: true, startsAt: true, endsAt: true },
+  });
+
   // Build a map: time string -> set of available coach IDs
   const timeToCoaches = new Map<string, Set<string>>();
 
@@ -102,6 +115,12 @@ availabilityRoutes.get("/", async (c) => {
       (bb: any) => bb.coachId === coachId && startsAt < bb.endsAt && endsAt > bb.startsAt,
     );
     if (isBusy) continue;
+
+    // Same check for Google Calendar shadow events.
+    const isGoogleBusy = googleShadows.some(
+      (g: any) => g.coachId === coachId && startsAt < g.endsAt && endsAt > g.startsAt,
+    );
+    if (isGoogleBusy) continue;
 
     const key = startsAt.toISOString();
     if (!timeToCoaches.has(key)) {

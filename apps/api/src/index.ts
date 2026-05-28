@@ -13,6 +13,7 @@ import { pathRoutes } from "./routes/paths";
 import { searchRoutes } from "./routes/search";
 import { libraryRoutes } from "./routes/library";
 import { coachPaymentsRoutes } from "./routes/coach-payments";
+import { googleCalendarRoutes } from "./routes/google-calendar";
 import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
 import { initDb, initDbD1 } from "./lib/db";
@@ -81,6 +82,7 @@ app.route("/api/paths", pathRoutes);
 app.route("/api/search", searchRoutes);
 app.route("/api/library", libraryRoutes);
 app.route("/api/coach-payments", coachPaymentsRoutes);
+app.route("/api/calendar/google", googleCalendarRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/skill-trees", skillTreeRoutes);
 

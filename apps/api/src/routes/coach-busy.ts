@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { createCoachBusySchema } from "@sunbird/shared";
+import { pushEventMirror, deleteEventMirror } from "./google-calendar";
 
 export const coachBusyRoutes = new Hono();
 
@@ -50,13 +51,20 @@ coachBusyRoutes.post("/", requireAuth, requireRole("COACH", "ADMIN"), async (c) 
   }
 
   const db = getDb();
+  const startsAt = new Date(parsed.data.startsAt);
+  const endsAt = new Date(parsed.data.endsAt);
+  const label = parsed.data.label ?? null;
   const created = await db.coachBusy.create({
-    data: {
-      coachId: user.id,
-      startsAt: new Date(parsed.data.startsAt),
-      endsAt: new Date(parsed.data.endsAt),
-      label: parsed.data.label ?? null,
-    },
+    data: { coachId: user.id, startsAt, endsAt, label },
+  });
+
+  // Mirror onto Google Calendar (best-effort).
+  await pushEventMirror(c, {
+    coachId: user.id,
+    busyId: created.id,
+    startsAt,
+    endsAt,
+    summary: label ? `Busy · ${label}` : "Busy",
   });
 
   return c.json({ data: serializeBusy(created) });
@@ -76,6 +84,9 @@ coachBusyRoutes.delete("/:id", requireAuth, requireRole("COACH", "ADMIN"), async
     return c.json({ error: "Forbidden" }, 403);
   }
 
+  // Drop the Google mirror first; the cascade on GoogleEvent.busyId
+  // is SET NULL, which would leave an orphan row otherwise.
+  await deleteEventMirror(c, { coachId: existing.coachId, busyId: id });
   await db.coachBusy.delete({ where: { id } });
   return c.json({ data: { ok: true } });
 });

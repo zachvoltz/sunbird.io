@@ -4,6 +4,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { createBookingSchema, createRecurringScheduleSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { createCallsService } from "../services/calls.service";
+import { pushEventMirror, deleteEventMirror } from "./google-calendar";
 
 const LESSON_DURATION_MINS = 60;
 
@@ -245,6 +246,19 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     content: `📅 Booked a ${category.title} lesson — ${formatDateTime(startsAt)}`,
   });
 
+  // Push to the coach's Google Calendar (best-effort).
+  if (coachId) {
+    const studentName = user.name ?? user.email ?? "student";
+    await pushEventMirror(c, {
+      coachId,
+      bookingId: booking.id,
+      startsAt,
+      endsAt,
+      summary: `${studentName} · ${category.title}`,
+      description: studentNote ?? undefined,
+    });
+  }
+
   // Send confirmation email (fire and forget)
   try {
     const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
@@ -389,6 +403,11 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     data: { status: "CANCELLED" },
     include: bookingInclude,
   });
+
+  // Tear down the mirrored Google Calendar event, if any.
+  if (booking.coachId) {
+    await deleteEventMirror(c, { coachId: booking.coachId, bookingId: id });
+  }
 
   // Send cancellation email
   try {
@@ -587,6 +606,7 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
 
   // Create bookings
   const createdBookings = [];
+  const studentName = user.name ?? user.email ?? "student";
   for (const date of dates) {
     const endsAt = new Date(date.getTime() + LESSON_DURATION_MINS * 60 * 1000);
 
@@ -609,6 +629,18 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     });
 
     createdBookings.push(serializeBooking(booking));
+
+    // Mirror each booking to the coach's Google Calendar (best-effort).
+    if (coachId) {
+      await pushEventMirror(c, {
+        coachId,
+        bookingId: booking.id,
+        startsAt: date,
+        endsAt,
+        summary: `${studentName} · ${category.title}`,
+        description: studentNote ?? undefined,
+      });
+    }
   }
 
   // Notify the coach in their inbox — one summary message anchored on
@@ -672,6 +704,9 @@ bookingRoutes.post("/recurring/:scheduleId/cancel", requireAuth, async (c) => {
 
   for (const booking of futureBookings) {
     await db.booking.update({ where: { id: booking.id }, data: { status: "CANCELLED" } });
+    if (booking.coachId) {
+      await deleteEventMirror(c, { coachId: booking.coachId, bookingId: booking.id });
+    }
   }
 
   return c.json({ data: { ok: true, cancelledCount: futureBookings.length } });

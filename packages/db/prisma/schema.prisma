@@ -69,6 +69,7 @@ model User {
   coachPathAssignments   PathAssignment[] @relation("coachPathAssignments")
   libraryItems       LibraryItem[]       @relation("coachLibraryItems")
   messageReads       SessionMessageRead[]
+  googleEvents       GoogleEvent[]
   recurringSchedules RecurringSchedule[] @relation("studentSchedules")
   coachSchedules     RecurringSchedule[] @relation("coachSchedules")
   coachResources     CoachResource[]     @relation("coachResources")
@@ -247,6 +248,36 @@ model PathAssignment {
   @@index([studentId])
 }
 
+// Two-way Google Calendar sync mirror/shadow row.
+//
+//   - "Outbound mirror" — bookingId or busyId is set; we created this
+//     event on Google to reflect a Sunbird resource. Used to update
+//     or delete the Google event later.
+//   - "Inbound shadow" — both bookingId and busyId are null; this row
+//     was pulled from Google so the coach's existing calendar entries
+//     block them from being double-booked on Sunbird.
+model GoogleEvent {
+  id               String   @id @default(cuid())
+  coachId          String
+  googleEventId    String
+  googleCalendarId String   @default("primary")
+  bookingId        String?
+  busyId           String?
+  startsAt         DateTime
+  endsAt           DateTime
+  summary          String?
+  syncedAt         DateTime @default(now())
+
+  coach   User       @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  booking Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  busy    CoachBusy? @relation(fields: [busyId],    references: [id], onDelete: SetNull)
+
+  @@unique([coachId, googleEventId])
+  @@index([coachId])
+  @@index([bookingId])
+  @@index([busyId])
+}
+
 // Date-specific busy block. Takes precedence over CoachAvailability when
 // computing bookable slots — if any CoachBusy row overlaps the requested
 // time range for this coach, the slot is unavailable regardless of the
@@ -259,7 +290,8 @@ model CoachBusy {
   label     String?
   createdAt DateTime @default(now())
 
-  coach User @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  coach        User          @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  googleEvents GoogleEvent[]
 
   @@index([coachId, startsAt])
 }
@@ -537,6 +569,7 @@ model Booking {
   noteReadReceipts NoteReadReceipt[]
   noteVoiceMemos   NoteVoiceMemo[]
   assignments      Assignment[]
+  googleEvents     GoogleEvent[]
 }
 
 model RecurringSchedule {

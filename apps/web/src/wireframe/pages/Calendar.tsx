@@ -159,6 +159,17 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
   // between weeks doesn't refetch.
   const [busy, setBusy] = useState<CoachBusyPublic[]>([]);
 
+  // Google Calendar shadow events (pulled from the coach's connected
+  // Google primary calendar). Rendered alongside Sunbird busy blocks
+  // with a distinct visual treatment.
+  type GoogleShadow = { id: string; summary: string | null; startsAt: string; endsAt: string };
+  const [googleShadows, setGoogleShadows] = useState<GoogleShadow[]>([]);
+  const [googleStatus, setGoogleStatus] = useState<{
+    connected: boolean;
+    lastSyncedAt: string | null;
+  }>({ connected: false, lastSyncedAt: null });
+  const [googleSyncing, setGoogleSyncing] = useState(false);
+
   // Load availability + busy on mount.
   useEffect(() => {
     apiFetch<{ data: { availability: CoachAvailabilitySlot[] } }>("/api/coach-settings")
@@ -177,6 +188,64 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
   }, []);
 
   useEffect(() => { refreshBusy(); }, [refreshBusy]);
+
+  const refreshGoogleStatus = useCallback(() => {
+    apiFetch<{ data: { connected: boolean; lastSyncedAt: string | null } }>(
+      "/api/calendar/google/status",
+    )
+      .then((r) => setGoogleStatus(r.data))
+      .catch(() => { /* leave at last known */ });
+  }, []);
+  const refreshGoogleShadows = useCallback(() => {
+    apiFetch<{ data: GoogleShadow[] }>("/api/calendar/google/events")
+      .then((r) => setGoogleShadows(r.data))
+      .catch(() => setGoogleShadows([]));
+  }, []);
+
+  useEffect(() => { refreshGoogleStatus(); }, [refreshGoogleStatus]);
+  useEffect(() => { refreshGoogleShadows(); }, [refreshGoogleShadows]);
+
+  // If we just returned from the Google OAuth flow, run an immediate
+  // sync so the user sees their events without an extra click.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("gcal") === "connected") {
+      setGoogleSyncing(true);
+      apiFetch("/api/calendar/google/sync", { method: "POST" })
+        .then(() => {
+          refreshGoogleStatus();
+          refreshGoogleShadows();
+        })
+        .catch(() => { /* surfaced via status */ })
+        .finally(() => setGoogleSyncing(false));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const syncGoogle = useCallback(async () => {
+    if (googleSyncing) return;
+    setGoogleSyncing(true);
+    try {
+      await apiFetch("/api/calendar/google/sync", { method: "POST" });
+      refreshGoogleStatus();
+      refreshGoogleShadows();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't sync with Google.");
+    } finally {
+      setGoogleSyncing(false);
+    }
+  }, [googleSyncing, refreshGoogleShadows, refreshGoogleStatus]);
+
+  const disconnectGoogle = useCallback(async () => {
+    if (!window.confirm("Disconnect Google Calendar? Inbound events will be removed.")) return;
+    try {
+      await apiFetch("/api/calendar/google/disconnect", { method: "POST" });
+      setGoogleShadows([]);
+      refreshGoogleStatus();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't disconnect.");
+    }
+  }, [refreshGoogleStatus]);
 
   const availDirty = useMemo(() => {
     if (availKeys.size !== savedAvailKeys.size) return true;
@@ -323,6 +392,38 @@ function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loa
               {savingAvail ? "saving…" : availDirty ? "save hours" : "saved"}
             </button>
           )}
+          {/* Google Calendar connect / sync. The connect button is a
+              full-page redirect (anchor, not button) so the OAuth flow
+              works without preflight CORS. */}
+          {googleStatus.connected ? (
+            <div className="row gap-2" style={{ alignItems: "center", marginLeft: 4 }}>
+              <span
+                className="chip tiny"
+                style={{ background: "#e6f1e9", borderColor: "#4a8a5a", color: "#2f6a3f" }}
+                title={googleStatus.lastSyncedAt ?? undefined}
+              >
+                ● Google synced
+              </span>
+              <button
+                className="btn small ghost"
+                onClick={syncGoogle}
+                disabled={googleSyncing}
+              >
+                {googleSyncing ? "syncing…" : "sync now"}
+              </button>
+              <button className="btn small ghost" onClick={disconnectGoogle}>
+                disconnect
+              </button>
+            </div>
+          ) : (
+            <a
+              className="btn small"
+              href="/api/calendar/google/connect"
+              style={{ marginLeft: 4 }}
+            >
+              connect Google ↗
+            </a>
+          )}
         </div>
       </div>
 
@@ -394,6 +495,7 @@ function WeekGrid({
   days,
   bookings,
   busy,
+  googleShadows,
   now,
   editMode,
   availKeys,
@@ -404,6 +506,7 @@ function WeekGrid({
   days: Date[];
   bookings: BookingPublic[];
   busy: CoachBusyPublic[];
+  googleShadows: GoogleShadowRow[];
   now: Date;
   editMode: EditMode;
   availKeys: Set<string>;
@@ -502,11 +605,18 @@ function WeekGrid({
 // fills (solid coral) and availability shading (paper-2 wash).
 const BUSY_HATCH = "repeating-linear-gradient(135deg, rgba(232,93,77,0.18) 0 6px, rgba(232,93,77,0.36) 6px 8px)";
 
+// Slate hatch for Google Calendar shadows — distinct from coral busy
+// blocks, so coaches can tell at a glance which side made the conflict.
+const GOOGLE_HATCH = "repeating-linear-gradient(135deg, rgba(60,90,140,0.14) 0 6px, rgba(60,90,140,0.28) 6px 8px)";
+
+type GoogleShadowRow = { id: string; summary: string | null; startsAt: string; endsAt: string };
+
 function DayColumn({
   day,
   uiDay,
   bookings,
   busy,
+  googleShadows,
   now,
   editMode,
   availKeys,
@@ -518,6 +628,7 @@ function DayColumn({
   uiDay: number;
   bookings: BookingPublic[];
   busy: CoachBusyPublic[];
+  googleShadows: GoogleShadowRow[];
   now: Date;
   editMode: EditMode;
   availKeys: Set<string>;
@@ -647,6 +758,49 @@ function DayColumn({
               {bb.label ?? "busy"}
             </span>
             {editMode === "busy" && <span style={{ marginLeft: 4 }}>✕</span>}
+          </div>
+        );
+      })}
+
+      {/* Google Calendar shadows — slate hatch, read-only. Sit at the
+          same z-layer as Sunbird busy blocks so they visually compete
+          for the same time without one swallowing the other. */}
+      {googleShadows.map((g) => {
+        const start = new Date(g.startsAt);
+        const end = new Date(g.endsAt);
+        const startHour = start.getHours() + start.getMinutes() / 60;
+        const endHour = end.getHours() + end.getMinutes() / 60;
+        if (endHour <= START_HOUR || startHour >= END_HOUR + 1) return null;
+        const top = (Math.max(startHour, START_HOUR) - START_HOUR) * HOUR_PX;
+        const height = Math.max(20, (Math.min(endHour, END_HOUR + 1) - Math.max(startHour, START_HOUR)) * HOUR_PX);
+        return (
+          <div
+            key={g.id}
+            title={`Google: ${g.summary ?? "(no title)"}`}
+            style={{
+              position: "absolute",
+              left: 1,
+              right: 1,
+              top,
+              height,
+              background: GOOGLE_HATCH,
+              border: "1.5px dashed #3c5a8c",
+              borderRadius: 4,
+              zIndex: 1,
+              cursor: "help",
+              display: "flex",
+              alignItems: "flex-start",
+              padding: "2px 5px",
+              fontFamily: "var(--hand)",
+              fontSize: 11,
+              color: "#3c5a8c",
+              fontWeight: 600,
+              pointerEvents: "auto",
+            }}
+          >
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              G · {g.summary ?? "busy"}
+            </span>
           </div>
         );
       })}
