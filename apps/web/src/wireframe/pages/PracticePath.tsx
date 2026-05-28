@@ -1,90 +1,97 @@
-import { Link, useSearchParams } from "react-router-dom";
-import type { AssignmentPublic, LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
+import { useEffect, useRef, useState } from "react";
+import "html-midi-player";
+import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
+import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
-import { Squiggle } from "../components/Squiggle";
 import { useMyStudentDetail } from "../hooks/useCoachData";
-import { useNow } from "../hooks/useNow";
-import { MobileStatusBar } from "../components/MobileStatusBar";
 
-// ── path geometry (verbatim from design) ─────────────────
-const PATH_D =
-  "M 50 30 Q 280 60 60 130 Q -40 200 280 230 Q 360 290 50 320 Q -40 380 280 410 Q 340 470 80 500";
-const PATH_SLOTS: Array<{ x: number; y: number }> = [
-  { x: 50, y: 30 },
-  { x: 60, y: 130 },
-  { x: 280, y: 230 },
-  { x: 50, y: 320 },
-  { x: 280, y: 410 },
-  { x: 80, y: 500 },
-];
+// Default General-MIDI soundfont bundled/served by the magenta project —
+// html-midi-player synthesizes .mid playback against it.
+const SOUNDFONT = "https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus";
 
-type Stop = {
-  label: string;
-  /** Routine-driven stops carry a routineItemId; assignment-driven ones carry assignmentId. */
-  routineItemId?: string;
-  assignmentId?: string;
-  type?: AssignmentPublic["type"];
-  status?: AssignmentPublic["status"];
-  bars?: string | null;
-  tempo?: string | null;
-  durationMin?: number | null;
+const KIND_LABEL: Record<LibraryItemKind, string> = {
+  warmup: "warmup",
+  exercise: "exercise",
+  song: "song",
 };
 
-const KIND_TO_ASSIGNMENT_TYPE: Record<LibraryItemKind, AssignmentPublic["type"]> = {
-  warmup: "WARMUP",
-  exercise: "EXERCISE",
-  song: "SONG",
-};
+// ── path geometry ────────────────────────────────────────
+// One stop per routine item, laid out as a vertical serpentine so the path
+// scales to any number of items (the old design hard-coded six slots).
+const VB_W = 300;
+const TOP = 46;
+const GAP = 108;
+const LEFT_X = 74;
+const RIGHT_X = 226;
 
+function slotFor(i: number): { x: number; y: number } {
+  return { x: i % 2 === 0 ? LEFT_X : RIGHT_X, y: TOP + i * GAP };
+}
+
+function buildPathD(n: number): string {
+  if (n === 0) return "";
+  let d = `M ${slotFor(0).x} ${slotFor(0).y}`;
+  for (let i = 1; i < n; i++) {
+    const a = slotFor(i - 1);
+    const b = slotFor(i);
+    const bow = i % 2 === 0 ? 72 : -72; // alternate the curve's bend
+    const cx = (a.x + b.x) / 2 + bow;
+    const cy = (a.y + b.y) / 2;
+    d += ` Q ${cx} ${cy} ${b.x} ${b.y}`;
+  }
+  return d;
+}
+
+function tempoLabel(it: RoutineItem): string | null {
+  if (it.bpmStart && it.bpmEnd && it.bpmStart !== it.bpmEnd) return `${it.bpmStart} → ${it.bpmEnd} bpm`;
+  if (it.bpmStart) return `${it.bpmStart} bpm`;
+  return null;
+}
+
+function metaLine(it: RoutineItem): string {
+  return [KIND_LABEL[it.kind], it.bars, tempoLabel(it), it.durationMin ? `${it.durationMin} min` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+// ── path SVG ─────────────────────────────────────────────
 function PathSvg({
-  stops,
-  progress,
-  current,
-  completedAll,
+  items,
+  selectedId,
+  onSelect,
 }: {
-  stops: Stop[];
-  progress: number;
-  current: number;
-  completedAll: boolean;
+  items: RoutineItem[];
+  selectedId: string | null;
+  onSelect: (id: string) => void;
 }) {
+  const n = items.length;
+  const viewH = TOP + Math.max(0, n - 1) * GAP + 64;
+  const pathD = buildPathD(n);
   return (
-    <svg viewBox="0 0 340 540" width="100%" height="100%" style={{ display: "block" }}>
-      <path
-        d={PATH_D}
-        fill="none"
-        stroke="var(--ink)"
-        strokeWidth="2.5"
-        strokeDasharray="2 6"
-        strokeLinecap="round"
-      />
-      {completedAll && (
+    <svg viewBox={`0 0 ${VB_W} ${viewH}`} width="100%" height={viewH} style={{ display: "block" }}>
+      {pathD && (
         <path
-          d={PATH_D}
+          d={pathD}
           fill="none"
-          stroke="var(--accent)"
+          stroke="var(--ink)"
           strokeWidth="2.5"
+          strokeDasharray="2 6"
           strokeLinecap="round"
         />
       )}
-      {PATH_SLOTS.slice(0, stops.length).map((slot, i) => {
-        const stop = stops[i];
-        const done = i < progress;
-        const now = i === current && !completedAll;
-        const isSong = stop.type === "SONG" || i === stops.length - 1;
-        const fill = done
-          ? isSong
-            ? "var(--accent)"
-            : "var(--ink)"
-          : now
-          ? "var(--accent)"
-          : "var(--paper)";
-        const stroke = now ? "var(--accent)" : "var(--ink)";
-        const r = now ? 26 : 20;
+      {items.map((it, i) => {
+        const slot = slotFor(i);
+        const done = !!it.completedToday;
+        const selected = it.id === selectedId;
+        const isSong = it.kind === "song";
+        const fill = done ? "var(--accent)" : selected ? "white" : "var(--paper)";
+        const stroke = selected || done ? "var(--accent)" : "var(--ink)";
+        const r = selected ? 25 : 20;
         return (
-          <g key={i}>
-            {now && (
+          <g key={it.id} style={{ cursor: "pointer" }} onClick={() => onSelect(it.id)}>
+            {selected && (
               <circle
                 cx={slot.x}
                 cy={slot.y}
@@ -96,40 +103,26 @@ function PathSvg({
               />
             )}
             <circle cx={slot.x} cy={slot.y} r={r} fill={fill} stroke={stroke} strokeWidth="2" />
-            {isSong ? (
-              <text
-                x={slot.x}
-                y={slot.y + 5}
-                textAnchor="middle"
-                fill={done ? "white" : "var(--accent)"}
-                fontFamily="Caveat"
-                fontSize="20"
-                fontWeight="700"
-              >
-                ♪
-              </text>
-            ) : (
-              <text
-                x={slot.x}
-                y={slot.y + 5}
-                textAnchor="middle"
-                fill={done ? "var(--paper)" : now ? "white" : "var(--ink)"}
-                fontFamily="Caveat"
-                fontSize="20"
-                fontWeight="700"
-              >
-                {i + 1}
-              </text>
-            )}
             <text
               x={slot.x}
-              y={slot.y + r + 16}
+              y={slot.y + 6}
+              textAnchor="middle"
+              fill={done ? "white" : "var(--ink)"}
+              fontFamily="Caveat"
+              fontSize="20"
+              fontWeight="700"
+            >
+              {done ? "✓" : isSong ? "♪" : i + 1}
+            </text>
+            <text
+              x={slot.x}
+              y={slot.y + r + 17}
               textAnchor="middle"
               fill="var(--ink)"
               fontFamily="Patrick Hand"
               fontSize="13"
             >
-              {stop.label}
+              {it.title.length > 20 ? it.title.slice(0, 18) + "…" : it.title}
             </text>
           </g>
         );
@@ -138,361 +131,232 @@ function PathSvg({
   );
 }
 
-function MobileCard({ children }: { children: React.ReactNode }) {
-  // Centered 390×760 mobile-card on desktop; full-width on narrow viewports.
+// ── MIDI player wrapper ──────────────────────────────────
+// Sets src/soundFont/loop as element *properties* (not attributes) so we
+// don't fight html-midi-player's attribute parsing.
+function MidiPlayer({ src, loop }: { src: string; loop: boolean }) {
+  const ref = useRef<HTMLElement & { src?: string; soundFont?: string; loop?: boolean }>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.soundFont = SOUNDFONT;
+    el.src = src;
+    el.loop = loop;
+  }, [src, loop]);
+  return <midi-player ref={ref as any} style={{ width: "100%", display: "block" }} />;
+}
+
+// ── exercise detail pane ─────────────────────────────────
+function ExerciseDetail({
+  item,
+  index,
+  total,
+  busy,
+  onToggle,
+}: {
+  item: RoutineItem;
+  index: number;
+  total: number;
+  busy: boolean;
+  onToggle: () => void;
+}) {
+  const [audioLoop, setAudioLoop] = useState(true);
+  const done = !!item.completedToday;
+  const hasMidi = !!(item.hasMidi && item.midiUrl);
   return (
-    <div
-      className="dt-main-body"
-      style={{
-        height: "100%",
-        display: "flex",
-        alignItems: "stretch",
-        justifyContent: "center",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 390,
-          minHeight: 0,
-          border: "1.5px solid var(--ink)",
-          borderRadius: 22,
-          background: "var(--paper)",
-          boxShadow: "3px 4px 0 rgba(0,0,0,0.08)",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {children}
+    <div className="wf">
+      <div className="row between" style={{ alignItems: "baseline", marginBottom: 6 }}>
+        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Stop {index + 1} of {total} · {KIND_LABEL[item.kind]}
+        </div>
+        {done && <span className="chip accent tiny">done today</span>}
       </div>
+
+      <h2 className="wf-title" style={{ marginBottom: 2 }}>{item.title}</h2>
+      <div className="wf-subtitle" style={{ marginBottom: 14 }}>{metaLine(item)}</div>
+
+      {item.note && (
+        <div className="box mb-3" style={{ background: "var(--paper-2)" }}>
+          <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+            from your coach
+          </div>
+          <div className="wf-scrawl" style={{ fontSize: 17, lineHeight: 1.15 }}>"{item.note}"</div>
+        </div>
+      )}
+
+      {/* Audio */}
+      {item.audioUrl ? (
+        <div className="box mb-3">
+          <div className="row between mb-2">
+            <div className="small bold">Reference audio</div>
+            <label className="row gap-1 tiny muted" style={{ cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={audioLoop}
+                onChange={(e) => setAudioLoop(e.target.checked)}
+              />
+              loop
+            </label>
+          </div>
+          <audio
+            key={item.id}
+            src={item.audioUrl}
+            controls
+            loop={audioLoop}
+            preload="none"
+            style={{ width: "100%", height: 34 }}
+          />
+        </div>
+      ) : null}
+
+      {/* MIDI */}
+      {hasMidi && (
+        <div className="box mb-3">
+          <div className="small bold mb-2">Play-along (MIDI)</div>
+          <MidiPlayer src={item.midiUrl!} loop />
+        </div>
+      )}
+
+      {/* PDF / sheet music */}
+      {item.pdfUrl && (
+        <a href={item.pdfUrl} target="_blank" rel="noreferrer" className="btn ghost small mb-3" style={{ textDecoration: "none" }}>
+          open sheet music →
+        </a>
+      )}
+
+      {!item.audioUrl && !hasMidi && !item.pdfUrl && (
+        <div className="box dashed small muted mb-3">No audio or MIDI attached to this exercise.</div>
+      )}
+
+      <button
+        className={"btn big " + (done ? "ghost" : "accent")}
+        onClick={onToggle}
+        disabled={busy}
+        style={{ width: "100%" }}
+      >
+        {done ? "↩ mark not done" : (
+          <>
+            <Icon name="play" size={15} stroke="white" /> mark done for today
+          </>
+        )}
+      </button>
     </div>
   );
 }
 
-type ViewMode = "auto" | "start" | "mid" | "done";
-
-function thisMonday(now = new Date()): Date {
-  const out = new Date(now);
-  const day = out.getDay();
-  const offset = day === 0 ? -6 : 1 - day;
-  out.setHours(0, 0, 0, 0);
-  out.setDate(out.getDate() + offset);
-  return out;
-}
-
-function thisWeeksAssignments(detail: StudentDetailPublic | undefined): AssignmentPublic[] {
-  if (!detail) return [];
-  const mondayIso = thisMonday().toISOString();
-  return detail.assignments
-    .filter((a) => a.weekStartsOn === mondayIso || new Date(a.weekStartsOn) >= thisMonday())
-    .sort((a, b) => a.sortOrder - b.sortOrder);
-}
-
-function routineStop(it: RoutineItem): Stop {
-  return {
-    label: it.title.length > 18 ? it.title.slice(0, 16) + "…" : it.title,
-    routineItemId: it.id,
-    type: KIND_TO_ASSIGNMENT_TYPE[it.kind],
-    bars: it.bars,
-    tempo:
-      it.bpmStart && it.bpmEnd && it.bpmStart !== it.bpmEnd
-        ? `${it.bpmStart} → ${it.bpmEnd} bpm`
-        : it.bpmStart
-        ? `${it.bpmStart} bpm`
-        : null,
-    durationMin: it.durationMin,
-  };
-}
-
-function assignmentStop(a: AssignmentPublic): Stop {
-  return {
-    label: a.title.length > 18 ? a.title.slice(0, 16) + "…" : a.title,
-    assignmentId: a.id,
-    type: a.type,
-    status: a.status,
-    bars: a.bars,
-    tempo:
-      a.tempoBpmStart && a.tempoBpmEnd && a.tempoBpmStart !== a.tempoBpmEnd
-        ? `${a.tempoBpmStart} → ${a.tempoBpmEnd} bpm`
-        : a.tempoBpmStart
-        ? `${a.tempoBpmStart} bpm`
-        : null,
-    durationMin: a.durationMin,
-  };
-}
-
-function buildStops(detail: StudentDetailPublic | undefined): Stop[] {
-  // Prefer the coach-set routine — it's the source of truth for what
-  // the student should practice today. Fall back to this-week's
-  // assignments (legacy) and then the design's placeholder labels so a
-  // brand-new student still sees the shape of the page.
-  const routine = detail?.routine?.items ?? [];
-  if (routine.length > 0) {
-    return routine.slice(0, PATH_SLOTS.length).map(routineStop);
-  }
-  const weekly = thisWeeksAssignments(detail);
-  if (weekly.length > 0) {
-    return weekly.slice(0, PATH_SLOTS.length).map(assignmentStop);
-  }
-  return [
-    { label: "Breathing" },
-    { label: "C scale" },
-    { label: "Hanon 4" },
-    { label: "Arpeggios" },
-    { label: "Sight read" },
-    { label: "River Flows" },
-  ];
-}
-
-function deriveProgress(stops: Stop[]): { progress: number; current: number; completedAll: boolean } {
-  const completed = stops.findIndex((s) => s.status !== "COMPLETED");
-  // findIndex returns -1 when *all* match, meaning all done.
-  if (stops.every((s) => s.status === "COMPLETED")) {
-    return { progress: stops.length, current: -1, completedAll: true };
-  }
-  const progress = stops.filter((s) => s.status === "COMPLETED").length;
-  // current = first not-completed (which is what findIndex returned in normal case)
-  const current = completed === -1 ? 0 : completed;
-  return { progress, current, completedAll: false };
-}
-
 export function PracticePathPage() {
-  const [search] = useSearchParams();
   const { user } = useAuth();
   const { detail, loading } = useMyStudentDetail();
-  const stops = buildStops(detail);
 
-  const derived = deriveProgress(stops);
-  // Allow ?state=start|mid|done to preview the other states from the same data.
-  const mode = (search.get("state") as ViewMode | null) ?? "auto";
-  const view =
-    mode === "start"
-      ? { progress: 0, current: 0, completedAll: false }
-      : mode === "mid"
-      ? { progress: 2, current: 2, completedAll: false }
-      : mode === "done"
-      ? { progress: stops.length, current: -1, completedAll: true }
-      : derived;
+  // Local, mutable copies so a check-off updates the path + streak instantly.
+  const [items, setItems] = useState<RoutineItem[]>([]);
+  const [streak, setStreak] = useState<StudentDetailPublic["streak"]>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
-  const currentStop = stops[view.current] ?? stops[0];
-  const minutesIn =
-    detail?.streak?.lastPracticedAt && view.progress > 0 && !view.completedAll ? 14 : null;
+  useEffect(() => {
+    if (!detail) return;
+    setItems(detail.routine.items);
+    setStreak(detail.streak);
+    setSelectedId((cur) => cur ?? detail.routine.items[0]?.id ?? null);
+  }, [detail]);
 
-  const headerTitle = view.completedAll
-    ? "All done!"
-    : view.progress === 0
-    ? `${dayLabelToday()}'s path`
-    : "On your way";
-  const headerSub = view.completedAll
-    ? `${dayLabelToday()} · ${detail?.streak ? `streak +1` : "great work"}`
-    : view.progress === 0
-    ? `${stops.length} stops · just you, your instrument`
-    : `${view.progress} of ${stops.length} done${minutesIn ? ` · ${minutesIn} min in` : ""}`;
+  const selectedItem = items.find((it) => it.id === selectedId) ?? items[0] ?? null;
+  const selectedIndex = selectedItem ? items.findIndex((it) => it.id === selectedItem.id) : -1;
+  const doneCount = items.filter((it) => it.completedToday).length;
+  const allDone = items.length > 0 && doneCount === items.length;
   const initial = user?.name?.trim().charAt(0).toUpperCase() ?? "?";
 
-  return (
-    <STFrame side="home">
-      <MobileCard>
-        <div className="wf">
-          <MobileStatusBar />
+  async function toggleComplete(item: RoutineItem) {
+    const next = !item.completedToday;
+    setBusyId(item.id);
+    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, completedToday: next } : it)));
+    try {
+      const res = await apiFetch<{
+        data: { completedToday: boolean; streak: StudentDetailPublic["streak"] };
+      }>("/api/me/routine/complete", {
+        method: "POST",
+        body: JSON.stringify({ routineItemId: item.id, completed: next }),
+      });
+      if (res.data.streak) setStreak(res.data.streak);
+    } catch {
+      // revert on failure
+      setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, completedToday: !next } : it)));
+    } finally {
+      setBusyId(null);
+    }
+  }
 
-          <div className="wf-header">
-            <div>
-              <h2 className="wf-title">{headerTitle}</h2>
-              <div className="wf-subtitle">{headerSub}</div>
+  return (
+    <STFrame side="practice">
+      <div className="dt-main-body" style={{ height: "100%", padding: 0 }}>
+        <div className="flex flex-col md:flex-row h-full" style={{ minHeight: 0 }}>
+          {/* Left — the path */}
+          <div
+            className="md:w-[360px] md:flex-none md:border-r"
+            style={{ overflowY: "auto", borderColor: "var(--ink-faint)" }}
+          >
+            <div className="wf-header" style={{ position: "sticky", top: 0, background: "var(--paper)", zIndex: 1 }}>
+              <div>
+                <h2 className="wf-title">
+                  {allDone ? "All done!" : `${dayLabelToday()}'s path`}
+                </h2>
+                <div className="wf-subtitle">
+                  {items.length > 0
+                    ? `${doneCount} of ${items.length} done today`
+                    : "no routine yet"}
+                </div>
+              </div>
+              <div className="row gap-2">
+                {streak && streak.currentDays > 0 && (
+                  <span className="chip accent" style={{ background: "var(--accent)", color: "white", borderColor: "var(--accent)" }}>
+                    🔥 {streak.currentDays}
+                  </span>
+                )}
+                <div className="wf-avatar">{initial}</div>
+              </div>
             </div>
-            <div className="row gap-2">
-              {detail?.streak && detail.streak.currentDays > 0 && !view.completedAll && (
-                <span className="chip accent" style={{ background: "var(--accent)", color: "white", borderColor: "var(--accent)" }}>🔥 {detail.streak.currentDays}</span>
+
+            {items.length > 0 && (
+              <div style={{ padding: "0 18px 8px" }}>
+                <div className="progress">
+                  <i style={{ width: `${(doneCount / items.length) * 100}%` }} />
+                </div>
+              </div>
+            )}
+
+            <div style={{ padding: "8px 8px 24px" }}>
+              {loading && items.length === 0 ? (
+                <div className="small muted" style={{ padding: 18 }}>Loading…</div>
+              ) : items.length === 0 ? (
+                <div className="box dashed small muted" style={{ margin: 12 }}>
+                  No routine set yet — your coach builds this after your next lesson.
+                </div>
+              ) : (
+                <PathSvg items={items} selectedId={selectedItem?.id ?? null} onSelect={setSelectedId} />
               )}
-              <div className="wf-avatar">{initial}</div>
             </div>
           </div>
 
-          {!view.completedAll && view.progress > 0 && (
-            <div style={{ padding: "0 18px 6px" }}>
-              <div className="progress">
-                <i style={{ width: `${(view.progress / stops.length) * 100}%` }} />
+          {/* Right — selected exercise detail */}
+          <div className="flex-1" style={{ overflowY: "auto", padding: 24, minWidth: 0 }}>
+            {selectedItem ? (
+              <ExerciseDetail
+                item={selectedItem}
+                index={selectedIndex}
+                total={items.length}
+                busy={busyId === selectedItem.id}
+                onToggle={() => toggleComplete(selectedItem)}
+              />
+            ) : (
+              <div className="small muted" style={{ padding: 8 }}>
+                {loading ? "Loading…" : "Pick a stop on your path to see the details."}
               </div>
-            </div>
-          )}
-
-          <div
-            className="wf-body"
-            style={{ position: "relative", overflow: "hidden", paddingBottom: 16 }}
-          >
-            {loading && (
-              <div className="small muted" style={{ padding: 18 }}>
-                Loading…
-              </div>
-            )}
-            <PathSvg
-              stops={stops}
-              progress={view.progress}
-              current={view.current}
-              completedAll={view.completedAll}
-            />
-
-            {/* State A — pinned teacher note */}
-            {view.progress === 0 && !view.completedAll && detail?.latestNoteSections?.intro && (
-              <div
-                style={{ position: "absolute", left: "50%", top: 60, transform: "translateX(-50%)" }}
-                className="postit"
-              >
-                <div className="tiny muted">PINNED · your teacher</div>
-                <div className="wf-scrawl" style={{ fontSize: 18, lineHeight: 1 }}>
-                  {detail.latestNoteSections.intro.length > 60
-                    ? detail.latestNoteSections.intro.slice(0, 58) + "…"
-                    : detail.latestNoteSections.intro}
-                </div>
-              </div>
-            )}
-
-            {/* State B — current stop tooltip */}
-            {!view.completedAll && view.progress > 0 && currentStop && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: 18,
-                  top: 148,
-                  background: "white",
-                  border: "1.5px solid var(--accent)",
-                  borderRadius: 10,
-                  padding: "6px 10px",
-                  maxWidth: 170,
-                }}
-              >
-                <div className="bold small">{currentStop.label}</div>
-                <div className="tiny muted">
-                  {[currentStop.durationMin ? `${currentStop.durationMin} min` : null, currentStop.tempo]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </div>
-                <svg
-                  width="80"
-                  height="40"
-                  viewBox="0 0 80 40"
-                  style={{ position: "absolute", right: -66, top: 18, pointerEvents: "none" }}
-                >
-                  <path
-                    d="M 4 6 Q 30 8 50 28"
-                    fill="none"
-                    stroke="var(--accent)"
-                    strokeWidth="1.5"
-                    strokeDasharray="3 3"
-                  />
-                  <polygon points="46,24 54,30 48,32" fill="var(--accent)" />
-                </svg>
-              </div>
-            )}
-
-            {/* State C — celebration card */}
-            {view.completedAll && (
-              <div
-                style={{
-                  position: "absolute",
-                  left: "50%",
-                  top: "38%",
-                  transform: "translate(-50%, -50%) rotate(-1.5deg)",
-                  width: "82%",
-                }}
-              >
-                <div
-                  className="box thick accent"
-                  style={{
-                    padding: "16px 14px",
-                    background: "var(--paper)",
-                    textAlign: "center",
-                  }}
-                >
-                  <div style={{ fontSize: 34, lineHeight: 1 }}>🎺</div>
-                  <div className="wf-scrawl bold" style={{ fontSize: 30, lineHeight: 1.05 }}>
-                    nailed it
-                  </div>
-                  <div className="small muted">
-                    all {stops.length} stops
-                    {detail?.streak ? ` · streak now ${detail.streak.currentDays} days` : ""}
-                  </div>
-                  <Squiggle w={80} color="var(--accent)" />
-                  <div
-                    className="row gap-2 mt-3"
-                    style={{ justifyContent: "center", flexWrap: "wrap" }}
-                  >
-                    <span className="chip accent">+1 streak day</span>
-                    <span className="chip">{stops.length} stops</span>
-                    {detail && detail.takes.some((t) => t.status === "UNREVIEWED") && (
-                      <span className="chip">1 take sent</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* CTA buttons */}
-            {!view.completedAll && currentStop && (
-              <BeginCTA stop={currentStop} progress={view.progress} />
-            )}
-            {view.completedAll && (
-              <>
-                <Link
-                  to="/my-bookings"
-                  className="btn primary"
-                  style={{
-                    position: "absolute",
-                    bottom: 58,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                  }}
-                >
-                  see today's recap →
-                </Link>
-                <button
-                  className="btn ghost small"
-                  style={{
-                    position: "absolute",
-                    bottom: 18,
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                  }}
-                >
-                  practice more (bonus)
-                </button>
-              </>
             )}
           </div>
         </div>
-      </MobileCard>
+      </div>
     </STFrame>
-  );
-}
-
-function BeginCTA({ stop, progress }: { stop: Stop; progress: number }) {
-  const label =
-    progress === 0
-      ? `Begin · stop 1`
-      : `Continue · ${stop.label}`;
-  const to = stop.assignmentId
-    ? stop.type === "SONG"
-      ? `/practice/record/${stop.assignmentId}`
-      : `/practice/exercise/${stop.assignmentId}`
-    : "#";
-  return (
-    <Link
-      to={to}
-      className="btn accent big"
-      style={{
-        position: "absolute",
-        bottom: 14,
-        left: "50%",
-        transform: "translateX(-50%)",
-        boxShadow: "2px 2px 0 var(--ink)",
-        textDecoration: "none",
-      }}
-    >
-      <Icon name="play" size={16} stroke="white" /> {label}
-    </Link>
   );
 }
 

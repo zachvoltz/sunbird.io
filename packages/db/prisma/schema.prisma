@@ -97,6 +97,7 @@ model User {
   noteReadReceipts      NoteReadReceipt[]
   noteVoiceMemos        NoteVoiceMemo[]
   lessonSummariesEdited LessonSummary[]     @relation("summaryEditor")
+  routineCompletions    RoutineCompletion[]
 }
 
 model Session {
@@ -933,4 +934,21 @@ model NoteVoiceMemo {
 
   booking Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   addedBy User    @relation(fields: [addedById], references: [id])
+}
+
+// One row per (student, routine item, day) the student checks off on their
+// Practice path. routineItemId is the id of the item inside the User's
+// currentRoutine JSON blob; `day` is UTC midnight so a completion is scoped
+// to a calendar day. First completion of a day bumps PracticeStreak.
+model RoutineCompletion {
+  id            String   @id @default(cuid())
+  userId        String
+  routineItemId String
+  day           DateTime
+  createdAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, routineItemId, day])
+  @@index([userId, day])
 }

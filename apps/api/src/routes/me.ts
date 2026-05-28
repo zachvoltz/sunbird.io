@@ -12,6 +12,13 @@ type MeEnv = {
 
 const me = new Hono<MeEnv>();
 
+// UTC midnight for the given date — the canonical "day" key for routine
+// completions and streak math, so a check-off is scoped to a calendar day
+// regardless of the request's local time.
+function utcMidnight(d: Date): Date {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+}
+
 me.get("/", requireAuth, (c) => {
   const user = c.get("user")!;
   return c.json({
@@ -123,6 +130,43 @@ me.get("/student-data", requireAuth, async (c) => {
     };
   }
 
+  // Enrich the routine with media URLs from the linked library items and
+  // today's completion state, so the Practice path can play audio/MIDI and
+  // render which stops are checked off for the day.
+  const parsedRoutine = parseRoutine((student as any).currentRoutine);
+  const libIds = parsedRoutine.items
+    .map((it) => it.libraryItemId)
+    .filter((x): x is string => !!x);
+  const today = utcMidnight(new Date());
+  const [libItems, completions] = await Promise.all([
+    libIds.length
+      ? db.libraryItem.findMany({
+          where: { id: { in: libIds } },
+          select: { id: true, audioUrl: true, midiUrl: true, pdfUrl: true, hasMidi: true },
+        })
+      : Promise.resolve([] as Array<{ id: string; audioUrl: string | null; midiUrl: string | null; pdfUrl: string | null; hasMidi: boolean }>),
+    db.routineCompletion.findMany({
+      where: { userId: user.id, day: today },
+      select: { routineItemId: true },
+    }),
+  ]);
+  const libById = new Map(libItems.map((l) => [l.id, l]));
+  const doneIds = new Set(completions.map((rc) => rc.routineItemId));
+  const enrichedRoutine = {
+    items: parsedRoutine.items.map((it) => {
+      const lib = it.libraryItemId ? libById.get(it.libraryItemId) : null;
+      return {
+        ...it,
+        audioUrl: lib?.audioUrl ?? null,
+        midiUrl: lib?.midiUrl ?? null,
+        pdfUrl: lib?.pdfUrl ?? null,
+        hasMidi: lib?.hasMidi ?? false,
+        completedToday: doneIds.has(it.id),
+      };
+    }),
+    updatedAt: parsedRoutine.updatedAt,
+  };
+
   const data = {
     id: student.id,
     name: student.name,
@@ -221,7 +265,7 @@ me.get("/student-data", requireAuth, async (c) => {
         addedBy: v.addedBy,
       })) ?? [],
     latestNoteCoach: latestSentNote?.coach ?? null,
-    routine: parseRoutine((student as any).currentRoutine),
+    routine: enrichedRoutine,
   };
 
   return c.json({ data });
@@ -354,6 +398,82 @@ me.delete("/inbox/:messageId/read", requireAuth, async (c) => {
     where: { messageId, userId: user.id },
   });
   return c.json({ data: { ok: true } });
+});
+
+// POST /api/me/routine/complete — toggle today's completion for one routine
+// item. Body: { routineItemId: string, completed: boolean }. The first
+// completion of any item on a given day advances the practice streak;
+// un-checking removes the day's row but never rolls the streak back.
+me.post("/routine/complete", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const body = (await c.req.json().catch(() => null)) as
+    | { routineItemId?: unknown; completed?: unknown }
+    | null;
+  const routineItemId = typeof body?.routineItemId === "string" ? body.routineItemId : "";
+  const completed = body?.completed === true;
+  if (!routineItemId) {
+    return c.json({ error: "routineItemId required" }, 400);
+  }
+
+  // Guard: the id must belong to the student's own current routine.
+  const student = await db.user.findUnique({
+    where: { id: user.id },
+    select: { currentRoutine: true },
+  });
+  const routine = parseRoutine(student?.currentRoutine ?? null);
+  if (!routine.items.some((it) => it.id === routineItemId)) {
+    return c.json({ error: "Routine item not found" }, 404);
+  }
+
+  const now = new Date();
+  const today = utcMidnight(now);
+
+  if (completed) {
+    await db.routineCompletion.upsert({
+      where: { userId_routineItemId_day: { userId: user.id, routineItemId, day: today } },
+      update: {},
+      create: { userId: user.id, routineItemId, day: today },
+    });
+  } else {
+    await db.routineCompletion.deleteMany({
+      where: { userId: user.id, routineItemId, day: today },
+    });
+  }
+
+  // Streak: advance only on the day's first completion (idempotent via the
+  // "already practiced today" check); leave it untouched on un-check.
+  let streak = await db.practiceStreak.findUnique({ where: { userId: user.id } });
+  if (completed) {
+    const lastDay = streak?.lastPracticedAt ? utcMidnight(streak.lastPracticedAt) : null;
+    const alreadyToday = lastDay?.getTime() === today.getTime();
+    if (!alreadyToday) {
+      const yesterday = new Date(today.getTime() - 86_400_000);
+      const continues = lastDay?.getTime() === yesterday.getTime();
+      const currentDays = continues ? (streak?.currentDays ?? 0) + 1 : 1;
+      const longestDays = Math.max(streak?.longestDays ?? 0, currentDays);
+      streak = await db.practiceStreak.upsert({
+        where: { userId: user.id },
+        update: { currentDays, longestDays, lastPracticedAt: now },
+        create: { userId: user.id, currentDays, longestDays, lastPracticedAt: now },
+      });
+    }
+  }
+
+  return c.json({
+    data: {
+      routineItemId,
+      completedToday: completed,
+      streak: streak
+        ? {
+            currentDays: streak.currentDays,
+            longestDays: streak.longestDays,
+            lastPracticedAt: streak.lastPracticedAt?.toISOString() ?? null,
+          }
+        : null,
+    },
+  });
 });
 
 export { me as meRoutes };

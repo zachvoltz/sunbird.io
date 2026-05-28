@@ -589,6 +589,14 @@ export interface RoutineItem {
   bpmEnd: number | null;
   durationMin: number | null;
   note: string | null;
+  // Read-only enrichments populated by GET /api/me/student-data (resolved
+  // from the linked LibraryItem + today's RoutineCompletion). Never written
+  // back via serializeRoutine — they're presentation-only.
+  audioUrl?: string | null;
+  midiUrl?: string | null;
+  pdfUrl?: string | null;
+  hasMidi?: boolean;
+  completedToday?: boolean;
 }
 
 export interface RoutinePublic {
