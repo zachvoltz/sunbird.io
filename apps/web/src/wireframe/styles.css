@@ -1001,7 +1001,7 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   .wireframe-root .dt,
   .wireframe-root .dt.dt--collapsed {
     grid-template-columns: 1fr;
-    grid-template-rows: 52px auto auto;
+    grid-template-rows: auto auto auto;
     grid-template-areas:
       "topbar"
       "side"
@@ -1010,14 +1010,22 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
     min-height: 100vh;
     overflow: visible;
   }
-  /* Topbar: keep it one row, let the search take the slack and shrink. */
+  /* min-width:0 lets the 1fr column collapse to the viewport instead of
+     stretching to its children's min-content width (which caused a ~240px
+     horizontal overflow on phones). */
+  .wireframe-root .dt-topbar,
+  .wireframe-root .dt-side,
+  .wireframe-root .dt-main { min-width: 0; }
+  /* Topbar wraps to a second row on narrow screens rather than overflowing. */
   .wireframe-root .dt-topbar {
     position: sticky;
     top: 0;
     gap: 8px;
-    padding: 0 12px;
+    row-gap: 6px;
+    padding: 8px 12px;
+    flex-wrap: wrap;
   }
-  .wireframe-root .dt-search { flex: 1 1 80px; min-width: 0; }
+  .wireframe-root .dt-search { flex: 1 1 120px; min-width: 0; }
   .wireframe-root .dt-search .kbd { display: none; }
   .wireframe-root .dt-side {
     flex-direction: row;
