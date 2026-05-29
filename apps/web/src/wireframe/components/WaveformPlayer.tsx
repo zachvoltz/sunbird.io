@@ -9,7 +9,7 @@ import { Icon } from "./Icon";
 // parsed note sequence.
 
 const SOUNDFONT = "https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus";
-const BAR_COUNT = 96;
+const BAR_COUNT = 140;
 
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) t = 0;
