@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
 import { parseRoutine } from "../lib/routine";
+import { computeStreak } from "../lib/streak";
 
 type MeEnv = {
   Variables: {
@@ -44,7 +45,7 @@ me.get("/student-data", requireAuth, async (c) => {
     id: true, name: true, email: true, avatarUrl: true, bio: true, role: true,
   } as const;
 
-  const [student, bookings, streak, assignments, takes, latestSentNote] = await Promise.all([
+  const [student, bookings, completionDays, assignments, takes, latestSentNote] = await Promise.all([
     db.user.findUnique({
       where: { id: user.id },
       select: {
@@ -62,7 +63,14 @@ me.get("/student-data", requireAuth, async (c) => {
         coach: { select: userSelect },
       },
     }),
-    db.practiceStreak.findUnique({ where: { userId: user.id } }),
+    // Distinct days the student completed an exercise — streak is derived
+    // from these (source of truth) rather than a separately-bumped counter.
+    db.routineCompletion.findMany({
+      where: { userId: user.id },
+      select: { day: true },
+      distinct: ["day"],
+      orderBy: { day: "desc" },
+    }),
     db.assignment.findMany({
       where: { studentId: user.id },
       orderBy: [{ weekStartsOn: "desc" }, { sortOrder: "asc" }],
@@ -175,6 +183,10 @@ me.get("/student-data", requireAuth, async (c) => {
     updatedAt: parsedRoutine.updatedAt,
   };
 
+  const derivedStreak = computeStreak(
+    completionDays.map((r) => r.day.toISOString().slice(0, 10)),
+  );
+
   const data = {
     id: student.id,
     name: student.name,
@@ -186,13 +198,13 @@ me.get("/student-data", requireAuth, async (c) => {
     bookingCount: bookings.length,
     firstLessonAt,
     lastLessonAt,
-    streak: streak
-      ? {
-          currentDays: streak.currentDays,
-          longestDays: streak.longestDays,
-          lastPracticedAt: streak.lastPracticedAt?.toISOString() ?? null,
-        }
-      : null,
+    streak: {
+      currentDays: derivedStreak.currentDays,
+      longestDays: derivedStreak.longestDays,
+      lastPracticedAt: derivedStreak.lastDay
+        ? new Date(derivedStreak.lastDay + "T00:00:00.000Z").toISOString()
+        : null,
+    },
     assignments: assignments.map((a: any) => ({
       id: a.id,
       studentId: a.studentId,
@@ -451,36 +463,38 @@ me.post("/routine/complete", requireAuth, async (c) => {
     });
   }
 
-  // Streak: advance only on the day's first completion (idempotent via the
-  // "already practiced today" check); leave it untouched on un-check.
-  let streak = await db.practiceStreak.findUnique({ where: { userId: user.id } });
-  if (completed) {
-    const lastDay = streak?.lastPracticedAt ? utcMidnight(streak.lastPracticedAt) : null;
-    const alreadyToday = lastDay?.getTime() === today.getTime();
-    if (!alreadyToday) {
-      const yesterday = new Date(today.getTime() - 86_400_000);
-      const continues = lastDay?.getTime() === yesterday.getTime();
-      const currentDays = continues ? (streak?.currentDays ?? 0) + 1 : 1;
-      const longestDays = Math.max(streak?.longestDays ?? 0, currentDays);
-      streak = await db.practiceStreak.upsert({
-        where: { userId: user.id },
-        update: { currentDays, longestDays, lastPracticedAt: now },
-        create: { userId: user.id, currentDays, longestDays, lastPracticedAt: now },
-      });
-    }
-  }
+  // Recompute the streak from the actual completion days (source of truth)
+  // and persist it, so un-checking rolls the streak back correctly instead
+  // of leaving a stale counter.
+  const completionDays = await db.routineCompletion.findMany({
+    where: { userId: user.id },
+    select: { day: true },
+    distinct: ["day"],
+  });
+  const derived = computeStreak(completionDays.map((r) => r.day.toISOString().slice(0, 10)));
+  const lastPracticedAt = derived.lastDay
+    ? new Date(derived.lastDay + "T00:00:00.000Z")
+    : null;
+  await db.practiceStreak.upsert({
+    where: { userId: user.id },
+    update: { currentDays: derived.currentDays, longestDays: derived.longestDays, lastPracticedAt },
+    create: {
+      userId: user.id,
+      currentDays: derived.currentDays,
+      longestDays: derived.longestDays,
+      lastPracticedAt,
+    },
+  });
 
   return c.json({
     data: {
       routineItemId,
       completedToday: completed,
-      streak: streak
-        ? {
-            currentDays: streak.currentDays,
-            longestDays: streak.longestDays,
-            lastPracticedAt: streak.lastPracticedAt?.toISOString() ?? null,
-          }
-        : null,
+      streak: {
+        currentDays: derived.currentDays,
+        longestDays: derived.longestDays,
+        lastPracticedAt: lastPracticedAt?.toISOString() ?? null,
+      },
     },
   });
 });

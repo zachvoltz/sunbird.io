@@ -273,6 +273,113 @@ function StreakRow({
   );
 }
 
+// ── celebration ──────────────────────────────────────────
+const CONFETTI = ["🎉", "✨", "🎊", "⭐", "🔥"];
+
+function CelebrationOverlay({
+  fromStreak,
+  toStreak,
+  onClose,
+}: {
+  fromStreak: number;
+  toStreak: number;
+  onClose: () => void;
+}) {
+  const [count, setCount] = useState(fromStreak);
+  useEffect(() => {
+    const start = performance.now();
+    const dur = 900;
+    let raf = 0;
+    const tick = (t: number) => {
+      const p = Math.min(1, (t - start) / dur);
+      const eased = 1 - Math.pow(1 - p, 3);
+      setCount(Math.round(fromStreak + (toStreak - fromStreak) * eased));
+      if (p < 1) raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    const close = window.setTimeout(onClose, 6000);
+    return () => {
+      cancelAnimationFrame(raf);
+      clearTimeout(close);
+    };
+  }, [fromStreak, toStreak, onClose]);
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 50,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.35)",
+      }}
+    >
+      <style>{`
+        @keyframes cf-fall { 0%{ transform: translateY(-12vh) rotate(0); opacity:1 } 100%{ transform: translateY(112vh) rotate(540deg); opacity:0.85 } }
+        @keyframes pop-in { 0%{ transform: scale(0.6) rotate(-3deg); opacity:0 } 60%{ transform: scale(1.08) rotate(1deg); opacity:1 } 100%{ transform: scale(1) rotate(0) } }
+        @keyframes flame-pulse { 0%,100%{ transform: scale(1) } 50%{ transform: scale(1.18) } }
+      `}</style>
+      {Array.from({ length: 28 }, (_, i) => {
+        const left = (i * 37) % 100;
+        const delay = (i % 10) * 0.18;
+        const dur = 2.6 + (i % 5) * 0.5;
+        return (
+          <span
+            key={i}
+            style={{
+              position: "fixed",
+              top: 0,
+              left: `${left}%`,
+              fontSize: 18 + (i % 4) * 6,
+              animation: `cf-fall ${dur}s linear ${delay}s infinite`,
+              pointerEvents: "none",
+            }}
+          >
+            {CONFETTI[i % CONFETTI.length]}
+          </span>
+        );
+      })}
+      <div
+        className="box thick accent"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          background: "var(--paper)",
+          textAlign: "center",
+          padding: "26px 30px",
+          maxWidth: 340,
+          animation: "pop-in 0.5s ease-out both",
+          boxShadow: "4px 5px 0 var(--ink)",
+        }}
+      >
+        <div style={{ fontSize: 40, lineHeight: 1 }}>🎺</div>
+        <div className="wf-scrawl bold" style={{ fontSize: 34, lineHeight: 1.05, marginTop: 4 }}>
+          nailed it
+        </div>
+        <div className="small muted" style={{ marginBottom: 14 }}>
+          you finished today's practice
+        </div>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8 }}>
+          <span style={{ fontSize: 44, display: "inline-block", animation: "flame-pulse 1.1s ease-in-out infinite" }}>
+            🔥
+          </span>
+          <span className="wf-scrawl bold" style={{ fontSize: 56, lineHeight: 1, color: "var(--accent)" }}>
+            {count}
+          </span>
+        </div>
+        <div className="small bold" style={{ color: "var(--accent)" }}>
+          day{count === 1 ? "" : "s"} in a row
+        </div>
+        <button className="btn primary" onClick={onClose} style={{ marginTop: 16 }}>
+          keep it going →
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export function PracticePathPage() {
   const { user } = useAuth();
   const { detail, loading } = useMyStudentDetail();
@@ -283,6 +390,7 @@ export function PracticePathPage() {
   const [recentDays, setRecentDays] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [celebrate, setCelebrate] = useState<{ from: number; to: number } | null>(null);
 
   useEffect(() => {
     if (!detail) return;
@@ -300,6 +408,9 @@ export function PracticePathPage() {
 
   async function toggleComplete(item: RoutineItem) {
     const next = !item.completedToday;
+    const prevStreak = streak?.currentDays ?? 0;
+    const idx = items.findIndex((it) => it.id === item.id);
+    const isLast = idx === items.length - 1;
     setBusyId(item.id);
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, completedToday: next } : it)));
     try {
@@ -310,6 +421,15 @@ export function PracticePathPage() {
         body: JSON.stringify({ routineItemId: item.id, completed: next }),
       });
       if (res.data.streak) setStreak(res.data.streak);
+      // On marking done: advance to the next stop, or celebrate if this was
+      // the last one.
+      if (next) {
+        if (!isLast && idx >= 0) {
+          setSelectedId(items[idx + 1].id);
+        } else if (isLast) {
+          setCelebrate({ from: prevStreak, to: res.data.streak?.currentDays ?? prevStreak });
+        }
+      }
     } catch {
       // revert on failure
       setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, completedToday: !next } : it)));
@@ -395,6 +515,13 @@ export function PracticePathPage() {
           </div>
         </div>
       </div>
+      {celebrate && (
+        <CelebrationOverlay
+          fromStreak={celebrate.from}
+          toStreak={celebrate.to}
+          onClose={() => setCelebrate(null)}
+        />
+      )}
     </STFrame>
   );
 }
