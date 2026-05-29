@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
-import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { AudioPlayer, MidiPlayer } from "../components/WaveformPlayer";
@@ -449,7 +448,6 @@ function CelebrationOverlay({
 }
 
 export function PracticePathPage() {
-  const { user } = useAuth();
   const { detail, loading } = useMyStudentDetail();
 
   // Local, mutable copies so a check-off updates the path + streak instantly.
@@ -483,7 +481,6 @@ export function PracticePathPage() {
   const selectedIndex = selectedItem ? items.findIndex((it) => it.id === selectedItem.id) : -1;
   const doneCount = items.filter((it) => it.completedToday).length;
   const allDone = items.length > 0 && doneCount === items.length;
-  const initial = user?.name?.trim().charAt(0).toUpperCase() ?? "?";
 
   async function toggleComplete(item: RoutineItem) {
     const next = !item.completedToday;
@@ -530,26 +527,29 @@ export function PracticePathPage() {
             className="md:w-[360px] md:flex-none md:border-r"
             style={{ overflowY: "auto", borderColor: "var(--ink-faint)" }}
           >
-            <div className="wf-header" style={{ position: "sticky", top: 0, background: "var(--paper)", zIndex: 1 }}>
-              <div>
-                <h2 className="wf-title">
-                  {allDone ? "All done!" : `${dayLabelToday()}'s path`}
-                </h2>
-                <div className="wf-subtitle">
-                  {items.length > 0
-                    ? `${doneCount} of ${items.length} done today`
-                    : "no routine yet"}
+            {/* Header (title + progress + avatar) is desktop-only; on mobile
+                it's redundant with the topbar avatar and the streak row. */}
+            {!isMobile && (
+              <div className="wf-header" style={{ position: "sticky", top: 0, background: "var(--paper)", zIndex: 1 }}>
+                <div>
+                  <h2 className="wf-title">
+                    {allDone ? "All done!" : `${dayLabelToday()}'s path`}
+                  </h2>
+                  <div className="wf-subtitle">
+                    {items.length > 0
+                      ? `${doneCount} of ${items.length} done today`
+                      : "no routine yet"}
+                  </div>
+                </div>
+                <div className="row gap-2">
+                  {streak && streak.currentDays > 0 && (
+                    <span className="chip accent" style={{ background: "var(--accent)", color: "white", borderColor: "var(--accent)" }}>
+                      🔥 {streak.currentDays}
+                    </span>
+                  )}
                 </div>
               </div>
-              <div className="row gap-2">
-                {streak && streak.currentDays > 0 && (
-                  <span className="chip accent" style={{ background: "var(--accent)", color: "white", borderColor: "var(--accent)" }}>
-                    🔥 {streak.currentDays}
-                  </span>
-                )}
-                <div className="wf-avatar">{initial}</div>
-              </div>
-            </div>
+            )}
 
             {items.length > 0 && (
               <StreakRow
