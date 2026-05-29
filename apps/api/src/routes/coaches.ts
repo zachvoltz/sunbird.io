@@ -113,23 +113,17 @@ coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (
 });
 
 // GET /api/coaches/inbox-count — number of unread incoming
-// SessionMessages for this coach. A message is unread when it arrived
-// after the user's lastInboxViewedAt (or never set) AND has no
-// per-item read receipt for this user. Powers the sidebar badge.
+// SessionMessages for this coach. Read state is per-item: a message is
+// unread when it has no read receipt for this user. Powers the sidebar
+// badge.
 coachRoutes.get("/inbox-count", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
   const db = getDb();
   const bookingFilter = user.role === "COACH" ? { coachId: user.id } : {};
-  const me = await db.user.findUnique({
-    where: { id: user.id },
-    select: { lastInboxViewedAt: true },
-  });
-  const since = me?.lastInboxViewedAt ?? null;
   const count = await db.sessionMessage.count({
     where: {
       booking: bookingFilter,
       NOT: { senderId: user.id },
-      ...(since ? { createdAt: { gt: since } } : {}),
       reads: { none: { userId: user.id } },
     },
   });
@@ -162,8 +156,8 @@ coachRoutes.post("/inbox/:messageId/read", requireAuth, requireRole("COACH", "AD
 });
 
 // DELETE /api/coaches/inbox/:messageId/read — un-mark (toggle back to
-// unread). Note: the message can still be hidden from the count by an
-// older lastInboxViewedAt; this only undoes the per-item receipt.
+// unread) by removing the per-item read receipt. Read state is purely
+// receipt-based, so this sticks across reloads.
 coachRoutes.delete("/inbox/:messageId/read", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
   const messageId = c.req.param("messageId");
@@ -177,18 +171,12 @@ coachRoutes.delete("/inbox/:messageId/read", requireAuth, requireRole("COACH", "
 // GET /api/coaches/inbox — list incoming SessionMessages on this
 // coach's bookings (not sent by them), newest first, capped at 50.
 // Returns each message with sender + booking context plus an `unread`
-// flag (createdAt > lastInboxViewedAt) so the UI can highlight new
+// flag (no read receipt for this user) so the UI can highlight new
 // rows without a second roundtrip.
 coachRoutes.get("/inbox", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
   const db = getDb();
   const bookingFilter = user.role === "COACH" ? { coachId: user.id } : {};
-
-  const me = await db.user.findUnique({
-    where: { id: user.id },
-    select: { lastInboxViewedAt: true },
-  });
-  const lastViewedAt: Date | null = me?.lastInboxViewedAt ?? null;
 
   const messages: any[] = await db.sessionMessage.findMany({
     where: {
@@ -219,13 +207,12 @@ coachRoutes.get("/inbox", requireAuth, requireRole("COACH", "ADMIN"), async (c) 
     data: {
       items: messages.map((m) => {
         const hasReceipt = Array.isArray(m.reads) && m.reads.length > 0;
-        const beforeViewed = lastViewedAt ? m.createdAt <= lastViewedAt : false;
         return {
           id: m.id,
           bookingId: m.bookingId,
           content: m.content,
           createdAt: m.createdAt.toISOString(),
-          unread: !hasReceipt && !beforeViewed,
+          unread: !hasReceipt,
           sender: {
             id: m.sender.id,
             name: m.sender.name,
@@ -241,22 +228,30 @@ coachRoutes.get("/inbox", requireAuth, requireRole("COACH", "ADMIN"), async (c) 
           },
         };
       }),
-      lastViewedAt: lastViewedAt ? lastViewedAt.toISOString() : null,
     },
   });
 });
 
-// POST /api/coaches/inbox-viewed — stamp the user's lastInboxViewedAt
-// to now and return the resulting (zero) count. The Inbox page calls
-// this on mount so the sidebar badge clears as soon as the coach
-// opens the inbox.
+// POST /api/coaches/inbox-viewed — "mark all read". Creates a read
+// receipt for every incoming message that lacks one, so the state is
+// per-item (and a later per-item "mark unread" actually sticks).
 coachRoutes.post("/inbox-viewed", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;
   const db = getDb();
-  await db.user.update({
-    where: { id: user.id },
-    data: { lastInboxViewedAt: new Date() },
+  const bookingFilter = user.role === "COACH" ? { coachId: user.id } : {};
+  const unread = await db.sessionMessage.findMany({
+    where: {
+      booking: bookingFilter,
+      NOT: { senderId: user.id },
+      reads: { none: { userId: user.id } },
+    },
+    select: { id: true },
   });
+  if (unread.length > 0) {
+    await db.sessionMessageRead.createMany({
+      data: unread.map((m) => ({ messageId: m.id, userId: user.id })),
+    });
+  }
   return c.json({ data: { count: 0 } });
 });
 
