@@ -286,6 +286,10 @@ function CelebrationOverlay({
   onClose: () => void;
 }) {
   const [count, setCount] = useState(fromStreak);
+  const [note, setNote] = useState("");
+  const [noteState, setNoteState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [noteError, setNoteError] = useState<string | null>(null);
+
   useEffect(() => {
     const start = performance.now();
     const dur = 900;
@@ -297,12 +301,26 @@ function CelebrationOverlay({
       if (p < 1) raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
-    const close = window.setTimeout(onClose, 6000);
-    return () => {
-      cancelAnimationFrame(raf);
-      clearTimeout(close);
-    };
-  }, [fromStreak, toStreak, onClose]);
+    // No auto-dismiss — the note prompt is interactive.
+    return () => cancelAnimationFrame(raf);
+  }, [fromStreak, toStreak]);
+
+  async function sendNote() {
+    const text = note.trim();
+    if (!text) return;
+    setNoteState("sending");
+    setNoteError(null);
+    try {
+      await apiFetch("/api/me/practice-note", {
+        method: "POST",
+        body: JSON.stringify({ text }),
+      });
+      setNoteState("sent");
+    } catch (e: any) {
+      setNoteState("error");
+      setNoteError(e?.body?.error ?? "Couldn't send your note.");
+    }
+  }
 
   return (
     <div
@@ -372,9 +390,58 @@ function CelebrationOverlay({
         <div className="small bold" style={{ color: "var(--accent)" }}>
           day{count === 1 ? "" : "s"} in a row
         </div>
-        <button className="btn primary" onClick={onClose} style={{ marginTop: 16 }}>
-          keep it going →
-        </button>
+
+        {/* Quick note to self / coach */}
+        <div className="hr-hand" style={{ margin: "16px 0 12px" }} />
+        {noteState === "sent" ? (
+          <div className="small" style={{ color: "var(--accent)", marginBottom: 12 }}>
+            ✓ note sent to your coach
+          </div>
+        ) : (
+          <>
+            <div className="small bold" style={{ textAlign: "left", marginBottom: 6 }}>
+              Leave a note about today
+            </div>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder="How did it go? Anything for your coach…"
+              rows={3}
+              maxLength={2000}
+              style={{
+                width: "100%",
+                fontFamily: "var(--hand)",
+                fontSize: 14,
+                padding: "8px 10px",
+                border: "1.5px solid var(--ink-faint)",
+                borderRadius: 8,
+                background: "var(--paper)",
+                color: "var(--ink)",
+                outline: "none",
+                resize: "vertical",
+              }}
+            />
+            {noteError && (
+              <div className="tiny" style={{ color: "var(--accent)", marginTop: 4, textAlign: "left" }}>
+                {noteError}
+              </div>
+            )}
+            <button
+              className="btn small primary"
+              onClick={sendNote}
+              disabled={noteState === "sending" || !note.trim()}
+              style={{ marginTop: 8 }}
+            >
+              {noteState === "sending" ? "sending…" : "send note to coach"}
+            </button>
+          </>
+        )}
+
+        <div>
+          <button className="btn ghost" onClick={onClose} style={{ marginTop: 14 }}>
+            {noteState === "sent" ? "done →" : "skip · keep it going →"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -410,7 +477,8 @@ export function PracticePathPage() {
     const next = !item.completedToday;
     const prevStreak = streak?.currentDays ?? 0;
     const idx = items.findIndex((it) => it.id === item.id);
-    const isLast = idx === items.length - 1;
+    // Will every exercise be done once this toggle applies?
+    const allDoneAfter = items.every((it) => (it.id === item.id ? next : it.completedToday));
     setBusyId(item.id);
     setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, completedToday: next } : it)));
     try {
@@ -421,13 +489,13 @@ export function PracticePathPage() {
         body: JSON.stringify({ routineItemId: item.id, completed: next }),
       });
       if (res.data.streak) setStreak(res.data.streak);
-      // On marking done: advance to the next stop, or celebrate if this was
-      // the last one.
+      // On marking done: celebrate once everything's complete, otherwise
+      // advance to the next stop.
       if (next) {
-        if (!isLast && idx >= 0) {
-          setSelectedId(items[idx + 1].id);
-        } else if (isLast) {
+        if (allDoneAfter) {
           setCelebrate({ from: prevStreak, to: res.data.streak?.currentDays ?? prevStreak });
+        } else if (idx >= 0 && idx < items.length - 1) {
+          setSelectedId(items[idx + 1].id);
         }
       }
     } catch {
@@ -472,7 +540,7 @@ export function PracticePathPage() {
               <StreakRow
                 completedDays={new Set(recentDays)}
                 streakDays={streak?.currentDays ?? 0}
-                todayDone={doneCount > 0}
+                todayDone={allDone}
               />
             )}
 

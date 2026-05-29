@@ -9,6 +9,40 @@ function dayKey(ms: number): string {
 }
 
 /**
+ * Days (UTC `YYYY-MM-DD`) on which the student completed EVERY exercise in
+ * their current routine — the only days that count toward the streak.
+ *
+ * @param completions  raw RoutineCompletion rows (day + routineItemId)
+ * @param routineItemIds the ids of the student's current routine items
+ */
+export function fullyCompleteDays(
+  completions: Array<{ day: Date; routineItemId: string }>,
+  routineItemIds: string[],
+): string[] {
+  if (routineItemIds.length === 0) return [];
+  const required = new Set(routineItemIds);
+  const byDay = new Map<string, Set<string>>();
+  for (const c of completions) {
+    const key = c.day.toISOString().slice(0, 10);
+    let set = byDay.get(key);
+    if (!set) byDay.set(key, (set = new Set()));
+    set.add(c.routineItemId);
+  }
+  const out: string[] = [];
+  for (const [key, done] of byDay) {
+    let all = true;
+    for (const id of required) {
+      if (!done.has(id)) {
+        all = false;
+        break;
+      }
+    }
+    if (all) out.push(key);
+  }
+  return out.sort();
+}
+
+/**
  * @param dayKeys distinct UTC `YYYY-MM-DD` strings (any order)
  */
 export function computeStreak(dayKeys: string[]): {

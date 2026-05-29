@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
 import { parseRoutine } from "../lib/routine";
-import { computeStreak } from "../lib/streak";
+import { computeStreak, fullyCompleteDays } from "../lib/streak";
 
 type MeEnv = {
   Variables: {
@@ -45,7 +45,11 @@ me.get("/student-data", requireAuth, async (c) => {
     id: true, name: true, email: true, avatarUrl: true, bio: true, role: true,
   } as const;
 
-  const [student, bookings, completionDays, assignments, takes, latestSentNote] = await Promise.all([
+  const now = new Date();
+  const today = utcMidnight(now);
+  const since120 = new Date(today.getTime() - 119 * 86_400_000);
+
+  const [student, bookings, completionRows, assignments, takes, latestSentNote] = await Promise.all([
     db.user.findUnique({
       where: { id: user.id },
       select: {
@@ -63,13 +67,12 @@ me.get("/student-data", requireAuth, async (c) => {
         coach: { select: userSelect },
       },
     }),
-    // Distinct days the student completed an exercise — streak is derived
-    // from these (source of truth) rather than a separately-bumped counter.
+    // Raw completion rows over the recent window. The streak counts only
+    // days on which EVERY current routine exercise was completed, so we
+    // need the per-day item sets, not just distinct days.
     db.routineCompletion.findMany({
-      where: { userId: user.id },
-      select: { day: true },
-      distinct: ["day"],
-      orderBy: { day: "desc" },
+      where: { userId: user.id, day: { gte: since120 } },
+      select: { day: true, routineItemId: true },
     }),
     db.assignment.findMany({
       where: { studentId: user.id },
@@ -142,32 +145,23 @@ me.get("/student-data", requireAuth, async (c) => {
   // today's completion state, so the Practice path can play audio/MIDI and
   // render which stops are checked off for the day.
   const parsedRoutine = parseRoutine((student as any).currentRoutine);
+  const routineItemIds = parsedRoutine.items.map((it) => it.id);
   const libIds = parsedRoutine.items
     .map((it) => it.libraryItemId)
     .filter((x): x is string => !!x);
-  const today = utcMidnight(new Date());
-  const since = new Date(today.getTime() - 13 * 86_400_000); // last 14 days incl. today
-  const [libItems, completions] = await Promise.all([
-    libIds.length
-      ? db.libraryItem.findMany({
-          where: { id: { in: libIds } },
-          select: { id: true, audioUrl: true, midiUrl: true, pdfUrl: true, hasMidi: true },
-        })
-      : Promise.resolve([] as Array<{ id: string; audioUrl: string | null; midiUrl: string | null; pdfUrl: string | null; hasMidi: boolean }>),
-    db.routineCompletion.findMany({
-      where: { userId: user.id, day: { gte: since } },
-      select: { routineItemId: true, day: true },
-    }),
-  ]);
+  const libItems = libIds.length
+    ? await db.libraryItem.findMany({
+        where: { id: { in: libIds } },
+        select: { id: true, audioUrl: true, midiUrl: true, pdfUrl: true, hasMidi: true },
+      })
+    : [];
   const libById = new Map(libItems.map((l) => [l.id, l]));
+  const todayKey = today.toISOString().slice(0, 10);
   const doneIds = new Set(
-    completions.filter((rc) => rc.day.getTime() === today.getTime()).map((rc) => rc.routineItemId),
+    completionRows
+      .filter((rc) => rc.day.toISOString().slice(0, 10) === todayKey)
+      .map((rc) => rc.routineItemId),
   );
-  // Distinct calendar days (UTC) the student completed at least one exercise,
-  // for the streak row on the Practice page.
-  const recentPracticeDays = [
-    ...new Set(completions.map((rc) => rc.day.toISOString().slice(0, 10))),
-  ].sort();
   const enrichedRoutine = {
     items: parsedRoutine.items.map((it) => {
       const lib = it.libraryItemId ? libById.get(it.libraryItemId) : null;
@@ -183,9 +177,11 @@ me.get("/student-data", requireAuth, async (c) => {
     updatedAt: parsedRoutine.updatedAt,
   };
 
-  const derivedStreak = computeStreak(
-    completionDays.map((r) => r.day.toISOString().slice(0, 10)),
-  );
+  // Streak counts only days where every current routine exercise was done.
+  const completeKeys = fullyCompleteDays(completionRows, routineItemIds);
+  const derivedStreak = computeStreak(completeKeys);
+  const since14Key = new Date(today.getTime() - 13 * 86_400_000).toISOString().slice(0, 10);
+  const recentPracticeDays = completeKeys.filter((k) => k >= since14Key);
 
   const data = {
     id: student.id,
@@ -463,15 +459,15 @@ me.post("/routine/complete", requireAuth, async (c) => {
     });
   }
 
-  // Recompute the streak from the actual completion days (source of truth)
-  // and persist it, so un-checking rolls the streak back correctly instead
-  // of leaving a stale counter.
-  const completionDays = await db.routineCompletion.findMany({
+  // Recompute the streak from completions (source of truth) and persist it,
+  // so un-checking rolls it back. A day counts only if EVERY current routine
+  // exercise was completed that day.
+  const completionRows = await db.routineCompletion.findMany({
     where: { userId: user.id },
-    select: { day: true },
-    distinct: ["day"],
+    select: { day: true, routineItemId: true },
   });
-  const derived = computeStreak(completionDays.map((r) => r.day.toISOString().slice(0, 10)));
+  const completeKeys = fullyCompleteDays(completionRows, routine.items.map((it) => it.id));
+  const derived = computeStreak(completeKeys);
   const lastPracticedAt = derived.lastDay
     ? new Date(derived.lastDay + "T00:00:00.000Z")
     : null;
@@ -497,6 +493,32 @@ me.post("/routine/complete", requireAuth, async (c) => {
       },
     },
   });
+});
+
+// POST /api/me/practice-note — a quick note the student jots after
+// finishing their routine. Sent to their coach as a session message on
+// the most recent booking (so it lands in the coach inbox and the shared
+// thread); the coach is inferred server-side, like takes.
+me.post("/practice-note", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const body = (await c.req.json().catch(() => null)) as { text?: unknown } | null;
+  const text = typeof body?.text === "string" ? body.text.trim() : "";
+  if (!text) return c.json({ error: "Note text required" }, 400);
+
+  const booking = await db.booking.findFirst({
+    where: { userId: user.id, coachId: { not: null } },
+    orderBy: { startsAt: "desc" },
+    select: { id: true },
+  });
+  if (!booking) {
+    return c.json({ error: "No coach to send your note to yet" }, 400);
+  }
+
+  await db.sessionMessage.create({
+    data: { bookingId: booking.id, senderId: user.id, content: text.slice(0, 2000) },
+  });
+  return c.json({ data: { ok: true } });
 });
 
 export { me as meRoutes };
