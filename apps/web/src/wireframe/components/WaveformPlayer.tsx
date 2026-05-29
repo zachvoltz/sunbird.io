@@ -68,7 +68,6 @@ function WaveformPlayer({
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "2px 2px 0 var(--ink)",
         }}
       >
         <Icon name={playing ? "pause" : "play"} size={18} stroke="white" />
