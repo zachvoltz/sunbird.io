@@ -231,16 +231,8 @@ export function DTFrame({
   // an empty array while the first fetch is in flight.
   const resolved = students ?? fetched ?? [];
   return (
-    <div
-      className="wireframe-root"
-      style={{ height: "100vh", overflow: "hidden" }}
-    >
-      <div
-        className="dt"
-        style={{
-          gridTemplateColumns: (collapsed ? "56px" : "220px") + " 1fr",
-        }}
-      >
+    <div className="wireframe-root dt-shell">
+      <div className={"dt" + (collapsed ? " dt--collapsed" : "")}>
         <DTTopBar live={live} collapsed={collapsed} onToggleSide={() => setCollapsed((c) => !c)} />
         <DTSidebar on={side} collapsed={collapsed} students={resolved} />
         <div className="dt-main">{children}</div>

@@ -363,6 +363,11 @@ html[data-theme="dark"] .wireframe-root .onb-success {
   font-size: 14px;
 }
 
+/* Fixed-viewport app shell on desktop; relaxed to natural height + page
+   scroll on mobile (see the max-width:900px block). */
+.wireframe-root.dt-shell { height: 100vh; overflow: hidden; }
+.wireframe-root .dt.dt--collapsed { grid-template-columns: 56px 1fr; }
+
 .wireframe-root .dt-topbar {
   grid-area: topbar;
   box-shadow: 0 1.5px 0 rgba(0,0,0,0.08);
@@ -991,7 +996,10 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
 
 /* ── responsive: collapse desktop to a vertical-stack on narrow screens ─ */
 @media (max-width: 900px) {
-  .wireframe-root .dt {
+  /* Let the shell grow with content and the page scroll normally. */
+  .wireframe-root.dt-shell { height: auto; overflow: visible; }
+  .wireframe-root .dt,
+  .wireframe-root .dt.dt--collapsed {
     grid-template-columns: 1fr;
     grid-template-rows: 52px auto auto;
     grid-template-areas:
@@ -1000,7 +1008,17 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
       "main";
     height: auto;
     min-height: 100vh;
+    overflow: visible;
   }
+  /* Topbar: keep it one row, let the search take the slack and shrink. */
+  .wireframe-root .dt-topbar {
+    position: sticky;
+    top: 0;
+    gap: 8px;
+    padding: 0 12px;
+  }
+  .wireframe-root .dt-search { flex: 1 1 80px; min-width: 0; }
+  .wireframe-root .dt-search .kbd { display: none; }
   .wireframe-root .dt-side {
     flex-direction: row;
     overflow-x: auto;
@@ -1009,7 +1027,7 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
     border-bottom: 1.5px solid var(--ink);
   }
   .wireframe-root .dt-main { overflow: visible; }
-  .wireframe-root .dt-main-body { overflow: visible; }
+  .wireframe-root .dt-main-body { overflow: visible; height: auto; }
   .wireframe-root .dt-cols,
   .wireframe-root .dt-cols.thirds,
   .wireframe-root .dt-cols.score-heavy {

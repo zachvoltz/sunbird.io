@@ -153,11 +153,8 @@ export function STFrame({
       ? "lessons"
       : "home";
   return (
-    <div className="wireframe-root" style={{ height: "100vh", overflow: "hidden" }}>
-      <div
-        className="dt"
-        style={{ gridTemplateColumns: (collapsed ? "56px" : "220px") + " 1fr" }}
-      >
+    <div className="wireframe-root dt-shell">
+      <div className={"dt" + (collapsed ? " dt--collapsed" : "")}>
         <STTopBar collapsed={collapsed} onToggleSide={() => setCollapsed((c) => !c)} />
         <STSidebar on={inferred} collapsed={collapsed} />
         <div className="dt-main">{children}</div>

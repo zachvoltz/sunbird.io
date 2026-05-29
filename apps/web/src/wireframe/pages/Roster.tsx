@@ -112,7 +112,7 @@ function RosterDesktop({
       </div>
 
       <div className="dt-main-body">
-        <div className="dt-cols thirds" style={{ gridTemplateColumns: "1fr 1fr 1fr", height: "100%" }}>
+        <div className="dt-cols thirds" style={{ height: "100%" }}>
           {/* Today's lessons */}
           <div className="panel panel-cool">
             <div className="panel-head">

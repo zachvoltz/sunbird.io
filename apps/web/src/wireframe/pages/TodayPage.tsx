@@ -137,7 +137,7 @@ export function TodayPage() {
       </div>
 
       <div className="dt-main-body">
-        <div className="dt-cols thirds" style={{ gridTemplateColumns: "1fr 1fr 1fr", height: "100%" }}>
+        <div className="dt-cols thirds" style={{ height: "100%" }}>
           {/* TODAY — lesson + path */}
           <div className="panel">
             <div className="panel-head">
