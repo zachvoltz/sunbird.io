@@ -104,7 +104,7 @@ function STSidebar({ on, collapsed }: { on: NavId; collapsed: boolean }) {
                 {showBadge && (
                   <span
                     className="chip tiny"
-                    style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10 }}
+                    style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10, color: "var(--ink)" }}
                   >
                     {inboxCount}
                   </span>
