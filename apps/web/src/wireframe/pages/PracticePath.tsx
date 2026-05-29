@@ -6,6 +6,7 @@ import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { AudioPlayer, MidiPlayer } from "../components/WaveformPlayer";
 import { useMyStudentDetail } from "../hooks/useCoachData";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 const KIND_LABEL: Record<LibraryItemKind, string> = {
   warmup: "warmup",
@@ -144,7 +145,7 @@ function ExerciseDetail({
   const done = !!item.completedToday;
   const hasMidi = !!(item.hasMidi && item.midiUrl);
   return (
-    <div className="wf">
+    <div className="wf" style={{ minHeight: 0 }}>
       <div className="row between" style={{ alignItems: "baseline", marginBottom: 6 }}>
         <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
           Stop {index + 1} of {total} · {KIND_LABEL[item.kind]}
@@ -458,6 +459,17 @@ export function PracticePathPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [celebrate, setCelebrate] = useState<{ from: number; to: number } | null>(null);
+  // Mobile (single-column) uses "peek-behind": the detail floats over the
+  // dimmed path only once a stop is tapped. Matches the md breakpoint where
+  // the two-pane layout kicks in.
+  const isMobile = useIsMobile(768);
+  const [detailOpen, setDetailOpen] = useState(false);
+
+  // Tapping a stop selects it; on mobile that floats its detail over the path.
+  function selectStop(id: string) {
+    setSelectedId(id);
+    if (isMobile) setDetailOpen(true);
+  }
 
   useEffect(() => {
     if (!detail) return;
@@ -560,13 +572,14 @@ export function PracticePathPage() {
                   No routine set yet — your coach builds this after your next lesson.
                 </div>
               ) : (
-                <PathSvg items={items} selectedId={selectedItem?.id ?? null} onSelect={setSelectedId} />
+                <PathSvg items={items} selectedId={selectedItem?.id ?? null} onSelect={selectStop} />
               )}
             </div>
           </div>
 
-          {/* Right — selected exercise detail */}
-          <div className="flex-1" style={{ overflowY: "auto", padding: 24, minWidth: 0 }}>
+          {/* Right — selected exercise detail (two-pane on desktop only;
+              mobile uses the peek-behind overlay below). */}
+          <div className="hidden md:block flex-1" style={{ overflowY: "auto", padding: 24, minWidth: 0 }}>
             {selectedItem ? (
               <ExerciseDetail
                 item={selectedItem}
@@ -583,6 +596,53 @@ export function PracticePathPage() {
           </div>
         </div>
       </div>
+
+      {/* Mobile peek-behind — detail floats over the dimmed path. */}
+      {isMobile && detailOpen && selectedItem && (
+        <div
+          onClick={() => setDetailOpen(false)}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 30,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "0 16px",
+            background: "rgba(240,238,233,0.66)",
+            backdropFilter: "blur(1.5px)",
+            WebkitBackdropFilter: "blur(1.5px)",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="box thick"
+            style={{
+              width: "92%",
+              maxWidth: 360,
+              maxHeight: "78vh",
+              overflowY: "auto",
+              background: "var(--paper)",
+              padding: 16,
+              boxShadow: "3px 3px 0 var(--ink)",
+              transform: "rotate(-0.5deg)",
+            }}
+          >
+            <ExerciseDetail
+              item={selectedItem}
+              index={selectedIndex}
+              total={items.length}
+              busy={busyId === selectedItem.id}
+              onToggle={() => toggleComplete(selectedItem)}
+            />
+          </div>
+          <div className="tiny muted" style={{ marginTop: 12, textAlign: "center" }}>
+            tap the dimmed path to step back out
+          </div>
+        </div>
+      )}
+
       {celebrate && (
         <CelebrationOverlay
           fromStreak={celebrate.from}
