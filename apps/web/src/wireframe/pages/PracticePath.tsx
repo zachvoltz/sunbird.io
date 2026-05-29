@@ -1,15 +1,11 @@
-import { useEffect, useRef, useState } from "react";
-import "html-midi-player";
+import { useEffect, useState } from "react";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
+import { AudioPlayer, MidiPlayer } from "../components/WaveformPlayer";
 import { useMyStudentDetail } from "../hooks/useCoachData";
-
-// Default General-MIDI soundfont bundled/served by the magenta project —
-// html-midi-player synthesizes .mid playback against it.
-const SOUNDFONT = "https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus";
 
 const KIND_LABEL: Record<LibraryItemKind, string> = {
   warmup: "warmup",
@@ -131,21 +127,6 @@ function PathSvg({
   );
 }
 
-// ── MIDI player wrapper ──────────────────────────────────
-// Sets src/soundFont/loop as element *properties* (not attributes) so we
-// don't fight html-midi-player's attribute parsing.
-function MidiPlayer({ src, loop }: { src: string; loop: boolean }) {
-  const ref = useRef<HTMLElement & { src?: string; soundFont?: string; loop?: boolean }>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    el.soundFont = SOUNDFONT;
-    el.src = src;
-    el.loop = loop;
-  }, [src, loop]);
-  return <midi-player ref={ref as any} style={{ width: "100%", display: "block" }} />;
-}
-
 // ── exercise detail pane ─────────────────────────────────
 function ExerciseDetail({
   item,
@@ -160,7 +141,6 @@ function ExerciseDetail({
   busy: boolean;
   onToggle: () => void;
 }) {
-  const [audioLoop, setAudioLoop] = useState(true);
   const done = !!item.completedToday;
   const hasMidi = !!(item.hasMidi && item.midiUrl);
   return (
@@ -184,36 +164,17 @@ function ExerciseDetail({
         </div>
       )}
 
-      {/* Audio */}
+      {/* Audio — SoundCloud-style waveform player */}
       {item.audioUrl ? (
         <div className="box mb-3">
-          <div className="row between mb-2">
-            <div className="small bold">Reference audio</div>
-            <label className="row gap-1 tiny muted" style={{ cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={audioLoop}
-                onChange={(e) => setAudioLoop(e.target.checked)}
-              />
-              loop
-            </label>
-          </div>
-          <audio
-            key={item.id}
-            src={item.audioUrl}
-            controls
-            loop={audioLoop}
-            preload="none"
-            style={{ width: "100%", height: 34 }}
-          />
+          <AudioPlayer key={`audio-${item.id}`} src={item.audioUrl} label="reference audio" />
         </div>
       ) : null}
 
-      {/* MIDI */}
+      {/* MIDI — same player UI, driven by the Magenta synth */}
       {hasMidi && (
         <div className="box mb-3">
-          <div className="small bold mb-2">Play-along (MIDI)</div>
-          <MidiPlayer src={item.midiUrl!} loop />
+          <MidiPlayer key={`midi-${item.id}`} src={item.midiUrl!} label="play-along (MIDI)" />
         </div>
       )}
 
