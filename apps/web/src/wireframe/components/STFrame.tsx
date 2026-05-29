@@ -5,6 +5,7 @@ import { apiFetch } from "@/lib/api";
 import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
 import { Icon } from "./Icon";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 type NavId = "home" | "practice" | "lessons" | "inbox" | "notes" | "takes" | "curriculum" | "profile";
 type NavIcon = "home" | "note" | "cap" | "inbox" | "journal" | "mic" | "map" | "user";
@@ -130,7 +131,16 @@ export function STFrame({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const isMobile = useIsMobile(900);
   const loc = useLocation();
+  // Close the mobile tray on navigation.
+  useEffect(() => {
+    setNavOpen(false);
+  }, [loc.pathname]);
+  // The topbar toggle opens the pull-out tray on mobile, or collapses the
+  // rail on desktop.
+  const onToggleSide = () => (isMobile ? setNavOpen((o) => !o) : setCollapsed((c) => !c));
   // If caller didn't pass a side, infer from the path.
   const inferred: NavId =
     side !== "home"
@@ -154,9 +164,10 @@ export function STFrame({
       : "home";
   return (
     <div className="wireframe-root dt-shell">
-      <div className={"dt" + (collapsed ? " dt--collapsed" : "")}>
-        <STTopBar collapsed={collapsed} onToggleSide={() => setCollapsed((c) => !c)} />
+      <div className={"dt" + (collapsed ? " dt--collapsed" : "") + (navOpen ? " dt--nav-open" : "")}>
+        <STTopBar collapsed={collapsed} onToggleSide={onToggleSide} />
         <STSidebar on={inferred} collapsed={collapsed} />
+        {navOpen && <div className="dt-nav-backdrop" onClick={() => setNavOpen(false)} />}
         <div className="dt-main">{children}</div>
       </div>
     </div>

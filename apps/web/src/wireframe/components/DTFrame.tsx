@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
 import { useSidebarStudents } from "../hooks/useSidebarStudents";
 import { useAuth } from "@/context/AuthContext";
 import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
 import { Icon } from "./Icon";
 import { apiFetch } from "@/lib/api";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // Unread incoming SessionMessages for the calling coach. Used to
 // render the sidebar's Inbox badge. Refetches:
@@ -226,15 +227,23 @@ export function DTFrame({
   children: React.ReactNode;
 }) {
   const [collapsed, setCollapsed] = useState(false);
+  const [navOpen, setNavOpen] = useState(false);
+  const isMobile = useIsMobile(900);
+  const loc = useLocation();
+  useEffect(() => {
+    setNavOpen(false);
+  }, [loc.pathname]);
+  const onToggleSide = () => (isMobile ? setNavOpen((o) => !o) : setCollapsed((c) => !c));
   const fetched = useSidebarStudents();
   // Caller-supplied list wins; otherwise show the cached real-data list, or
   // an empty array while the first fetch is in flight.
   const resolved = students ?? fetched ?? [];
   return (
     <div className="wireframe-root dt-shell">
-      <div className={"dt" + (collapsed ? " dt--collapsed" : "")}>
-        <DTTopBar live={live} collapsed={collapsed} onToggleSide={() => setCollapsed((c) => !c)} />
+      <div className={"dt" + (collapsed ? " dt--collapsed" : "") + (navOpen ? " dt--nav-open" : "")}>
+        <DTTopBar live={live} collapsed={collapsed} onToggleSide={onToggleSide} />
         <DTSidebar on={side} collapsed={collapsed} students={resolved} />
+        {navOpen && <div className="dt-nav-backdrop" onClick={() => setNavOpen(false)} />}
         <div className="dt-main">{children}</div>
       </div>
     </div>

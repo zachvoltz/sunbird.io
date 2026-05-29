@@ -367,6 +367,8 @@ html[data-theme="dark"] .wireframe-root .onb-success {
    scroll on mobile (see the max-width:900px block). */
 .wireframe-root.dt-shell { height: 100vh; overflow: hidden; }
 .wireframe-root .dt.dt--collapsed { grid-template-columns: 56px 1fr; }
+/* Mobile-only off-canvas tray backdrop (shown in the max-width:900px block). */
+.wireframe-root .dt-nav-backdrop { display: none; }
 
 .wireframe-root .dt-topbar {
   grid-area: topbar;
@@ -1001,10 +1003,9 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   .wireframe-root .dt,
   .wireframe-root .dt.dt--collapsed {
     grid-template-columns: 1fr;
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto 1fr;
     grid-template-areas:
       "topbar"
-      "side"
       "main";
     height: auto;
     min-height: 100vh;
@@ -1027,12 +1028,35 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   }
   .wireframe-root .dt-search { flex: 1 1 120px; min-width: 0; }
   .wireframe-root .dt-search .kbd { display: none; }
-  .wireframe-root .dt-side {
-    flex-direction: row;
-    overflow-x: auto;
-    padding: 10px 14px;
-    border-right: 0;
-    border-bottom: 1.5px solid var(--ink);
+  /* Sidebar becomes an off-canvas pull-out tray, opened via the topbar
+     toggle. Hidden off-screen by default; slides in when .dt has
+     .dt--nav-open. */
+  .wireframe-root .dt-side,
+  .wireframe-root .dt-side.collapsed {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 250px;
+    max-width: 84vw;
+    flex-direction: column;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 14px 10px;
+    border-right: 1.5px solid var(--ink);
+    border-bottom: 0;
+    transform: translateX(-100%);
+    transition: transform 0.22s ease;
+    z-index: 40;
+    box-shadow: 3px 0 16px rgba(0, 0, 0, 0.18);
+  }
+  .wireframe-root .dt.dt--nav-open .dt-side { transform: translateX(0); }
+  .wireframe-root .dt-nav-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.38);
+    z-index: 35;
   }
   .wireframe-root .dt-main { overflow: visible; }
   .wireframe-root .dt-main-body { overflow: visible; height: auto; }
