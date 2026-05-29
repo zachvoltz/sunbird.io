@@ -9,7 +9,7 @@ import { Icon } from "./Icon";
 // parsed note sequence.
 
 const SOUNDFONT = "https://storage.googleapis.com/magentadata/js/soundfonts/sgm_plus";
-const BAR_COUNT = 56;
+const BAR_COUNT = 96;
 
 function fmt(t: number): string {
   if (!isFinite(t) || t < 0) t = 0;
@@ -47,8 +47,8 @@ function WaveformPlayer({
   onToggleLoop: () => void;
   onSeek: ((fraction: number) => void) | null;
 }) {
-  const barW = 3;
-  const gap = 2;
+  const barW = 2;
+  const gap = 1;
   const vbW = peaks.length * (barW + gap);
   const vbH = 40;
   const playedBars = Math.round(progress * peaks.length);
