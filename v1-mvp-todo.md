@@ -71,14 +71,28 @@ Wireframe references:
 
 - [~] Schema has `stripePaymentId`, `stripeSubscriptionId`, `Subscription`, `SubscriptionPlan` — no integration code yet
 - [ ] Pick Stripe approach: Checkout Sessions (fastest) vs. Payment Element (custom UI)
-- [ ] Add Stripe SDK to `apps/api`; store keys in `.dev.vars` / Cloudflare secrets
-- [ ] Coach onboarding: Stripe Connect (Express) so payouts go to the coach, not the platform
+- [~] Add Stripe SDK to `apps/api` (`stripe` dep + `lib/stripe.ts` client factory present); still need keys in `.dev.vars` / Cloudflare secrets
+- [x] Coach onboarding: Stripe Connect (Express) — `routes/coach-payments.ts` (account create, onboarding/login links, status flags). Charge/subscription flows below still pending.
 - [ ] One-time payment flow: create PaymentIntent on booking, confirm on client, mark booking paid on webhook
 - [ ] Recurring payment flow: create Stripe Subscription on recurring booking, link to `RecurringSchedule`
 - [ ] Webhook endpoint: `payment_intent.succeeded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`
 - [ ] Handle failed-payment state on the booking + notify coach + student
 - [ ] Refund / cancel-subscription UI (coach side, at minimum)
 - [ ] **Needs mockup:** Stripe Connect onboarding screen for coach, payment step in student booking flow, payment failure / retry states
+
+### 5b. Multi-provider: Square as a Stripe alternative (let coaches pick)
+
+Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most cost is the second client checkout + subscriptions + webhooks; onboarding parity + the abstraction layer is the small part (~2–4 days). Decide *before* building Stripe checkout — the abstraction is cheap up front, expensive to retrofit.
+
+- [ ] **Spike first (½ day):** verify the `square` npm SDK runs on the Cloudflare Workers runtime (`nodejs_compat`); if not, plan to call Square's REST API via `fetch`. This is the biggest unknown.
+- [ ] Provider abstraction layer: an interface (`onboardingLink`, `createCheckout`, `createSubscription`, `verifyWebhook`) with Stripe + Square implementations; refactor `coach-payments.ts` to dispatch on the coach's chosen provider instead of calling `stripe.*` directly
+- [ ] Schema generalization (D1 migration, dev + prod): `paymentProvider` per coach + provider-neutral / Square-specific IDs (`squareMerchantId`, `squareLocationId`, OAuth token, etc.) alongside the existing `stripe*` columns
+- [ ] Square onboarding via **OAuth** (store coach access token + merchant/location) — different model than Stripe Connect account-links, not a drop-in
+- [ ] Square one-time payments: **Web Payments SDK** card tokenization in the browser → create payment server-side → confirm via webhook
+- [ ] Square subscriptions: Catalog + Subscriptions API (diverges most from Stripe; highest effort/uncertainty)
+- [ ] Square webhook endpoint + signature verification (separate from Stripe's)
+- [ ] Coach UI: provider chooser on `/coach/payments`; student checkout branches on the coach's provider (Square Web Payments card form vs Stripe)
+- [ ] End-to-end test in **both** Stripe and Square sandboxes (onboarding, one-time, recurring, failed payment, refund)
 
 ---
 
