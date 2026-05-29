@@ -569,6 +569,11 @@ export interface StudentDetailPublic {
   latestLessonSummary: LessonSummaryPublic | null;
   latestNoteVoiceMemos: NoteVoiceMemoPublic[];
   routine: RoutinePublic;
+  // Distinct calendar days (UTC `YYYY-MM-DD`) in the last ~2 weeks on which
+  // the student completed at least one routine exercise. Drives the
+  // Practice-page streak row. Optional for back-compat with the coach
+  // student-detail endpoint, which doesn't populate it.
+  recentPracticeDays?: string[];
 }
 
 // ── Current Routine ──

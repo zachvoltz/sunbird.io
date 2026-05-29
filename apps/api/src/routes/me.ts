@@ -138,6 +138,7 @@ me.get("/student-data", requireAuth, async (c) => {
     .map((it) => it.libraryItemId)
     .filter((x): x is string => !!x);
   const today = utcMidnight(new Date());
+  const since = new Date(today.getTime() - 13 * 86_400_000); // last 14 days incl. today
   const [libItems, completions] = await Promise.all([
     libIds.length
       ? db.libraryItem.findMany({
@@ -146,12 +147,19 @@ me.get("/student-data", requireAuth, async (c) => {
         })
       : Promise.resolve([] as Array<{ id: string; audioUrl: string | null; midiUrl: string | null; pdfUrl: string | null; hasMidi: boolean }>),
     db.routineCompletion.findMany({
-      where: { userId: user.id, day: today },
-      select: { routineItemId: true },
+      where: { userId: user.id, day: { gte: since } },
+      select: { routineItemId: true, day: true },
     }),
   ]);
   const libById = new Map(libItems.map((l) => [l.id, l]));
-  const doneIds = new Set(completions.map((rc) => rc.routineItemId));
+  const doneIds = new Set(
+    completions.filter((rc) => rc.day.getTime() === today.getTime()).map((rc) => rc.routineItemId),
+  );
+  // Distinct calendar days (UTC) the student completed at least one exercise,
+  // for the streak row on the Practice page.
+  const recentPracticeDays = [
+    ...new Set(completions.map((rc) => rc.day.toISOString().slice(0, 10))),
+  ].sort();
   const enrichedRoutine = {
     items: parsedRoutine.items.map((it) => {
       const lib = it.libraryItemId ? libById.get(it.libraryItemId) : null;
@@ -266,6 +274,7 @@ me.get("/student-data", requireAuth, async (c) => {
       })) ?? [],
     latestNoteCoach: latestSentNote?.coach ?? null,
     routine: enrichedRoutine,
+    recentPracticeDays,
   };
 
   return c.json({ data });

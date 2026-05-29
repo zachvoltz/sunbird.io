@@ -205,6 +205,74 @@ function ExerciseDetail({
   );
 }
 
+// ── streak row ───────────────────────────────────────────
+const WEEKDAY = ["S", "M", "T", "W", "T", "F", "S"];
+
+// Last `n` calendar days as UTC YYYY-MM-DD keys (matching the server's day
+// key), most-recent last, so the row reads left→right ending on today.
+function lastNDaysUTC(n: number): Array<{ key: string; label: string; isToday: boolean }> {
+  const now = new Date();
+  const todayUTC = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const out: Array<{ key: string; label: string; isToday: boolean }> = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(todayUTC - i * 86_400_000);
+    out.push({ key: d.toISOString().slice(0, 10), label: WEEKDAY[d.getUTCDay()], isToday: i === 0 });
+  }
+  return out;
+}
+
+function StreakRow({
+  completedDays,
+  streakDays,
+  todayDone,
+}: {
+  completedDays: Set<string>;
+  streakDays: number;
+  todayDone: boolean;
+}) {
+  const days = lastNDaysUTC(7);
+  return (
+    <div style={{ padding: "0 18px 12px" }}>
+      <div className="row between" style={{ alignItems: "baseline", marginBottom: 6 }}>
+        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+          last 7 days
+        </div>
+        <div className="small bold" style={{ color: "var(--accent)" }}>
+          {streakDays > 0 ? `🔥 ${streakDays} day${streakDays === 1 ? "" : "s"} in a row` : "start your streak"}
+        </div>
+      </div>
+      <div className="row" style={{ gap: 6 }}>
+        {days.map((d) => {
+          const done = completedDays.has(d.key) || (d.isToday && todayDone);
+          return (
+            <div key={d.key} className="col" style={{ alignItems: "center", gap: 3, flex: 1 }}>
+              <div className="tiny muted">{d.label}</div>
+              <div
+                style={{
+                  width: 26,
+                  height: 26,
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: 14,
+                  fontFamily: "Caveat",
+                  fontWeight: 700,
+                  background: done ? "var(--accent)" : "var(--paper)",
+                  color: done ? "white" : "var(--ink-faint)",
+                  border: `2px solid ${d.isToday || done ? "var(--accent)" : "var(--ink-faint)"}`,
+                }}
+              >
+                {done ? "✓" : ""}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function PracticePathPage() {
   const { user } = useAuth();
   const { detail, loading } = useMyStudentDetail();
@@ -212,6 +280,7 @@ export function PracticePathPage() {
   // Local, mutable copies so a check-off updates the path + streak instantly.
   const [items, setItems] = useState<RoutineItem[]>([]);
   const [streak, setStreak] = useState<StudentDetailPublic["streak"]>(null);
+  const [recentDays, setRecentDays] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
 
@@ -219,6 +288,7 @@ export function PracticePathPage() {
     if (!detail) return;
     setItems(detail.routine.items);
     setStreak(detail.streak);
+    setRecentDays(detail.recentPracticeDays ?? []);
     setSelectedId((cur) => cur ?? detail.routine.items[0]?.id ?? null);
   }, [detail]);
 
@@ -277,6 +347,14 @@ export function PracticePathPage() {
                 <div className="wf-avatar">{initial}</div>
               </div>
             </div>
+
+            {items.length > 0 && (
+              <StreakRow
+                completedDays={new Set(recentDays)}
+                streakDays={streak?.currentDays ?? 0}
+                todayDone={doneCount > 0}
+              />
+            )}
 
             {items.length > 0 && (
               <div style={{ padding: "0 18px 8px" }}>
