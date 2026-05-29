@@ -505,6 +505,9 @@ export function PracticePathPage() {
       // advance to the next stop.
       if (next) {
         if (allDoneAfter) {
+          // Close the mobile peek-behind so the celebration isn't left
+          // covering a lingering overlay once dismissed.
+          setDetailOpen(false);
           setCelebrate({ from: prevStreak, to: res.data.streak?.currentDays ?? prevStreak });
         } else if (idx >= 0 && idx < items.length - 1) {
           setSelectedId(items[idx + 1].id);
