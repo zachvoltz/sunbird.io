@@ -48,6 +48,7 @@ Wireframe references:
 - [x] "Book a session" CTA wired from public profile into booking flow
 - [x] Profile edit screen on `/coach/account` + public-page URL surfaced there
 - [x] Account left column scrolls properly
+- [x] QR code for the published public page on `/coach/profile` — shown once published, downloadable as a PNG (`qrcode` lib, client-side data URL)
 - [ ] Confirm cover-image upload works end-to-end from the edit screen (R2 binding now exists — verify it's used here too)
 - [ ] Add link to Ellisa's podcast on the public profile / site (per existing project memory)
 

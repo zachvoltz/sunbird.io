@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import QRCode from "qrcode";
 import { apiFetch } from "@/lib/api";
 import { DTFrame } from "../components/DTFrame";
 import { Squiggle } from "../components/Squiggle";
@@ -43,6 +44,52 @@ const EMPTY_PROFILE: ProfileState = {
 
 function normalizeSlug(v: string): string {
   return v.toLowerCase().replace(/[^a-z0-9-]/g, "");
+}
+
+// QR code for the published public page. Rendered to a PNG data URL so it
+// both displays and downloads without any server round-trip.
+function PublicQrCode({ url, slug }: { url: string; slug: string }) {
+  const [dataUrl, setDataUrl] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(url, { width: 512, margin: 2 })
+      .then((d) => alive && setDataUrl(d))
+      .catch(() => alive && setDataUrl(null));
+    return () => {
+      alive = false;
+    };
+  }, [url]);
+  if (!dataUrl) return null;
+  return (
+    <div className="row gap-3 mt-3" style={{ alignItems: "center" }}>
+      <img
+        src={dataUrl}
+        alt="QR code linking to your public coach page"
+        width={120}
+        height={120}
+        style={{
+          border: "1.5px solid var(--ink-faint)",
+          borderRadius: 8,
+          background: "white",
+          flex: "0 0 auto",
+        }}
+      />
+      <div className="col gap-1" style={{ minWidth: 0 }}>
+        <div className="small bold">QR code</div>
+        <div className="tiny muted" style={{ maxWidth: 240 }}>
+          Print it or add it to flyers — scanning opens your public page.
+        </div>
+        <a
+          className="btn small primary"
+          href={dataUrl}
+          download={`sunbird-${slug || "coach"}-qr.png`}
+          style={{ textDecoration: "none", width: "fit-content", marginTop: 2 }}
+        >
+          ↓ download QR
+        </a>
+      </div>
+    </div>
+  );
 }
 
 function Field({
@@ -245,6 +292,11 @@ export function ProfilePage() {
                 </button>
               </div>
             </div>
+
+            {/* QR code — only meaningful once the page is live. */}
+            {profile.isPublished && publicUrl && (
+              <PublicQrCode url={publicUrl} slug={profile.slug} />
+            )}
 
             <div className="hr-hand mt-3" />
 
