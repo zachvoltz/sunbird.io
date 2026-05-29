@@ -5,6 +5,7 @@ import { WFFrame } from "../components/WFFrame";
 import { Icon } from "../components/Icon";
 import { Tag } from "../components/Tag";
 import { LibItem } from "../components/LibItem";
+import { AudioPlayer } from "../components/WaveformPlayer";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { PathsBrowsePane, PathsMobile, useCoachPaths } from "./Paths";
 import { apiFetch } from "@/lib/api";
@@ -441,12 +442,7 @@ function LibraryRow({
         </div>
         {item.audioUrl && (
           <div className="mt-2">
-            <audio
-              src={item.audioUrl}
-              controls
-              preload="none"
-              style={{ width: "100%", height: 32 }}
-            />
+            <AudioPlayer src={item.audioUrl} label="audio" />
           </div>
         )}
       </div>
@@ -554,12 +550,9 @@ function LibraryRow({
             )}
           </div>
           {item.audioUrl && (
-            <audio
-              src={item.audioUrl}
-              controls
-              preload="none"
-              style={{ width: "100%", height: 32, marginTop: 2 }}
-            />
+            <div style={{ marginTop: 2 }}>
+              <AudioPlayer src={item.audioUrl} label="audio" />
+            </div>
           )}
           {uploadError && (
             <div className="small" style={{ color: "var(--accent)" }}>{uploadError}</div>
