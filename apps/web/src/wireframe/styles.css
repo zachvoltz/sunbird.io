@@ -743,7 +743,7 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   border: 1.5px solid var(--ink);
   border-radius: 999px;
   padding: 2px;
-  background: var(--paper);
+  background: var(--paper-2);
   gap: 2px;
 }
 .wireframe-root .pill-row .p {
