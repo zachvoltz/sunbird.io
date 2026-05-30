@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
@@ -134,22 +134,44 @@ function ExerciseDetail({
   total,
   busy,
   onToggle,
+  onPrev,
+  onNext,
 }: {
   item: RoutineItem;
   index: number;
   total: number;
   busy: boolean;
   onToggle: () => void;
+  onPrev?: () => void;
+  onNext?: () => void;
 }) {
   const done = !!item.completedToday;
   const hasMidi = !!(item.hasMidi && item.midiUrl);
   return (
     <div className="wf" style={{ minHeight: 0 }}>
-      <div className="row between" style={{ alignItems: "baseline", marginBottom: 6 }}>
-        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+      <div className="row" style={{ alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+        <button
+          className="btn icon small"
+          onClick={onPrev}
+          disabled={!onPrev}
+          aria-label="Previous exercise"
+          style={{ opacity: onPrev ? 1 : 0.3 }}
+        >
+          ‹
+        </button>
+        <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.5, textAlign: "center" }}>
           Stop {index + 1} of {total} · {KIND_LABEL[item.kind]}
+          {done && " · done"}
         </div>
-        {done && <span className="chip accent tiny">done today</span>}
+        <button
+          className="btn icon small"
+          onClick={onNext}
+          disabled={!onNext}
+          aria-label="Next exercise"
+          style={{ opacity: onNext ? 1 : 0.3 }}
+        >
+          ›
+        </button>
       </div>
 
       <h2 className="wf-title" style={{ marginBottom: 2 }}>{item.title}</h2>
@@ -482,6 +504,17 @@ export function PracticePathPage() {
   const doneCount = items.filter((it) => it.completedToday).length;
   const allDone = items.length > 0 && doneCount === items.length;
 
+  // Step between exercises (clamped at the ends). Wired to the detail
+  // prev/next buttons and the mobile swipe gesture.
+  const canPrev = selectedIndex > 0;
+  const canNext = selectedIndex >= 0 && selectedIndex < items.length - 1;
+  function navigate(delta: number) {
+    const target = selectedIndex + delta;
+    if (target < 0 || target >= items.length) return;
+    setSelectedId(items[target].id);
+  }
+  const touchStartX = useRef<number | null>(null);
+
   async function toggleComplete(item: RoutineItem) {
     const next = !item.completedToday;
     const prevStreak = streak?.currentDays ?? 0;
@@ -590,6 +623,8 @@ export function PracticePathPage() {
                 total={items.length}
                 busy={busyId === selectedItem.id}
                 onToggle={() => toggleComplete(selectedItem)}
+                onPrev={canPrev ? () => navigate(-1) : undefined}
+                onNext={canNext ? () => navigate(1) : undefined}
               />
             ) : (
               <div className="small muted" style={{ padding: 8 }}>
@@ -620,6 +655,15 @@ export function PracticePathPage() {
         >
           <div
             onClick={(e) => e.stopPropagation()}
+            onTouchStart={(e) => {
+              touchStartX.current = e.touches[0].clientX;
+            }}
+            onTouchEnd={(e) => {
+              if (touchStartX.current == null) return;
+              const dx = e.changedTouches[0].clientX - touchStartX.current;
+              touchStartX.current = null;
+              if (Math.abs(dx) > 40) navigate(dx < 0 ? 1 : -1);
+            }}
             className="box thick"
             style={{
               width: "92%",
@@ -638,10 +682,12 @@ export function PracticePathPage() {
               total={items.length}
               busy={busyId === selectedItem.id}
               onToggle={() => toggleComplete(selectedItem)}
+              onPrev={canPrev ? () => navigate(-1) : undefined}
+              onNext={canNext ? () => navigate(1) : undefined}
             />
           </div>
           <div className="tiny muted" style={{ marginTop: 12, textAlign: "center" }}>
-            tap the dimmed path to step back out
+            ‹ swipe › · tap the dimmed path to step back out
           </div>
         </div>
       )}
