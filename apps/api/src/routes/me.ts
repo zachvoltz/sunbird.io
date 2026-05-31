@@ -103,10 +103,12 @@ me.get("/student-data", requireAuth, async (c) => {
         },
       },
     }),
+    // Tolerate a not-yet-migrated Goal table in prod — degrade to no goals
+    // rather than 500 the whole student-data payload.
     db.goal.findMany({
       where: { studentId: user.id, status: { not: "ARCHIVED" } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    }),
+    }).catch(() => []),
   ]);
 
   if (!student) {
@@ -361,10 +363,12 @@ me.post("/takes", requireAuth, async (c) => {
 me.get("/goals", requireAuth, async (c) => {
   const user = c.get("user")!;
   const db = getDb();
-  const goals = await db.goal.findMany({
-    where: { studentId: user.id, status: { not: "ARCHIVED" } },
-    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-  });
+  const goals = await db.goal
+    .findMany({
+      where: { studentId: user.id, status: { not: "ARCHIVED" } },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    })
+    .catch(() => [] as Awaited<ReturnType<typeof db.goal.findMany>>);
   return c.json({ data: goals.map(serializeGoal) });
 });
 

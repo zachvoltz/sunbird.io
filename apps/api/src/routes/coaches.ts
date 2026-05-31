@@ -552,10 +552,11 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
     }),
     // Goals this student shares — scoped to this coach when the caller is a
     // coach so they only see goals shared with them.
+    // Tolerate a not-yet-migrated Goal table in prod (see me.ts).
     db.goal.findMany({
       where: { studentId, status: { not: "ARCHIVED" }, ...(user.role === "COACH" ? { coachId: user.id } : {}) },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
-    }),
+    }).catch(() => []),
   ]);
 
   if (!student) {
