@@ -14,6 +14,8 @@ import type {
   createSessionResourceSchema,
   updateCoachSettingsSchema,
   updateCoachAvailabilitySchema,
+  createGoalSchema,
+  updateGoalSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -22,6 +24,8 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+export type CreateGoalInput = z.infer<typeof createGoalSchema>;
+export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
 export type PracticeNotesInput = z.infer<typeof practiceNotesSchema>;
 export type CreateAvailabilityInput = z.infer<typeof createAvailabilitySchema>;
 export type CreateSongInput = z.infer<typeof createSongSchema>;
@@ -513,6 +517,13 @@ export interface PlanGapItem {
   lastBookingAt: string | null;
 }
 
+/** Student whose most recent past session has no future booking on the books. */
+export interface NextSessionTodoItem {
+  student: UserPublic;
+  lastBookingId: string;
+  lastBookingAt: string;
+}
+
 export interface WeekDensityDay {
   dayLabel: string;
   date: string;
@@ -534,6 +545,7 @@ export interface CoachDashboardPublic {
   unreviewedTakes: UnreviewedTakeItem[];
   bookingsMissingNotes: MissingNotesItem[];
   studentsWithoutPlan: PlanGapItem[];
+  bookingsNeedingNextSession: NextSessionTodoItem[];
   weekStats: {
     totalStudents: number;
     activeThisWeek: number;
@@ -543,6 +555,32 @@ export interface CoachDashboardPublic {
   weekDensity: WeekDensityDay[];
   recentActivity: ActivityItem[];
   weekStartsOn: string;
+}
+
+/** Student practice goal, shared with the coach. */
+export type GoalStatus = "ACTIVE" | "ACHIEVED" | "ARCHIVED";
+
+export interface GoalPublic {
+  id: string;
+  title: string;
+  detail: string | null;
+  targetLabel: string | null;
+  progressPct: number;
+  status: GoalStatus;
+  isNew: boolean;
+  achievedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Suggested next session for the book-next gate / student book card. */
+export interface NextSuggestedSessionPublic {
+  /** A future slot to offer, or null if nothing sensible could be derived. */
+  suggested: { startsAt: string; endsAt: string } | null;
+  /** The active recurring schedule this booking belongs to, if any. */
+  recurring: RecurringSchedulePublic | null;
+  /** True when there is already a future confirmed booking (gate not needed). */
+  alreadyBooked: boolean;
 }
 
 /** Aggregate for the Student page. */
@@ -569,6 +607,9 @@ export interface StudentDetailPublic {
   latestLessonSummary: LessonSummaryPublic | null;
   latestNoteVoiceMemos: NoteVoiceMemoPublic[];
   routine: RoutinePublic;
+  // Practice goals the student set, shared with this coach. New (un-discussed)
+  // goals are surfaced on the coach's session-prep agenda.
+  goals: GoalPublic[];
   // Distinct calendar days (UTC `YYYY-MM-DD`) in the last ~2 weeks on which
   // the student completed at least one routine exercise. Drives the
   // Practice-page streak row. Optional for back-compat with the coach

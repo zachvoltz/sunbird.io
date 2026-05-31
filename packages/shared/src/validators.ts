@@ -297,3 +297,24 @@ export const eventRsvpSchema = z.object({
   name: z.string().min(1, "Name is required").max(100),
   email: z.string().email("Invalid email address"),
 });
+
+// ── Student goals (set + track, shared with coach) ──
+
+export const createGoalSchema = z.object({
+  title: z.string().min(1, "Give your goal a name").max(120),
+  detail: z.string().max(500).optional(),
+  targetLabel: z.string().max(80).optional(),
+});
+
+export const updateGoalSchema = z
+  .object({
+    title: z.string().min(1).max(120).optional(),
+    detail: z.string().max(500).nullable().optional(),
+    targetLabel: z.string().max(80).nullable().optional(),
+    progressPct: z.number().int().min(0).max(100).optional(),
+    status: z.enum(["ACTIVE", "ACHIEVED", "ARCHIVED"]).optional(),
+    isNew: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "Nothing to update.",
+  });

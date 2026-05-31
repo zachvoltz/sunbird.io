@@ -5,8 +5,13 @@ import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
 import { DTFrame } from "@/wireframe/components/DTFrame";
 import { CurrentRoutine } from "@/components/coach/CurrentRoutine";
+import { SessionStepper } from "@/components/SessionStepper";
+import { GoalCard } from "@/components/GoalCard";
+import { Badge } from "@/components/ui/Badge";
 import type {
   BookingPublic,
+  GoalPublic,
+  NextSuggestedSessionPublic,
   NoteSections,
   RoutinePublic,
   SessionMessagePublic,
@@ -112,15 +117,17 @@ function formatTimestamp(iso: string): string {
   });
 }
 
-type Phase = "upcoming" | "live" | "next";
+type Phase = "upcoming" | "live" | "followup";
 
-const PHASES: readonly Phase[] = ["upcoming", "live", "next"] as const;
+const PHASES: readonly Phase[] = ["upcoming", "live", "followup"] as const;
 
 const PHASE_LABELS: Record<Phase, string> = {
-  upcoming: "Plan",
+  upcoming: "Upcoming",
   live: "Live",
-  next: "Next",
+  followup: "Follow-up",
 };
+
+const STEPPER_STEPS = PHASES.map((p) => ({ key: p, label: PHASE_LABELS[p] }));
 
 // 15-minute padding around the booking window — coaches typically join a
 // few minutes before, and "Live" should remain selected briefly after the
@@ -129,12 +136,12 @@ const LIVE_PAD_MS = 15 * 60 * 1000;
 
 function getDefaultPhase(booking: BookingPublic, now = Date.now()): Phase {
   if (booking.status === "COMPLETED" || booking.status === "CANCELLED") {
-    return "next";
+    return "followup";
   }
   const start = new Date(booking.startsAt).getTime();
   const end = new Date(booking.endsAt).getTime();
   if (now < start - LIVE_PAD_MS) return "upcoming";
-  if (now > end + LIVE_PAD_MS) return "next";
+  if (now > end + LIVE_PAD_MS) return "followup";
   return "live";
 }
 
@@ -205,9 +212,17 @@ export function CoachSession() {
   const [progress, setProgress] = useState<StudentProgressPublic[]>([]);
 
   // Current routine — fetched after the booking loads so we know the
-  // student. Plan-tab read-only; Next-tab editable (coach updates it
+  // student. Upcoming read-only; Follow-up editable (coach updates it
   // as part of the post-lesson plan).
   const [routine, setRoutine] = useState<RoutinePublic | null>(null);
+
+  // Full student detail — goals (shared) + streak feed the Upcoming prep
+  // column. Loaded alongside the routine.
+  const [studentDetail, setStudentDetail] = useState<StudentDetailPublic | null>(null);
+
+  // Book-next gate — fires on "End lesson" when there's no future booking.
+  const [gateOpen, setGateOpen] = useState(false);
+  const [nextSuggested, setNextSuggested] = useState<NextSuggestedSessionPublic | null>(null);
 
   // Lesson notes state — five labeled sections, persisted as
   // booking.noteSections (JSON) with a flattened practiceNotes string
@@ -278,9 +293,21 @@ export function CoachSession() {
     const studentId = booking?.user?.id;
     if (!studentId) return;
     apiFetch<{ data: StudentDetailPublic }>(`/api/coaches/students/${studentId}`)
-      .then((res) => setRoutine(res.data.routine))
+      .then((res) => {
+        setStudentDetail(res.data);
+        setRoutine(res.data.routine);
+      })
       .catch(() => {});
   }, [booking?.user?.id]);
+
+  // Pre-load the next-session suggestion so the gate + Follow-up cards know
+  // whether a future booking already exists.
+  useEffect(() => {
+    if (!bookingId || !booking) return;
+    apiFetch<{ data: NextSuggestedSessionPublic }>(`/api/bookings/${bookingId}/next-suggested`)
+      .then((res) => setNextSuggested(res.data))
+      .catch(() => {});
+  }, [bookingId, booking?.id, nextWeekBooking?.id]);
 
   // Load skill tree + student progress once booking is loaded
   useEffect(() => {
@@ -410,6 +437,32 @@ export function CoachSession() {
     }
   };
 
+  // "End lesson" — gate the move into Follow-up on booking the next session.
+  // If one's already on the books we go straight to Follow-up; otherwise the
+  // book-next modal opens.
+  const handleEndLesson = () => {
+    if (nextSuggested && !nextSuggested.alreadyBooked && !nextWeekBooking) {
+      setGateOpen(true);
+    } else {
+      setPhase("followup");
+    }
+  };
+
+  // Book from the gate, then continue into Follow-up. Reuses the same
+  // same-time-next-week booking the Follow-up card uses.
+  const bookFromGate = async () => {
+    await bookSameTimeNextWeek();
+    setGateOpen(false);
+    setPhase("followup");
+  };
+
+  const skipFromGate = () => {
+    // Leaving it unbooked drops a to-do into the coach's Needs you column
+    // (computed server-side in the dashboard).
+    setGateOpen(false);
+    setPhase("followup");
+  };
+
   const completedNodeIds = new Set(progress.map((p) => p.nodeId));
 
   // Build prereq map for determining locked state
@@ -510,46 +563,42 @@ export function CoachSession() {
           className="mx-auto max-w-[1200px]"
           style={isLive ? { pointerEvents: "auto" } : undefined}
         >
-        {/* Workflow phase — Upcoming | Live | Next. Default is time-aware
-            (getDefaultPhase) but the coach can switch freely; the manual
-            choice sticks for the rest of the visit. */}
-        <div className="mb-8 flex items-center gap-3 flex-wrap">
-          <div className="inline-flex items-center bg-warm-gray/30 rounded-card p-1">
-            {PHASES.map((p) => {
-              const active = phase === p;
-              return (
-                <button
-                  key={p}
-                  onClick={() => setPhase(p)}
-                  className={`text-[12px] font-medium uppercase tracking-[0.1em] px-4 py-1.5 rounded-card transition-colors ${
-                    active
-                      ? "bg-iris text-cream shadow-sm"
-                      : "text-text-secondary hover:text-charcoal"
-                  }`}
-                >
-                  {p === "live" && active && (
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-cream mr-2 align-middle animate-pulse" />
-                  )}
-                  {PHASE_LABELS[p]}
-                </button>
-              );
-            })}
+        {/* Workflow phase — Upcoming → Live → Follow-up. Default is
+            time-aware (getDefaultPhase) but the coach can switch freely;
+            the manual choice sticks for the rest of the visit. Booking the
+            next session gates the move into Follow-up (see handleEndLesson). */}
+        <SessionStepper
+          steps={STEPPER_STEPS}
+          activeKey={phase}
+          onSelect={(key) => setPhase(key as Phase)}
+          meta={
+            <span className="flex items-center gap-3">
+              <span>{phaseHint(booking, phase)}</span>
+              {student?.name && (
+                <span>
+                  {student.name.split(" ")[0]}
+                  {booking.category?.title ? ` · ${booking.category.title}` : ""}
+                </span>
+              )}
+            </span>
+          }
+        />
+
+        {/* During Live, "End lesson" is what triggers the book-next gate. */}
+        {phase === "live" && (
+          <div className="mb-8 -mt-4 flex items-center gap-3 pointer-events-auto">
+            <span className="inline-flex items-center text-[12px] font-medium text-iris">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-iris mr-2 animate-pulse" />
+              in session
+            </span>
+            <button
+              onClick={handleEndLesson}
+              className="ml-auto text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors"
+            >
+              End lesson →
+            </button>
           </div>
-          <span className="text-[11px] text-text-secondary">
-            {phaseHint(booking, phase)}
-          </span>
-          <span
-            className={`text-[11px] uppercase tracking-wider font-medium ml-auto ${
-              booking.status === "COMPLETED"
-                ? "text-sage"
-                : booking.status === "CANCELLED"
-                  ? "text-coral"
-                  : "text-iris"
-            }`}
-          >
-            {booking.status}
-          </span>
-        </div>
+        )}
 
         {/* (Live video lives in the SessionShell background layer above —
             rendered once per page when phase === "live".) */}
@@ -558,7 +607,7 @@ export function CoachSession() {
             routine/notes columns so the coach books the follow-up first.
             One click books the same student at the same time + 7 days; on
             conflict, the coach falls back to /coach/calendar. */}
-        {phase === "next" && (() => {
+        {phase === "followup" && (() => {
           const nextStart = new Date(new Date(booking.startsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
           const nextEnd = new Date(new Date(booking.endsAt).getTime() + 7 * 24 * 60 * 60 * 1000);
           const studentFirst = student?.name?.split(" ")[0] ?? "student";
@@ -566,8 +615,13 @@ export function CoachSession() {
             <section className="mb-10">
               <div className="flex items-baseline justify-between mb-4">
                 <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
-                  Next time
+                  Next session
                 </h2>
+                {nextWeekBooking || nextSuggested?.alreadyBooked ? (
+                  <Badge variant="success">booked</Badge>
+                ) : (
+                  <Badge variant="warning">not booked</Badge>
+                )}
               </div>
               <div className="bg-surface rounded-card shadow-card p-5">
                 {nextWeekBooking ? (
@@ -621,6 +675,12 @@ export function CoachSession() {
                     </div>
                   </div>
                 )}
+                {!nextWeekBooking && !nextSuggested?.alreadyBooked && (
+                  <p className="text-[11px] text-text-secondary mt-3 pt-3 border-t border-charcoal/10">
+                    You skipped booking at the end of the lesson — this is sitting in your{" "}
+                    <Link to="/coach" className="text-iris hover:text-iris-hover">Needs you</Link> column until booked.
+                  </p>
+                )}
               </div>
             </section>
           );
@@ -630,7 +690,7 @@ export function CoachSession() {
             Hidden during Live (the lesson itself) and Upcoming (the
             pre-lesson prep view). Saves to booking.noteSections and
             emails the student via PATCH /api/bookings/:id/notes. */}
-        {phase === "next" && (
+        {phase === "followup" && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start mb-10">
           {/* Routine for next time — editable post-lesson plan, narrow
               column beside the wider lesson-notes editor. */}
@@ -696,6 +756,26 @@ export function CoachSession() {
               ))}
             </div>
 
+            {/* AI summary of this lesson, when generated — sent alongside the note. */}
+            {studentDetail?.latestLessonSummary &&
+              studentDetail.latestLessonSummary.bookingId === booking.id &&
+              studentDetail.latestLessonSummary.bullets.length > 0 && (
+              <div className="ai-summary mt-4">
+                <div className="ai-summary-head">
+                  <span className="ai-badge">✦ AI</span>
+                  <span className="ai-title">lesson summary</span>
+                  {studentDetail.latestLessonSummary.durationMin && (
+                    <span className="ai-meta">{studentDetail.latestLessonSummary.durationMin} min · from recording</span>
+                  )}
+                </div>
+                <ul className="ai-bullets">
+                  {studentDetail.latestLessonSummary.bullets.map((b, i) => (
+                    <li key={i}>{b}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
             <div className="flex items-center justify-between gap-3 flex-wrap pt-5 mt-5 border-t border-charcoal/10">
               <p className="text-[11px] text-text-secondary">
                 Saving emails the notes to {student?.name?.split(" ")[0] ?? "the student"}.{" "}
@@ -726,30 +806,17 @@ export function CoachSession() {
         </div>
         )}
 
-        {/* Plan-tab prep row — current routine (view-only; editing happens
-            on the Next tab) beside a wider "Last time" recap, side by side
-            so the coach can prep the routine against the prior session. */}
+        {/* Upcoming prep — three columns mirroring the design: last
+            session's note (+ AI summary), the daily routine the student's
+            practicing, and a prep column (shared goals + today's agenda). */}
         {phase === "upcoming" && (
         <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start mb-10">
-          {/* Current routine */}
-          {booking.user?.id && (
-          <section className="md:col-span-4">
-            <CurrentRoutine
-              routine={routine ?? { items: [], updatedAt: null }}
-              editable={false}
-              title="Current routine"
-              emptyHint="No routine set yet — set one on the Next tab after the lesson."
-            />
-          </section>
-          )}
-
-          {/* Last time — recap of the most recent completed session with
-              this student. Renders an empty state when there's no prior
-              session. */}
-          <section className={booking.user?.id ? "md:col-span-8" : "md:col-span-12"}>
+          {/* Last session — recap of the most recent completed session with
+              this student, plus its AI summary if one exists. */}
+          <section className="md:col-span-5">
             <div className="flex items-baseline justify-between mb-4">
               <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
-                Last time
+                Last session
               </h2>
               {lastSession && (
                 <span className="text-[11px] text-text-secondary">
@@ -803,7 +870,103 @@ export function CoachSession() {
                   );
                 })()
               )}
+
+              {/* AI summary of the last lesson, when generated. */}
+              {studentDetail?.latestLessonSummary &&
+                studentDetail.latestLessonSummary.bullets.length > 0 && (
+                <div className="ai-summary compact mt-4">
+                  <div className="ai-summary-head">
+                    <span className="ai-badge">✦ AI</span>
+                    <span className="ai-title">summary</span>
+                    {studentDetail.latestLessonSummary.durationMin && (
+                      <span className="ai-meta">{studentDetail.latestLessonSummary.durationMin} min</span>
+                    )}
+                  </div>
+                  <ul className="ai-bullets">
+                    {studentDetail.latestLessonSummary.bullets.slice(0, 3).map((b, i) => (
+                      <li key={i}>{b}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
+          </section>
+
+          {/* Daily routine — what the student is practicing until today. */}
+          {booking.user?.id && (
+          <section className="md:col-span-4">
+            <CurrentRoutine
+              routine={routine ?? { items: [], updatedAt: null }}
+              editable={false}
+              title="Daily routine"
+              emptyHint="No routine set yet — set one in Follow-up after the lesson."
+            />
+            {studentDetail?.streak && studentDetail.streak.currentDays > 0 && (
+              <p className="text-[12px] text-text-secondary mt-3">
+                🔥 {studentDetail.streak.currentDays}-day practice streak
+              </p>
+            )}
+          </section>
+          )}
+
+          {/* Prep — shared goals + today's agenda (derived from new goals and
+              the student's "bring up" note on this booking). */}
+          <section className="md:col-span-3 space-y-5">
+            {(() => {
+              const goals = studentDetail?.goals ?? [];
+              const newGoals = goals.filter((g) => g.isNew && g.status === "ACTIVE");
+              const studentNoteItems = (booking.studentNote ?? "")
+                .split(/\n+/)
+                .map((s) => s.trim())
+                .filter(Boolean);
+              return (
+                <>
+                  {goals.length > 0 && (
+                    <div>
+                      <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">
+                        {student?.name?.split(" ")[0] ?? "Student"}'s goals · shared
+                      </h2>
+                      <div className="space-y-3">
+                        {goals.slice(0, 3).map((g) => (
+                          <GoalCard key={g.id} goal={g} compact showShared={false} />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">
+                      Today's agenda
+                    </h2>
+                    <div className="bg-surface rounded-card shadow-card p-4 space-y-2">
+                      {newGoals.length === 0 && studentNoteItems.length === 0 ? (
+                        <p className="text-[12px] text-text-secondary">
+                          Nothing flagged yet — new goals and the student's questions land here.
+                        </p>
+                      ) : (
+                        <>
+                          {newGoals.map((g) => (
+                            <div key={g.id} className="flex items-start gap-2 rounded-card bg-blush border border-iris px-2.5 py-1.5">
+                              <span className="text-iris text-xs mt-0.5">✨</span>
+                              <div className="min-w-0">
+                                <div className="text-[12.5px] font-medium text-charcoal leading-tight">{g.title}</div>
+                                <div className="text-[10.5px] text-iris">new goal · talk through approach</div>
+                              </div>
+                            </div>
+                          ))}
+                          {studentNoteItems.map((item, i) => (
+                            <div key={i} className="flex items-start gap-2">
+                              <span className="text-iris text-xs mt-1">›</span>
+                              <span className="text-[12.5px] text-charcoal leading-snug">{item}</span>
+                            </div>
+                          ))}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </>
+              );
+            })()}
           </section>
         </div>
         )}
@@ -974,6 +1137,73 @@ export function CoachSession() {
           )}
         </div>
       )}
+
+      {/* Book-next gate — fires on "End lesson" when no future booking exists.
+          Booking continues into Follow-up; skipping leaves a to-do in the
+          coach's Needs you column. */}
+      {gateOpen && (() => {
+        const first = student?.name?.split(" ")[0] ?? "the student";
+        const suggested = nextSuggested?.suggested;
+        const recurring = nextSuggested?.recurring;
+        const suggestedLabel = suggested
+          ? `${formatDate(suggested.startsAt)} · ${formatTime(suggested.startsAt)}`
+          : null;
+        return (
+          <div className="absolute inset-0 z-40 flex items-center justify-center p-6" style={{ background: "rgba(26,22,18,0.45)", pointerEvents: "auto" }}>
+            <div className="w-full max-w-[520px] bg-surface rounded-card shadow-elevated overflow-hidden">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-charcoal/10">
+                <h3 className="font-display text-2xl font-bold">Book {first}'s next session</h3>
+                <button onClick={() => setGateOpen(false)} className="text-text-secondary hover:text-charcoal text-lg leading-none" aria-label="Close">×</button>
+              </div>
+              <div className="px-6 py-5 space-y-4">
+                <div className="flex items-center gap-2 rounded-card bg-blush border border-iris px-3 py-2.5">
+                  <span className="text-iris font-bold">!</span>
+                  <span className="text-[13px] text-charcoal">No next session is on the calendar yet. Lock it in before {first} leaves.</span>
+                </div>
+
+                {suggested && (
+                  <div className="rounded-card border-2 border-iris p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-sm font-medium text-charcoal">
+                          {recurring ? "Repeat weekly · " : ""}{suggestedLabel}
+                        </div>
+                        <div className="text-[12px] text-text-secondary mt-0.5">
+                          {recurring ? `${first}'s usual slot · ` : ""}same time next week
+                        </div>
+                      </div>
+                      <Badge variant="default">recommended</Badge>
+                    </div>
+                    {nextWeekError && <p className="text-[12px] text-coral mt-2">{nextWeekError}</p>}
+                  </div>
+                )}
+
+                <Link
+                  to="/coach/calendar"
+                  className="block text-[12px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+                >
+                  or pick another time →
+                </Link>
+              </div>
+              <div className="flex items-center gap-3 px-6 py-4 border-t border-charcoal/10">
+                <div className="leading-tight">
+                  <button onClick={skipFromGate} className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors">
+                    skip — remind me later
+                  </button>
+                  <div className="text-[11px] text-text-secondary mt-0.5">adds a to-do to your <span className="font-medium">Needs you</span> column</div>
+                </div>
+                <button
+                  onClick={bookFromGate}
+                  disabled={bookingNextWeek || !suggested}
+                  className="ml-auto text-[13px] font-medium text-cream bg-iris px-5 py-2.5 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
+                >
+                  {bookingNextWeek ? "Booking…" : "book & go to follow-up →"}
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </SessionShell>
   );
 }

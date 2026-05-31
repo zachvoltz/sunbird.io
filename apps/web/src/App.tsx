@@ -44,6 +44,7 @@ import { ProfilePage } from "@/wireframe/pages/Profile";
 import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
 import { MyInboxPage } from "@/wireframe/pages/MyInbox";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
+import { MyGoalsPage } from "@/pages/MyGoals";
 
 export function App() {
   return (
@@ -95,6 +96,7 @@ export function App() {
       <Route path="/my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
       <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />
       <Route path="/my-notes/:bookingId" element={<AuthGate><MyNoteExpandedPage /></AuthGate>} />
+      <Route path="/my-goals" element={<AuthGate><MyGoalsPage /></AuthGate>} />
       <Route path="/my-takes" element={<AuthGate><MyTakesPage /></AuthGate>} />
       <Route path="/my-curriculum" element={<AuthGate><MyCurriculumHub /></AuthGate>} />
       <Route path="/my-profile" element={<AuthGate><MyProfilePage /></AuthGate>} />

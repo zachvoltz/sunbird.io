@@ -273,6 +273,28 @@ bookingRoutes.post("/", requireAuth, async (c) => {
 });
 
 // PATCH /api/bookings/:id/node — select/change node on a session
+// PATCH /api/bookings/:id/student-note — the owning student sets their
+// "bring up with my coach" note for an upcoming session. These surface on
+// the coach's session-prep agenda.
+bookingRoutes.patch("/:id/student-note", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const body = await c.req.json().catch(() => ({}));
+  const note = typeof body.studentNote === "string" ? body.studentNote.slice(0, 500) : "";
+
+  const db = getDb();
+  const booking = await db.booking.findUnique({ where: { id }, include: bookingInclude });
+  if (!booking) return c.json({ error: "Booking not found" }, 404);
+  if (booking.userId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  const updated = await db.booking.update({
+    where: { id },
+    data: { studentNote: note || null },
+    include: bookingInclude,
+  });
+  return c.json({ data: serializeBooking(updated) });
+});
+
 bookingRoutes.patch("/:id/node", requireAuth, async (c) => {
   const { id } = c.req.param();
   const user = c.get("user")!;
@@ -493,6 +515,77 @@ bookingRoutes.post("/:id/next-week", requireAuth, requireRole("COACH", "ADMIN"),
   });
 
   return c.json({ data: serializeBooking(booking) }, 201);
+});
+
+// GET /api/bookings/:id/next-suggested — what to offer when wrapping up a
+// session: a future slot (the recurring cadence if the booking belongs to a
+// schedule, else same-time +7d, rolled forward until it's in the future) plus
+// whether a future booking already exists (so the book-next gate can skip).
+bookingRoutes.get("/:id/next-suggested", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const source = await db.booking.findUnique({
+    where: { id },
+    include: {
+      schedule: { include: { category: true, coach: { select: { id: true, name: true, avatarUrl: true, bio: true } }, _count: { select: { bookings: true } } } },
+    },
+  });
+  if (!source) return c.json({ error: "Booking not found" }, 404);
+  if (user.role === "STUDENT" && source.userId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (user.role === "COACH" && source.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const now = new Date();
+  const alreadyBooked = source.coachId
+    ? (await db.booking.findFirst({
+        where: {
+          userId: source.userId,
+          coachId: source.coachId,
+          status: { not: "CANCELLED" },
+          startsAt: { gt: now },
+        },
+        select: { id: true },
+      })) !== null
+    : false;
+
+  // Roll the same-time-next-week slot forward until it lands in the future
+  // (a session that ended weeks ago shouldn't suggest a past date).
+  const durationMs = source.endsAt.getTime() - source.startsAt.getTime();
+  let start = new Date(source.startsAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+  while (start <= now) start = new Date(start.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const suggested = { startsAt: start.toISOString(), endsAt: new Date(start.getTime() + durationMs).toISOString() };
+
+  const s = source.schedule;
+  const recurring = s
+    ? {
+        id: s.id,
+        frequency: s.frequency,
+        dayOfWeek: s.dayOfWeek,
+        startTime: s.startTime,
+        startsOn: s.startsOn.toISOString(),
+        endsOn: s.endsOn.toISOString(),
+        status: s.status,
+        category: s.category
+          ? {
+              id: s.category.id,
+              slug: s.category.slug,
+              title: s.category.title,
+              subtitle: s.category.subtitle ?? null,
+              description: s.category.description,
+              imageUrl: s.category.imageUrl ?? null,
+            }
+          : null,
+        coach: (s as any).coach,
+        bookingCount: (s as any)._count?.bookings ?? 0,
+      }
+    : null;
+
+  return c.json({ data: { suggested, recurring, alreadyBooked } });
 });
 
 // PATCH /api/bookings/:id/cancel — cancel a booking
