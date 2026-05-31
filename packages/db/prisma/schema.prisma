@@ -98,6 +98,8 @@ model User {
   noteVoiceMemos        NoteVoiceMemo[]
   lessonSummariesEdited LessonSummary[]     @relation("summaryEditor")
   routineCompletions    RoutineCompletion[]
+  studentGoals          Goal[]              @relation("studentGoals")
+  coachGoals            Goal[]              @relation("coachGoals")
 }
 
 model Session {
@@ -951,4 +953,28 @@ model RoutineCompletion {
 
   @@unique([userId, routineItemId, day])
   @@index([userId, day])
+}
+
+// Student-set practice goal, shared with their coach. A freshly-set goal
+// (isNew) surfaces on the coach's session-prep agenda as a "talk through
+// how to approach this" item; the coach clears isNew once it's discussed.
+model Goal {
+  id          String   @id @default(cuid())
+  studentId   String
+  coachId     String
+  title       String
+  detail      String?
+  targetLabel String?  // free-text "by the June recital", "this month"…
+  progressPct Int      @default(0) // 0-100
+  status      String   @default("ACTIVE") // "ACTIVE" | "ACHIEVED" | "ARCHIVED"
+  isNew       Boolean  @default(true)      // un-discussed → agenda item
+  achievedAt  DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  student User @relation("studentGoals", fields: [studentId], references: [id], onDelete: Cascade)
+  coach   User @relation("coachGoals", fields: [coachId], references: [id])
+
+  @@index([studentId, status])
+  @@index([coachId, status])
 }

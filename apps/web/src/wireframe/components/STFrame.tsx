@@ -7,8 +7,8 @@ import { UiSettings } from "./UiSettings";
 import { Icon } from "./Icon";
 import { useIsMobile } from "../hooks/useIsMobile";
 
-type NavId = "home" | "practice" | "lessons" | "inbox" | "notes" | "takes" | "curriculum" | "profile";
-type NavIcon = "home" | "note" | "cap" | "inbox" | "journal" | "mic" | "map" | "user";
+type NavId = "home" | "practice" | "lessons" | "inbox" | "notes" | "goals" | "takes" | "curriculum" | "profile";
+type NavIcon = "home" | "note" | "cap" | "inbox" | "journal" | "star" | "mic" | "map" | "user";
 
 const NAV: Array<{ id: NavId; label: string; icon: NavIcon; to: string }> = [
   { id: "home", label: "Today", icon: "home", to: "/today" },
@@ -16,6 +16,7 @@ const NAV: Array<{ id: NavId; label: string; icon: NavIcon; to: string }> = [
   { id: "lessons", label: "Lessons", icon: "cap", to: "/my-bookings" },
   { id: "inbox", label: "Inbox", icon: "inbox", to: "/my-inbox" },
   { id: "notes", label: "Journal", icon: "journal", to: "/my-notes" },
+  { id: "goals", label: "Goals", icon: "star", to: "/my-goals" },
   { id: "takes", label: "My takes", icon: "mic", to: "/my-takes" },
   { id: "curriculum", label: "Curriculum", icon: "map", to: "/my-curriculum" },
   { id: "profile", label: "Profile", icon: "user", to: "/my-profile" },

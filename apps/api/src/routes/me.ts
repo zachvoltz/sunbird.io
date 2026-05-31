@@ -3,6 +3,8 @@ import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
 import { parseRoutine } from "../lib/routine";
 import { computeStreak, fullyCompleteDays } from "../lib/streak";
+import { serializeGoal } from "../lib/goals";
+import { createGoalSchema, updateGoalSchema } from "@sunbird/shared";
 
 type MeEnv = {
   Variables: {
@@ -49,7 +51,7 @@ me.get("/student-data", requireAuth, async (c) => {
   const today = utcMidnight(now);
   const since120 = new Date(today.getTime() - 119 * 86_400_000);
 
-  const [student, bookings, completionRows, assignments, takes, latestSentNote] = await Promise.all([
+  const [student, bookings, completionRows, assignments, takes, latestSentNote, goals] = await Promise.all([
     db.user.findUnique({
       where: { id: user.id },
       select: {
@@ -100,6 +102,10 @@ me.get("/student-data", requireAuth, async (c) => {
           orderBy: { createdAt: "asc" },
         },
       },
+    }),
+    db.goal.findMany({
+      where: { studentId: user.id, status: { not: "ARCHIVED" } },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }),
   ]);
 
@@ -282,6 +288,7 @@ me.get("/student-data", requireAuth, async (c) => {
       })) ?? [],
     latestNoteCoach: latestSentNote?.coach ?? null,
     routine: enrichedRoutine,
+    goals: goals.map(serializeGoal),
     recentPracticeDays,
   };
 
@@ -346,6 +353,102 @@ me.post("/takes", requireAuth, async (c) => {
   });
 
   return c.json({ data: { id: take.id } }, 201);
+});
+
+// ── Goals (set + track, shared with the coach) ──
+
+// GET /api/me/goals — the calling student's goals (active + achieved).
+me.get("/goals", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const goals = await db.goal.findMany({
+    where: { studentId: user.id, status: { not: "ARCHIVED" } },
+    orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+  });
+  return c.json({ data: goals.map(serializeGoal) });
+});
+
+// POST /api/me/goals — set a new goal. Coach is inferred from the student's
+// most recent booking (same rule as takes); a goal is meaningless without a
+// coach to share it with. New goals default to isNew=true so they surface on
+// the coach's session-prep agenda.
+me.post("/goals", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const parsed = createGoalSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid goal" }, 400);
+  }
+
+  const lastBooking = await db.booking.findFirst({
+    where: { userId: user.id, coachId: { not: null } },
+    orderBy: { startsAt: "desc" },
+    select: { coachId: true },
+  });
+  const coachId = lastBooking?.coachId ?? null;
+  if (!coachId) {
+    return c.json({ error: "Book a lesson with a coach before setting goals." }, 400);
+  }
+
+  const goal = await db.goal.create({
+    data: {
+      studentId: user.id,
+      coachId,
+      title: parsed.data.title,
+      detail: parsed.data.detail ?? null,
+      targetLabel: parsed.data.targetLabel ?? null,
+    },
+  });
+  return c.json({ data: serializeGoal(goal) }, 201);
+});
+
+// PATCH /api/me/goals/:id — update progress / status / details. Marking a
+// goal ACHIEVED stamps achievedAt.
+me.patch("/goals/:id", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const id = c.req.param("id");
+  const db = getDb();
+  const parsed = updateGoalSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid update" }, 400);
+  }
+
+  const existing = await db.goal.findUnique({ where: { id }, select: { studentId: true, status: true } });
+  if (!existing || existing.studentId !== user.id) {
+    return c.json({ error: "Goal not found" }, 404);
+  }
+
+  const d = parsed.data;
+  const goal = await db.goal.update({
+    where: { id },
+    data: {
+      ...(d.title !== undefined ? { title: d.title } : {}),
+      ...(d.detail !== undefined ? { detail: d.detail } : {}),
+      ...(d.targetLabel !== undefined ? { targetLabel: d.targetLabel } : {}),
+      ...(d.progressPct !== undefined ? { progressPct: d.progressPct } : {}),
+      ...(d.isNew !== undefined ? { isNew: d.isNew } : {}),
+      ...(d.status !== undefined
+        ? {
+            status: d.status,
+            achievedAt: d.status === "ACHIEVED" ? new Date() : null,
+          }
+        : {}),
+    },
+  });
+  return c.json({ data: serializeGoal(goal) });
+});
+
+// DELETE /api/me/goals/:id — remove a goal entirely.
+me.delete("/goals/:id", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const id = c.req.param("id");
+  const db = getDb();
+  const existing = await db.goal.findUnique({ where: { id }, select: { studentId: true } });
+  if (!existing || existing.studentId !== user.id) {
+    return c.json({ error: "Goal not found" }, 404);
+  }
+  await db.goal.delete({ where: { id } });
+  return c.json({ data: { ok: true } });
 });
 
 // GET /api/me/inbox-count — unread incoming SessionMessages for the

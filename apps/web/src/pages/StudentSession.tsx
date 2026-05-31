@@ -4,25 +4,21 @@ import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
 import { STFrame } from "@/wireframe/components/STFrame";
+import { SessionStepper } from "@/components/SessionStepper";
+import { GoalCard } from "@/components/GoalCard";
+import { Badge } from "@/components/ui/Badge";
 import type {
   BookingPublic,
+  NextSuggestedSessionPublic,
+  NoteSections,
   SessionMessagePublic,
-  SessionResourcePublic,
-  SessionResourceType,
+  StudentDetailPublic,
 } from "@sunbird/shared";
 
 function SessionShell({ children }: { children: React.ReactNode }) {
-  // Highlight "Lessons" in the left nav since /my-bookings is the parent.
   return (
     <STFrame side="lessons">
-      <div
-        style={{
-          flex: 1,
-          minHeight: 0,
-          overflowY: "auto",
-          background: "var(--color-cream)",
-        }}
-      >
+      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--color-cream)" }}>
         {children}
       </div>
     </STFrame>
@@ -34,35 +30,61 @@ function formatDate(iso: string): string {
     weekday: "long",
     month: "long",
     day: "numeric",
-    year: "numeric",
   });
 }
-
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+}
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
-
 function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleTimeString("en-US", {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 }
 
-const RESOURCE_TYPE_LABELS: Record<SessionResourceType, string> = {
-  LINK: "Link",
-  PDF: "PDF",
-  AUDIO: "Audio",
-};
+type Phase = "upcoming" | "live" | "followup";
+const PHASES: readonly Phase[] = ["upcoming", "live", "followup"] as const;
+const STEP_LABELS: Record<Phase, string> = { upcoming: "Upcoming", live: "Live", followup: "Follow-up" };
+const STEPPER_STEPS = PHASES.map((p) => ({ key: p, label: STEP_LABELS[p] }));
 
-const RESOURCE_TYPE_ICONS: Record<SessionResourceType, string> = {
-  LINK: "\u{1F517}",
-  PDF: "\u{1F4C4}",
-  AUDIO: "\u{1F3B5}",
-};
+const LIVE_PAD_MS = 15 * 60 * 1000;
+function getDefaultPhase(b: BookingPublic, now = Date.now()): Phase {
+  if (b.status === "COMPLETED" || b.status === "CANCELLED") return "followup";
+  const start = new Date(b.startsAt).getTime();
+  const end = new Date(b.endsAt).getTime();
+  if (now < start - LIVE_PAD_MS) return "upcoming";
+  if (now > end + LIVE_PAD_MS) return "followup";
+  return "live";
+}
+
+// The teacher's note as a clean recap — sections if present, else the flat
+// practiceNotes string.
+function NoteRecap({ sections, flat }: { sections: NoteSections | null; flat: string | null }) {
+  const filled = sections
+    ? (Object.entries(sections) as [keyof NoteSections, string | undefined][]).filter(([, v]) => v?.trim())
+    : [];
+  if (filled.length === 0 && flat) {
+    return <p className="text-sm leading-relaxed whitespace-pre-line text-charcoal">{flat}</p>;
+  }
+  if (filled.length === 0) {
+    return <p className="text-sm text-text-secondary">No note from your teacher yet.</p>;
+  }
+  const LABELS: Record<string, string> = {
+    intro: "Intro", scalesExercises: "Exercises", topics: "Topics", songWork: "Song work", nextTime: "Next time",
+  };
+  return (
+    <div className="note-sections" style={{ rowGap: 12, alignItems: "start" }}>
+      {filled.map(([key, v]) => (
+        <div key={key} className="ns-row">
+          <label className="ns-label" style={{ paddingTop: 2 }}>{LABELS[key] ?? key}</label>
+          <p className="ns-body text-sm leading-relaxed whitespace-pre-line text-charcoal">{v}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+const ROUTINE_KIND_ICON: Record<string, string> = { warmup: "🔥", exercise: "♪", song: "🎵" };
 
 export function StudentSession() {
   const { bookingId } = useParams<{ bookingId: string }>();
@@ -70,11 +92,20 @@ export function StudentSession() {
 
   const [booking, setBooking] = useState<BookingPublic | null>(null);
   const [messages, setMessages] = useState<SessionMessagePublic[]>([]);
-  const [resources, setResources] = useState<SessionResourcePublic[]>([]);
+  const [detail, setDetail] = useState<StudentDetailPublic | null>(null);
+  const [nextSuggested, setNextSuggested] = useState<NextSuggestedSessionPublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
-  // Chat state
+  const [phase, setPhase] = useState<Phase>("upcoming");
+  const seededPhase = useRef(false);
+
+  // "Bring up with my coach" note → persists to booking.studentNote.
+  const [bringUp, setBringUp] = useState("");
+  const [savedBringUp, setSavedBringUp] = useState("");
+  const [savingBringUp, setSavingBringUp] = useState(false);
+
+  // Chat state (kept for the Live phase)
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -83,36 +114,46 @@ export function StudentSession() {
     apiFetch<{ data: BookingPublic }>(`/api/bookings/${bookingId}`)
       .then((res) => setBooking(res.data))
       .catch(() => setNotFound(true));
-
   const loadMessages = () =>
     apiFetch<{ data: SessionMessagePublic[] }>(`/api/bookings/${bookingId}/messages`)
       .then((res) => setMessages(res.data))
       .catch(() => {});
 
-  const loadResources = () =>
-    apiFetch<{ data: SessionResourcePublic[] }>(`/api/bookings/${bookingId}/resources`)
-      .then((res) => setResources(res.data))
-      .catch(() => {});
-
   useEffect(() => {
     if (!bookingId) return;
-    Promise.all([loadBooking(), loadMessages(), loadResources()]).finally(() =>
-      setLoading(false),
-    );
+    Promise.all([
+      loadBooking(),
+      loadMessages(),
+      apiFetch<{ data: StudentDetailPublic }>("/api/me/student-data")
+        .then((res) => setDetail(res.data))
+        .catch(() => {}),
+    ]).finally(() => setLoading(false));
   }, [bookingId]);
 
-  // Poll for new messages every 15s
+  useEffect(() => {
+    if (!booking || seededPhase.current) return;
+    setPhase(getDefaultPhase(booking));
+    seededPhase.current = true;
+    setBringUp(booking.studentNote ?? "");
+    setSavedBringUp(booking.studentNote ?? "");
+  }, [booking]);
+
+  useEffect(() => {
+    if (!bookingId || !booking) return;
+    apiFetch<{ data: NextSuggestedSessionPublic }>(`/api/bookings/${bookingId}/next-suggested`)
+      .then((res) => setNextSuggested(res.data))
+      .catch(() => {});
+  }, [bookingId, booking?.id]);
+
+  // Poll messages every 15s
   useEffect(() => {
     if (!bookingId || notFound) return;
     const interval = setInterval(() => {
-      if (document.visibilityState === "visible") {
-        loadMessages();
-      }
+      if (document.visibilityState === "visible") loadMessages();
     }, 15000);
     return () => clearInterval(interval);
   }, [bookingId, notFound]);
 
-  // Scroll chat to bottom only when the user sends a message
   const shouldScrollChat = useRef(false);
   useEffect(() => {
     if (shouldScrollChat.current) {
@@ -138,6 +179,22 @@ export function StudentSession() {
     }
   };
 
+  const saveBringUp = async () => {
+    if (savingBringUp || bringUp.trim() === savedBringUp.trim()) return;
+    setSavingBringUp(true);
+    try {
+      const res = await apiFetch<{ data: BookingPublic }>(`/api/bookings/${bookingId}/student-note`, {
+        method: "PATCH",
+        body: JSON.stringify({ studentNote: bringUp.trim() }),
+      });
+      setBooking(res.data);
+      setSavedBringUp(res.data.studentNote ?? "");
+    } catch {
+    } finally {
+      setSavingBringUp(false);
+    }
+  };
+
   if (loading) {
     return (
       <SessionShell>
@@ -147,254 +204,294 @@ export function StudentSession() {
       </SessionShell>
     );
   }
-
   if (notFound || !booking) {
     return (
       <SessionShell>
-        <div className="py-16 px-6 md:px-10">
-          <div className="mx-auto max-w-[900px] text-center">
-            <h1 className="font-display text-3xl font-bold mb-4">
-              Session not found
-            </h1>
-            <Link
-              to="/my-bookings"
-              className="text-sm text-iris hover:text-iris-hover transition-colors"
-            >
-              Back to my bookings
-            </Link>
-          </div>
+        <div className="py-16 px-6 md:px-10 text-center">
+          <h1 className="font-display text-3xl font-bold mb-4">Session not found</h1>
+          <Link to="/my-bookings" className="text-sm text-iris hover:text-iris-hover">Back to my bookings</Link>
         </div>
       </SessionShell>
     );
   }
 
   const coach = booking.coach;
+  const isLive = phase === "live";
+  const goals = detail?.goals ?? [];
+  const routineItems = detail?.routine?.items ?? [];
+  const recentDays = detail?.recentPracticeDays ?? [];
+  const streak = detail?.streak;
+
+  // This-week practice days (last 7 calendar days present in recentPracticeDays).
+  const weekKeys = (() => {
+    const keys: string[] = [];
+    const now = new Date();
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now.getTime() - i * 86_400_000);
+      keys.push(d.toISOString().slice(0, 10));
+    }
+    return new Set(keys);
+  })();
+  const daysThisWeek = recentDays.filter((d) => weekKeys.has(d)).length;
 
   return (
     <SessionShell>
-      <div className="py-10 px-6 md:px-10">
-        <div className="mx-auto max-w-[1200px]">
-        {/* Header */}
-        <div className="mb-10 flex items-baseline justify-between">
-          <h1 className="font-display text-3xl md:text-4xl font-bold">
-            Session
-          </h1>
-          <span
-            className={`text-[11px] uppercase tracking-wider font-medium ${
-              booking.status === "COMPLETED"
-                ? "text-sage"
-                : booking.status === "CANCELLED"
-                  ? "text-coral"
-                  : "text-iris"
-            }`}
-          >
-            {booking.status}
-          </span>
+      {isLive && (
+        <div className="absolute inset-0 z-0">
+          {booking.mode === "ONLINE" && booking.status === "CONFIRMED" ? (
+            <div className="w-full h-full p-4 md:p-6">
+              <VideoCall bookingId={bookingId!} localUserName={user?.name ?? "You"} remoteUserName={coach?.name ?? "Coach"} />
+            </div>
+          ) : (
+            <div className="w-full h-full" style={{ background: "#1a1612" }} />
+          )}
         </div>
+      )}
 
-        {/* Video call for online sessions */}
-        {booking.mode === "ONLINE" && booking.status === "CONFIRMED" && (
-          <div className="mb-8">
-            <VideoCall
-              bookingId={bookingId!}
-              localUserName={user?.name ?? "You"}
-              remoteUserName={coach?.name ?? "Coach"}
-            />
-          </div>
-        )}
+      <div className={isLive ? "absolute inset-0 z-10 overflow-y-auto py-8 px-6 md:px-10 pointer-events-none" : "py-10 px-6 md:px-10"}>
+        <div className="mx-auto max-w-[1000px]" style={isLive ? { pointerEvents: "auto" } : undefined}>
+          {/* Phase stepper — walks Upcoming → Live → Follow-up */}
+          <SessionStepper
+            steps={STEPPER_STEPS}
+            activeKey={phase}
+            onSelect={(k) => setPhase(k as Phase)}
+            meta={
+              <span>
+                {coach?.name ? `with ${coach.name.split(" ")[0]}` : ""} · {formatShortDate(booking.startsAt)} · {formatTime(booking.startsAt)}
+              </span>
+            }
+          />
 
-        {/* Two-column layout */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-8 items-start">
-          {/* Left column — Lesson, Coach, Resources */}
-          <div className="md:col-span-4 space-y-8">
-            {/* Lesson Info */}
-            <section>
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-                Lesson
-              </h2>
-              <div className="bg-surface rounded-card shadow-card p-6">
-                <h3 className="font-display text-lg font-semibold mb-1">
-                  {booking.category?.title ?? "Open"}
-                </h3>
-                {booking.skillTree && (
-                  <p className="text-sm text-gold font-medium mb-2">
-                    {booking.skillTree.title}
-                  </p>
-                )}
-                <p className="text-sm text-text-secondary leading-relaxed mb-4">
-                  {booking.category?.description ?? ""}
-                </p>
-                <p className="text-[12px] text-text-secondary">
-                  {formatDate(booking.startsAt)}<br />
-                  {formatTime(booking.startsAt)} &ndash; {formatTime(booking.endsAt)}
-                </p>
-                {booking.mode === "IN_PERSON" && booking.coach?.bio && (
-                  <p className="text-[12px] text-text-secondary mt-3">
-                    In person
-                  </p>
-                )}
-              </div>
-            </section>
-
-            {/* Coach Info */}
-            <section>
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-                Coach
-              </h2>
-              <div className="bg-surface rounded-card shadow-card p-6">
-                <div className="flex items-start gap-4">
-                  <div className="shrink-0 w-10 h-10 rounded-full bg-warm-gray flex items-center justify-center">
-                    {coach?.avatarUrl ? (
-                      <img
-                        src={coach.avatarUrl}
-                        alt={coach.name}
-                        className="w-10 h-10 rounded-full object-cover"
-                      />
-                    ) : (
-                      <span className="font-display text-sm font-semibold text-text-secondary">
-                        {coach?.name?.charAt(0) ?? "?"}
-                      </span>
-                    )}
-                  </div>
+          {/* ── UPCOMING ───────────────────────────────────── */}
+          {phase === "upcoming" && (
+            <div className="space-y-6">
+              {/* Practice CTA */}
+              <div className="bg-surface rounded-card shadow-card p-5 border-2 border-iris">
+                <div className="flex items-center justify-between gap-4 flex-wrap">
                   <div>
-                    <h3 className="font-display text-base font-semibold">
-                      {coach?.name ?? "Unassigned"}
-                    </h3>
-                    {coach?.bio && (
-                      <p className="text-sm text-text-secondary mt-1">
-                        {coach.bio}
-                      </p>
-                    )}
+                    <h2 className="font-display text-2xl font-bold leading-tight">Practice your routine</h2>
+                    <p className="text-[12px] text-text-secondary mt-1">
+                      {routineItems.length} {routineItems.length === 1 ? "stop" : "stops"} · before your lesson
+                    </p>
                   </div>
+                  {streak && streak.currentDays > 0 && <Badge variant="warning">🔥 {streak.currentDays}</Badge>}
                 </div>
-              </div>
-            </section>
-
-            {/* Curriculum link */}
-            {booking.category?.slug && (
-              <div className="mb-8">
                 <Link
-                  to={`/my-curriculum/${booking.category.slug}`}
-                  className="text-[12px] font-medium text-iris hover:text-iris-hover transition-colors"
+                  to="/practice"
+                  className="block text-center mt-4 text-[13px] font-medium text-cream bg-iris px-5 py-2.5 rounded-card hover:bg-iris-hover transition-colors"
                 >
-                  View your learning roadmap &rarr;
+                  Open practice path →
                 </Link>
               </div>
-            )}
 
-            {/* Resources (read-only for students) */}
-            <section>
-              <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-                Resources
-              </h2>
-
-              {resources.length === 0 ? (
-                <div className="bg-surface rounded-card shadow-card p-5">
-                  <p className="text-sm text-text-secondary text-center py-2">
-                    No resources shared yet.
-                  </p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {resources.map((r) => (
-                    <div
-                      key={r.id}
-                      className="bg-surface rounded-card shadow-card p-4 flex items-center gap-3"
-                    >
-                      <span className="text-base" title={RESOURCE_TYPE_LABELS[r.type]}>
-                        {RESOURCE_TYPE_ICONS[r.type]}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <a
-                          href={r.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-charcoal hover:text-iris transition-colors truncate block"
-                        >
-                          {r.title}
-                        </a>
-                        <p className="text-[11px] text-text-secondary">
-                          {RESOURCE_TYPE_LABELS[r.type]}
-                        </p>
-                      </div>
+              {/* Practice stats */}
+              <section>
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">Your practice</h2>
+                <div className="grid grid-cols-3 gap-3">
+                  {[
+                    { v: streak?.currentDays ?? 0, l: "day streak" },
+                    { v: `${daysThisWeek}/7`, l: "this week" },
+                    { v: detail?.takes?.length ?? 0, l: "takes sent" },
+                  ].map((s, i) => (
+                    <div key={i} className="bg-surface rounded-card shadow-card py-4 text-center">
+                      <div className="font-display text-2xl font-bold leading-none">{s.v}</div>
+                      <div className="text-[11px] text-text-secondary mt-1">{s.l}</div>
                     </div>
                   ))}
                 </div>
-              )}
-            </section>
-          </div>
+              </section>
 
-          {/* Right column — Chat */}
-          <div className="md:col-span-8">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-              Chat
-            </h2>
-            <div className="bg-surface rounded-card shadow-card overflow-hidden flex flex-col" style={{ height: "calc(100vh - 220px)", minHeight: "500px" }}>
-              <div className="flex-1 overflow-y-auto p-6 space-y-4">
-                {messages.length === 0 && (
-                  <p className="text-sm text-text-secondary text-center py-8">
-                    No messages yet. Start the conversation.
-                  </p>
-                )}
-                {messages.map((m) => {
-                  const isMe = m.sender.id === user?.id;
-                  return (
-                    <div
-                      key={m.id}
-                      className={`flex ${isMe ? "justify-end" : "justify-start"}`}
+              {/* Teacher note from last lesson */}
+              <section>
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">
+                  From {coach?.name?.split(" ")[0] ?? "your teacher"} · last lesson
+                </h2>
+                <div className="bg-surface rounded-card shadow-card p-5">
+                  <NoteRecap sections={detail?.latestNoteSections ?? null} flat={detail?.latestNotePracticeNotes ?? null} />
+                </div>
+              </section>
+
+              {/* Goals (shared) */}
+              {goals.length > 0 && (
+                <section>
+                  <div className="flex items-baseline justify-between mb-3">
+                    <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">Your goals · shared</h2>
+                    <Link to="/my-goals" className="text-[11px] font-medium text-iris hover:text-iris-hover">all goals →</Link>
+                  </div>
+                  <div className="space-y-3">
+                    {goals.slice(0, 2).map((g) => (
+                      <GoalCard key={g.id} goal={g} compact />
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Bring up with coach → studentNote */}
+              <section>
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">
+                  Bring up with {coach?.name?.split(" ")[0] ?? "your coach"}
+                </h2>
+                <div className="bg-surface rounded-card shadow-card p-5">
+                  <textarea
+                    value={bringUp}
+                    onChange={(e) => setBringUp(e.target.value)}
+                    onBlur={saveBringUp}
+                    placeholder="A question or something you're stuck on — e.g. “bar 22 keeps tripping me up”…"
+                    rows={3}
+                    maxLength={500}
+                    className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none resize-y leading-relaxed"
+                  />
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[11px] text-text-secondary italic">
+                      ✦ these pop up as agenda items at the start of your lesson
+                    </p>
+                    <button
+                      onClick={saveBringUp}
+                      disabled={savingBringUp || bringUp.trim() === savedBringUp.trim()}
+                      className="text-[12px] font-medium text-iris hover:text-iris-hover disabled:opacity-40"
                     >
-                      <div
-                        className={`max-w-[75%] rounded-2xl px-4 py-2.5 ${
-                          isMe
-                            ? "bg-iris text-cream"
-                            : "bg-warm-gray/60 text-charcoal"
-                        }`}
-                      >
-                        {!isMe && (
-                          <p className="text-[11px] font-medium mb-0.5 opacity-70">
-                            {m.sender.name}
-                          </p>
-                        )}
-                        <p className="text-sm whitespace-pre-line">{m.content}</p>
-                        <p
-                          className={`text-[10px] mt-1 ${
-                            isMe ? "text-cream/60" : "text-text-secondary"
-                          }`}
-                        >
-                          {formatTimestamp(m.createdAt)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
-                <div ref={chatEndRef} />
+                      {savingBringUp ? "Saving…" : bringUp.trim() === savedBringUp.trim() ? "Saved" : "Save"}
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {/* ── LIVE ───────────────────────────────────────── */}
+          {phase === "live" && (
+            <div className="space-y-4 max-w-[420px]">
+              <div className="bg-surface/95 backdrop-blur rounded-card shadow-card p-4">
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center text-[12px] font-medium text-iris">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-iris mr-2 animate-pulse" />
+                    in your lesson
+                  </span>
+                  <span className="text-[11px] text-text-secondary ml-auto">your lesson is being recorded</span>
+                </div>
               </div>
-              <div className="border-t border-charcoal/10 p-4 flex gap-3">
-                <input
-                  type="text"
-                  value={chatInput}
-                  onChange={(e) => setChatInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      sendMessage();
-                    }
-                  }}
-                  placeholder="Type a message..."
-                  className="flex-1 px-4 py-2.5 text-sm bg-cream border border-charcoal/10 rounded-full focus:border-charcoal/30 focus:outline-none transition-colors"
-                />
-                <button
-                  onClick={sendMessage}
-                  disabled={sendingChat || !chatInput.trim()}
-                  className="text-[13px] font-medium text-cream bg-iris px-5 py-2.5 rounded-full hover:bg-iris-hover transition-colors disabled:opacity-50"
-                >
-                  Send
-                </button>
+
+              {/* Lightweight chat alongside the call */}
+              <div className="bg-surface/95 backdrop-blur rounded-card shadow-card overflow-hidden flex flex-col" style={{ height: "min(420px, 50vh)" }}>
+                <div className="px-4 py-2 border-b border-charcoal/10 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
+                  Chat{messages.length > 0 ? ` · ${messages.length}` : ""}
+                </div>
+                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                  {messages.length === 0 && <p className="text-[12px] text-text-secondary text-center py-6">No messages yet.</p>}
+                  {messages.map((m) => {
+                    const isMe = m.sender.id === user?.id;
+                    return (
+                      <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-iris text-cream" : "bg-warm-gray/70 text-charcoal"}`}>
+                          <p className="text-[13px] whitespace-pre-line">{m.content}</p>
+                          <p className={`text-[10px] mt-1 ${isMe ? "text-cream/60" : "text-text-secondary"}`}>{formatTimestamp(m.createdAt)}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={chatEndRef} />
+                </div>
+                <div className="border-t border-charcoal/10 p-2 flex gap-2">
+                  <input
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                    placeholder="Message…"
+                    className="flex-1 px-3 py-1.5 text-[13px] bg-cream border border-charcoal/10 rounded-full focus:border-charcoal/30 focus:outline-none"
+                  />
+                  <button onClick={sendMessage} disabled={sendingChat || !chatInput.trim()} className="text-[12px] font-medium text-cream bg-iris px-3 py-1.5 rounded-full hover:bg-iris-hover disabled:opacity-50">Send</button>
+                </div>
               </div>
             </div>
-          </div>
+          )}
+
+          {/* ── FOLLOW-UP ──────────────────────────────────── */}
+          {phase === "followup" && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <h2 className="font-display text-2xl font-bold">Lesson done! 🎉</h2>
+                <p className="text-[12px] text-text-secondary mt-1">Nice work today.</p>
+              </div>
+
+              {/* Teacher note + summary */}
+              <section>
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">
+                  From {coach?.name?.split(" ")[0] ?? "your teacher"}
+                </h2>
+                <div className="bg-surface rounded-card shadow-card p-5">
+                  <NoteRecap sections={detail?.latestNoteSections ?? null} flat={detail?.latestNotePracticeNotes ?? null} />
+                  {detail?.latestLessonSummary && detail.latestLessonSummary.bullets.length > 0 && (
+                    <div className="ai-summary compact mt-4">
+                      <div className="ai-summary-head">
+                        <span className="ai-badge">✦ AI</span>
+                        <span className="ai-title">summary</span>
+                      </div>
+                      <ul className="ai-bullets">
+                        {detail.latestLessonSummary.bullets.slice(0, 3).map((b, i) => <li key={i}>{b}</li>)}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </section>
+
+              {/* Next routine */}
+              <section>
+                <div className="flex items-baseline justify-between mb-3">
+                  <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">Your routine</h2>
+                  <Link to="/practice" className="text-[11px] font-medium text-iris hover:text-iris-hover">start practicing →</Link>
+                </div>
+                <div className="bg-surface rounded-card shadow-card p-5 space-y-2">
+                  {routineItems.length === 0 ? (
+                    <p className="text-sm text-text-secondary">No routine assigned yet.</p>
+                  ) : (
+                    routineItems.map((it) => (
+                      <div key={it.id} className="flex items-center gap-3 py-1.5">
+                        <span aria-hidden>{ROUTINE_KIND_ICON[it.kind] ?? "♪"}</span>
+                        <div className="min-w-0 grow">
+                          <div className="text-[13px] font-medium text-charcoal truncate">{it.title}</div>
+                          <div className="text-[11px] text-text-secondary">
+                            {it.kind}{it.bpmEnd ? ` · ${it.bpmEnd} bpm` : ""}
+                          </div>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </section>
+
+              {/* Book next */}
+              <section>
+                <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-3">Next lesson</h2>
+                {nextSuggested?.alreadyBooked ? (
+                  <div className="bg-surface rounded-card shadow-card p-5 flex items-center gap-3">
+                    <span className="text-sage">✓</span>
+                    <span className="text-sm text-charcoal">You're booked for your next lesson.</span>
+                    <Link to="/my-bookings" className="ml-auto text-[12px] font-medium text-iris hover:text-iris-hover">view →</Link>
+                  </div>
+                ) : (
+                  <div className="bg-surface rounded-card shadow-card p-5 border-2 border-iris text-center">
+                    <div className="flex items-center justify-center gap-2">
+                      <span className="text-iris font-bold">!</span>
+                      <span className="text-sm font-medium text-charcoal">Not booked yet</span>
+                    </div>
+                    {nextSuggested?.suggested && (
+                      <p className="text-[12px] text-text-secondary mt-1">
+                        {coach?.name?.split(" ")[0] ?? "Your coach"} usually sees you{" "}
+                        {formatShortDate(nextSuggested.suggested.startsAt)} at {formatTime(nextSuggested.suggested.startsAt)}.
+                      </p>
+                    )}
+                    <Link
+                      to="/book"
+                      className="block mt-3 text-[13px] font-medium text-cream bg-iris px-5 py-2.5 rounded-card hover:bg-iris-hover transition-colors"
+                    >
+                      Book your next lesson →
+                    </Link>
+                  </div>
+                )}
+              </section>
+            </div>
+          )}
         </div>
-      </div>
       </div>
     </SessionShell>
   );

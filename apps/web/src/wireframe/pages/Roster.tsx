@@ -4,6 +4,7 @@ import type {
   BookingPublic,
   CoachDashboardPublic,
   MissingNotesItem,
+  NextSessionTodoItem,
   PlanGapItem,
   UnreviewedTakeItem,
 } from "@sunbird/shared";
@@ -172,7 +173,8 @@ function NeedsYouPanel({
   const takes = dashboard?.unreviewedTakes ?? [];
   const missingNotes = dashboard?.bookingsMissingNotes ?? [];
   const planGaps = dashboard?.studentsWithoutPlan ?? [];
-  const total = takes.length + missingNotes.length + planGaps.length;
+  const needNextSession = dashboard?.bookingsNeedingNextSession ?? [];
+  const total = takes.length + missingNotes.length + planGaps.length + needNextSession.length;
 
   return (
     <div className={"panel " + (total > 0 ? "panel-warm" : "tinted")}>
@@ -208,6 +210,38 @@ function NeedsYouPanel({
         {planGaps.map((g, i) => (
           <PlanGapCard key={g.student.id} item={g} now={now} index={takes.length + missingNotes.length + i} />
         ))}
+
+        {needNextSession.map((n, i) => (
+          <NextSessionTodoCard
+            key={n.student.id}
+            item={n}
+            now={now}
+            index={takes.length + missingNotes.length + planGaps.length + i}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NextSessionTodoCard({ item, now, index }: { item: NextSessionTodoItem; now: Date; index: number }) {
+  const daysSince = Math.max(
+    0,
+    Math.floor((now.getTime() - new Date(item.lastBookingAt).getTime()) / 86_400_000),
+  );
+  return (
+    <div className="box accent wobble" style={{ transform: wobbleRotation(index) }}>
+      <div className="row between">
+        <div className="row gap-2">
+          <Avatar name={item.student.name} size={32} />
+          <div>
+            <div className="bold">{item.student.name.split(" ")[0]} · book next session</div>
+            <div className="tiny muted">
+              {daysSince === 0 ? "last lesson today" : `last lesson ${daysSince}d ago`} · nothing booked next
+            </div>
+          </div>
+        </div>
+        <Link to={`/coach/session/${item.lastBookingId}`} className="btn small accent">book</Link>
       </div>
     </div>
   );

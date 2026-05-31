@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { parseRoutine, serializeRoutine } from "../lib/routine";
+import { serializeGoal } from "../lib/goals";
 import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
 
 export const coachRoutes = new Hono();
@@ -370,6 +371,26 @@ coachRoutes.get("/dashboard", requireAuth, requireRole("COACH", "ADMIN"), async 
     (a.lastBookingAt ?? "").localeCompare(b.lastBookingAt ?? ""),
   );
 
+  // ── Derive: students whose most recent session has passed with no future
+  // booking on the books (the "skip-the-gate" follow-up to-do). One row per
+  // such student, anchored on their latest past booking. ────────────────
+  const bookingsNeedingNextSession: any[] = [];
+  for (const [sid, student] of studentMap.entries()) {
+    const hasFuture = allBookings.some((b: any) => b.userId === sid && b.startsAt >= now);
+    if (hasFuture) continue;
+    // Latest past booking (allBookings is sorted desc) — only flag recently
+    // active students so long-lapsed ones don't clutter the column.
+    const lastPast = allBookings.find((b: any) => b.userId === sid && b.startsAt < now);
+    if (!lastPast) continue;
+    if (now.getTime() - lastPast.startsAt.getTime() > 21 * 86_400_000) continue;
+    bookingsNeedingNextSession.push({
+      student,
+      lastBookingId: lastPast.id,
+      lastBookingAt: lastPast.startsAt.toISOString(),
+    });
+  }
+  bookingsNeedingNextSession.sort((a, b) => (a.lastBookingAt < b.lastBookingAt ? 1 : -1));
+
   // ── Stats ──────────────────────────────────────────────
   const bookingsThisWeek = allBookings.filter(
     (b: any) => b.startsAt >= weekStart && b.startsAt < weekEnd,
@@ -424,6 +445,7 @@ coachRoutes.get("/dashboard", requireAuth, requireRole("COACH", "ADMIN"), async 
       unreviewedTakes: unreviewedItems,
       bookingsMissingNotes,
       studentsWithoutPlan: studentsWithoutPlan.slice(0, 6),
+      bookingsNeedingNextSession: bookingsNeedingNextSession.slice(0, 6),
       weekStats: {
         totalStudents: studentMap.size,
         activeThisWeek: activeStudentsThisWeek.size,
@@ -481,7 +503,7 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
 
   const coachFilter = user.role === "COACH" ? { coachId: user.id } : {};
 
-  const [student, bookings, streak, assignments, takes, latestSentNote] = await Promise.all([
+  const [student, bookings, streak, assignments, takes, latestSentNote, goals] = await Promise.all([
     db.user.findUnique({
       where: { id: studentId },
       select: {
@@ -527,6 +549,12 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
           orderBy: { createdAt: "asc" },
         },
       },
+    }),
+    // Goals this student shares — scoped to this coach when the caller is a
+    // coach so they only see goals shared with them.
+    db.goal.findMany({
+      where: { studentId, status: { not: "ARCHIVED" }, ...(user.role === "COACH" ? { coachId: user.id } : {}) },
+      orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }),
   ]);
 
@@ -667,6 +695,7 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
         addedBy: v.addedBy,
       })) ?? [],
     routine: parseRoutine((student as any).currentRoutine),
+    goals: goals.map(serializeGoal),
   };
 
   return c.json({ data });
