@@ -17,6 +17,13 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Password is required"),
 });
 
+// Post-signup role picker — the user chooses student vs coach on
+// /onboarding/role. Only STUDENT/COACH are pickable (ADMIN is assigned
+// out-of-band, never self-selected).
+export const setRoleSchema = z.object({
+  role: z.enum(["STUDENT", "COACH"]),
+});
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
 });

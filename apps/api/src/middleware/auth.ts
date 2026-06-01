@@ -10,6 +10,7 @@ type AuthUser = {
   avatarUrl: string | null;
   bio: string | null;
   role: string;
+  roleChosen: boolean;
 };
 
 type AuthEnv = {

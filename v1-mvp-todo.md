@@ -13,13 +13,13 @@ Wireframe references:
 - [x] Email/password register, login, logout, session cookie
 - [x] Password reset via email
 - [x] Final pass on logout UX — "sign out" button in the topbar for both student (`STFrame.tsx`) and coach (`DTFrame.tsx`); coach also retains the Account-page logout
-- [ ] **Add a "student or coach?" step to the signup flow** — applies to both email/password and Google OAuth signup
-  - [ ] Decide placement: pre-signup picker (role chosen before either auth method) vs. post-signup landing step that runs the first time a user has no role set yet
-  - [ ] Persist the chosen role on the `User` record (`COACH` or `STUDENT`)
-  - [ ] Pre-signup picker links: surface both "Sign up as a student" and "Sign up as a coach" entry points from the marketing/home page
-  - [ ] Email/password signup: include role in the registration form payload
-  - [ ] Google OAuth signup: today the callback creates a user with the schema default role (`auth.ts:264`) — change the flow so first-time Google users are sent to the role-picker step before being routed to a dashboard
-  - [ ] Returning Google users (already have a role) should skip the picker and land on their dashboard as before
+- [~] **Add a "student or coach?" step to the signup flow** — applies to both email/password and Google OAuth signup. Implemented as a **post-signup landing step** at `/onboarding/role` (`apps/web/src/pages/Onboarding.tsx`), gated by `AuthGate` for any authed user with `roleChosen = false`.
+  - [x] Decide placement: **post-signup landing step** chosen. Added `User.roleChosen Boolean @default(false)` (schema + D1 migration `0023_add_role_chosen.sql`, existing users backfilled to true) as the "no role set yet" signal — schema previously had no unset state.
+  - [x] Persist the chosen role on the `User` record (`COACH` or `STUDENT`) — `POST /api/me/role` (one-time; 409 on re-pick), wired to the picker buttons
+  - [x] Email/password signup: lands on the picker (`Login.tsx` routes to `/onboarding/role` when `roleChosen` is false). Role chosen post-signup, not in the register payload.
+  - [x] Google OAuth signup: callback now redirects first-time Google users to `/onboarding/role` before any dashboard (`auth.ts`); `AuthGate` is the safety net
+  - [x] Returning Google users (already have a role / `roleChosen = true`) skip the picker and land on their dashboard as before
+  - [ ] Surface "Sign up as a student" / "Sign up as a coach" entry points on the marketing/home page (optional polish — the post-signup picker covers the core flow)
 - [ ] **Google sign-up / sign-in working end-to-end for both coaches and students** (must ship in V1)
   - [x] Backend OAuth start + callback wired (`/api/auth/oauth/google`, `/api/auth/oauth/google/cb`), arctic-based; links by email if user exists, otherwise creates user + sends welcome email
   - [x] "Continue with Google" button on Login page
@@ -111,7 +111,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
   - [ ] New take submitted → coach
   - [ ] Coach added notes / replied on take → student
   - [ ] Upcoming lesson reminder (24h + 1h) → both sides
-- [ ] Mark-read action (click an inbox row → marks individual notification read, not just the global `lastInboxViewedAt` watermark) — confirm whether this is needed for V1 or if watermark-only is acceptable
+- [x] Mark-read action (click an inbox row → marks individual notification read, not just the global `lastInboxViewedAt` watermark) — per-item read receipts via `SessionMessageRead`; `POST`/`DELETE /api/coaches/inbox/:messageId/read` toggles, wired to the inbox row checkbox in `Inbox.tsx`
 
 ---
 
@@ -138,7 +138,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Paths: Khan-style lesson trees inside the Library, persisted, with "+ add lesson" affordance in both the path editor and tree canvas
 - [ ] Wire library items + paths into the per-session `Assignment` UI — coach picks items from library to assign to a specific session
 - [ ] Carry-over logic: when coach opens a new session, pre-populate exercises from the previous lesson for that student, with edit affordance
-- [x] Notes visible to student after the lesson — dedicated student notes views render full `noteSections` (intro / scales & exercises / topics / song work / suggestions / next time) with `practiceNotes` fallback (`/my-notes`, `/my-notes/:bookingId` in `wireframe/pages/MyNotes.tsx`). Note: not yet surfaced on the in-session page (`StudentSession.tsx`)
+- [x] Notes visible to student after the lesson — dedicated student notes views render full `noteSections` (intro / scales & exercises / topics / song work / suggestions / next time) with `practiceNotes` fallback (`/my-notes`, `/my-notes/:bookingId` in `wireframe/pages/MyNotes.tsx`). Also surfaced on the in-session page via the `NoteRecap` component in the Upcoming + Follow-up phases (`StudentSession.tsx`)
 
 ---
 

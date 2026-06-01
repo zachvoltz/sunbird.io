@@ -23,6 +23,9 @@ model User {
   avatarUrl      String?
   bio            String?
   role           String   @default("STUDENT")
+  // False until the user picks student/coach on /onboarding/role right after
+  // signup. Existing users are backfilled to true so they skip the picker.
+  roleChosen     Boolean  @default(false)
   slug           String?  @unique
   headline       String?
   longBio        String?

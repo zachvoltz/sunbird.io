@@ -3,7 +3,7 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 
 export function AuthGate({ children }: { children: ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
   const location = useLocation();
 
   if (isLoading) {
@@ -16,6 +16,13 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
   if (!isAuthenticated) {
     return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+  }
+
+  // Fresh signups haven't picked student/coach yet — funnel them to the
+  // onboarding picker before any app route. The path guard avoids a loop on
+  // the picker itself.
+  if (user && !user.roleChosen && location.pathname !== "/onboarding/role") {
+    return <Navigate to="/onboarding/role" replace />;
   }
 
   return <>{children}</>;

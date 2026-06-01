@@ -4,11 +4,11 @@ import { getDb } from "../lib/db";
 import { parseRoutine } from "../lib/routine";
 import { computeStreak, fullyCompleteDays } from "../lib/streak";
 import { serializeGoal } from "../lib/goals";
-import { createGoalSchema, updateGoalSchema } from "@sunbird/shared";
+import { createGoalSchema, updateGoalSchema, setRoleSchema } from "@sunbird/shared";
 
 type MeEnv = {
   Variables: {
-    user: { id: string; email: string; name: string; avatarUrl: string | null; bio: string | null; role: string } | null;
+    user: { id: string; email: string; name: string; avatarUrl: string | null; bio: string | null; role: string; roleChosen: boolean } | null;
     sessionId: string | null;
   };
 };
@@ -32,6 +32,42 @@ me.get("/", requireAuth, (c) => {
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       role: user.role,
+      roleChosen: user.roleChosen,
+    },
+  });
+});
+
+// POST /api/me/role — one-time role pick from the post-signup onboarding step.
+// New users land here as STUDENT/roleChosen=false; choosing locks in their role
+// and flips roleChosen so they skip the picker on subsequent visits. Rejects a
+// second pick so a role can't be silently switched from the client later.
+me.post("/role", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  if (user.roleChosen) {
+    return c.json({ error: "Role already chosen" }, 409);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = setRoleSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Invalid role", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const db = getDb();
+  const updated = await db.user.update({
+    where: { id: user.id },
+    data: { role: parsed.data.role, roleChosen: true },
+  });
+
+  return c.json({
+    data: {
+      id: updated.id,
+      email: updated.email,
+      name: updated.name,
+      avatarUrl: updated.avatarUrl,
+      bio: updated.bio,
+      role: updated.role,
+      roleChosen: updated.roleChosen,
     },
   });
 });

@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type {
   registerSchema,
   loginSchema,
+  setRoleSchema,
   contactSchema,
   createBookingSchema,
   practiceNotesSchema,
@@ -22,6 +23,7 @@ import type {
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type SetRoleInput = z.infer<typeof setRoleSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
@@ -47,6 +49,7 @@ export interface AuthUser {
   avatarUrl: string | null;
   bio: string | null;
   role: Role;
+  roleChosen: boolean;
 }
 
 export type BookingStatus = "CONFIRMED" | "CANCELLED" | "COMPLETED" | "NO_SHOW";

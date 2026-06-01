@@ -59,7 +59,7 @@ auth.post("/register", async (c) => {
   });
 
   return c.json({
-    data: { id: user.id, email: user.email, name: user.name, role: user.role },
+    data: { id: user.id, email: user.email, name: user.name, role: user.role, roleChosen: user.roleChosen },
   }, 201);
 });
 
@@ -88,7 +88,7 @@ auth.post("/login", async (c) => {
   c.header("Set-Cookie", cookie);
 
   return c.json({
-    data: { id: user.id, email: user.email, name: user.name, role: user.role },
+    data: { id: user.id, email: user.email, name: user.name, role: user.role, roleChosen: user.roleChosen },
   });
 });
 
@@ -249,6 +249,7 @@ auth.get("/oauth/google/cb", async (c) => {
   });
 
   let user;
+  let isNewUser = false;
   if (oauthAccount) {
     user = oauthAccount.user;
   } else {
@@ -260,7 +261,9 @@ auth.get("/oauth/google/cb", async (c) => {
       });
       user = existingUser;
     } else {
-      // Create new user + OAuth account
+      // Create new user + OAuth account. roleChosen defaults to false, so the
+      // redirect below sends them to the role picker.
+      isNewUser = true;
       user = await db.user.create({
         data: {
           email,
@@ -288,8 +291,10 @@ auth.get("/oauth/google/cb", async (c) => {
   c.header("Set-Cookie", `google_oauth_state=; ${clearOpts}`, { append: true });
   c.header("Set-Cookie", `google_oauth_verifier=; ${clearOpts}`, { append: true });
 
-  // Redirect to frontend
-  return c.redirect("/");
+  // Redirect to frontend. First-time Google users haven't picked a role yet,
+  // so send them straight to the onboarding picker (AuthGate is the safety net
+  // for everyone else).
+  return c.redirect(isNewUser ? "/onboarding/role" : "/");
 });
 
 export { auth as authRoutes };

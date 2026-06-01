@@ -7,8 +7,8 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login(email: string, password: string): Promise<void>;
-  register(input: RegisterInput): Promise<void>;
+  login(email: string, password: string): Promise<AuthUser>;
+  register(input: RegisterInput): Promise<AuthUser>;
   logout(): Promise<void>;
   refresh(): Promise<void>;
 }
@@ -38,6 +38,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify({ email, password }),
     });
     setUser(res.data);
+    return res.data;
   };
 
   const register = async (input: RegisterInput) => {
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       body: JSON.stringify(input),
     });
     setUser(res.data);
+    return res.data;
   };
 
   const logout = async () => {

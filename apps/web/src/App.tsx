@@ -45,6 +45,7 @@ import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
 import { MyInboxPage } from "@/wireframe/pages/MyInbox";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
 import { MyGoalsPage } from "@/pages/MyGoals";
+import { RolePicker } from "@/pages/Onboarding";
 
 export function App() {
   return (
@@ -88,6 +89,9 @@ export function App() {
       <Route path="/coach/profile" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><ProfilePage /></RoleGate></AuthGate>} />
       <Route path="/coach/payments" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><PaymentsPage /></RoleGate></AuthGate>} />
       <Route path="/coach/session/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSession /></RoleGate></AuthGate>} />
+
+      {/* Post-signup role picker — full-bleed, gated to authed-but-unchosen users. */}
+      <Route path="/onboarding/role" element={<AuthGate><RolePicker /></AuthGate>} />
 
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
       <Route path="/today" element={<AuthGate><TodayPage /></AuthGate>} />

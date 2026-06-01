@@ -28,12 +28,13 @@ export function Login() {
     setLoading(true);
 
     try {
-      if (tab === "signin") {
-        await login(email, password);
-      } else {
-        await register({ name, email, password });
-      }
-      navigate(redirectTo, { replace: true });
+      const user =
+        tab === "signin"
+          ? await login(email, password)
+          : await register({ name, email, password });
+      // Fresh accounts (and anyone who never finished the picker) choose their
+      // role before landing anywhere else.
+      navigate(user.roleChosen ? redirectTo : "/onboarding/role", { replace: true });
     } catch (err) {
       if (err instanceof ApiError) {
         setError(err.body.error);
