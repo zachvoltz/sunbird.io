@@ -52,6 +52,9 @@ model User {
   stripeChargesEnabled   Boolean @default(false)
   stripePayoutsEnabled   Boolean @default(false)
   stripeDetailsSubmitted Boolean @default(false)
+  // Coach's flat per-session price in cents. Null/0 = lessons are free (no
+  // Checkout is created). Charged once Stripe Connect charges are enabled.
+  sessionPrice           Int?
 
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
@@ -558,6 +561,9 @@ model Booking {
   remindedAt1h        DateTime?
   completedAt         DateTime?
   stripePaymentId     String?
+  // NOT_REQUIRED (free / coach has no Stripe) | PENDING (awaiting Checkout) |
+  // PAID | FAILED | REFUNDED. Set via the Stripe webhook.
+  paymentStatus       String    @default("NOT_REQUIRED")
   usedSubscription    Boolean   @default(false)
   scheduleId          String?
   categoryId          String?
@@ -607,6 +613,10 @@ model RecurringSchedule {
   categoryId       String?
   skillTreeId      String?
   nodeId           String?
+  // Stripe Subscription backing this schedule (set once Checkout completes).
+  stripeSubscriptionId String? @unique
+  // NOT_REQUIRED | PENDING (awaiting Checkout) | PAID | PAST_DUE | CANCELLED.
+  paymentStatus    String   @default("NOT_REQUIRED")
   createdAt        DateTime @default(now())
 
   user      User           @relation("studentSchedules", fields: [userId], references: [id])

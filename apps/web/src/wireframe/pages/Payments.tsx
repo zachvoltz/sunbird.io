@@ -27,6 +27,7 @@ type StripeStatus = {
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   stripeAccountId: string | null;
+  sessionPrice: number | null;
 };
 
 const EMPTY_STATUS: StripeStatus = {
@@ -35,7 +36,69 @@ const EMPTY_STATUS: StripeStatus = {
   chargesEnabled: false,
   payoutsEnabled: false,
   stripeAccountId: null,
+  sessionPrice: null,
 };
+
+// Coach's flat per-session rate editor. Reads the current value from
+// /status, saves via PATCH /rate. Dollars in the UI, cents on the wire.
+function SessionRateCard() {
+  const [dollars, setDollars] = useState<string>("");
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    apiFetch<{ data: StripeStatus }>("/api/coach-payments/status")
+      .then((r) => setDollars(r.data.sessionPrice ? (r.data.sessionPrice / 100).toString() : ""))
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const n = parseFloat(dollars);
+      const sessionPrice = !dollars || isNaN(n) || n <= 0 ? null : Math.round(n * 100);
+      await apiFetch("/api/coach-payments/rate", { method: "PATCH", body: JSON.stringify({ sessionPrice }) });
+      setSaved(true);
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't save your rate");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="box" style={{ margin: "0 0 14px", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+      <div style={{ flex: "1 1 220px" }}>
+        <div className="bold">Session rate</div>
+        <div className="tiny muted">
+          What students pay per lesson. Leave blank to keep lessons free.
+        </div>
+      </div>
+      <div className="row gap-2" style={{ alignItems: "center" }}>
+        <span className="bold">$</span>
+        <input
+          type="number"
+          min={0}
+          step="1"
+          value={dollars}
+          disabled={!loaded}
+          onChange={(e) => { setDollars(e.target.value); setSaved(false); }}
+          placeholder="0"
+          style={{
+            width: 90, fontFamily: "var(--hand)", fontSize: 14, padding: "6px 8px",
+            border: "1.5px solid var(--ink-faint)", borderRadius: 6, background: "var(--paper)", color: "var(--ink)",
+          }}
+        />
+        <button className="btn small primary" onClick={save} disabled={saving || !loaded}>
+          {saving ? "saving…" : saved ? "saved ✓" : "save"}
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function stageFromStatus(s: StripeStatus): Stage {
   if (!s.hasStripeAccount) return "entry";
@@ -1261,6 +1324,7 @@ function PaymentsOverviewDesktop() {
       </div>
 
       <div className="dt-main-body">
+        <SessionRateCard />
         {scope === "month" ? (
           <div className="col gap-3" style={{ height: "100%" }}>
             <div className="pay-kpis">

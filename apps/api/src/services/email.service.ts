@@ -157,6 +157,25 @@ export function createEmailService(apiKey: string, from: string) {
       });
     },
 
+    async sendPaymentFailed(to: string, name: string, lessonType: string, detail: string) {
+      if (!resend) {
+        console.log(`[email] Payment failed to ${to} — ${lessonType}: ${detail}`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `Payment issue — ${lessonType}`,
+        html: `
+          <h2>There was a payment problem</h2>
+          <p>Hi ${name}, ${detail}</p>
+          <p>Lesson: <strong>${lessonType}</strong></p>
+          <p>Please update your payment details or rebook to keep your lessons on track.</p>
+          <p>— Sunbird</p>
+        `.trim(),
+      });
+    },
+
     async sendPasswordResetEmail(to: string, resetUrl: string) {
       if (!resend) {
         console.log(`[email] Password reset for ${to}: ${resetUrl}`);

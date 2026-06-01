@@ -313,6 +313,7 @@ export interface BookingPublic {
   routineSnapshot: RoutinePublic | null;
   completedAt: string | null;
   usedSubscription: boolean;
+  paymentStatus: "NOT_REQUIRED" | "PENDING" | "PAID" | "FAILED" | "REFUNDED";
   scheduleId: string | null;
   category: CategoryPublic | null;
   skillTree: { id: string; title: string } | null;

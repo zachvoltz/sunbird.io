@@ -14,6 +14,7 @@ type StatusPayload = {
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
   stripeAccountId: string | null;
+  sessionPrice: number | null;
 };
 
 function serializeStatus(u: any): StatusPayload {
@@ -23,6 +24,7 @@ function serializeStatus(u: any): StatusPayload {
     chargesEnabled: !!u.stripeChargesEnabled,
     payoutsEnabled: !!u.stripePayoutsEnabled,
     stripeAccountId: u.stripeAccountId ?? null,
+    sessionPrice: u.sessionPrice ?? null,
   };
 }
 
@@ -72,6 +74,7 @@ coachPaymentsRoutes.get(
         stripeChargesEnabled: true,
         stripePayoutsEnabled: true,
         stripeDetailsSubmitted: true,
+        sessionPrice: true,
       },
     });
     if (!row) return c.json({ error: "User not found" }, 404);
@@ -193,5 +196,25 @@ coachPaymentsRoutes.post(
         error: err?.message ?? "Couldn't generate dashboard link",
       }, 502);
     }
+  },
+);
+
+// PATCH /api/coach-payments/rate — set the coach's flat per-session price.
+// Body: { sessionPrice: number | null } in cents. null/0 makes lessons free.
+coachPaymentsRoutes.patch(
+  "/rate",
+  requireAuth,
+  requireRole("COACH", "ADMIN"),
+  async (c) => {
+    const user = c.get("user")!;
+    const body = (await c.req.json().catch(() => null)) as { sessionPrice?: unknown } | null;
+    const raw = body?.sessionPrice;
+    if (raw !== null && (typeof raw !== "number" || !Number.isFinite(raw) || raw < 0 || raw > 1_000_000)) {
+      return c.json({ error: "sessionPrice must be a non-negative amount in cents (or null)" }, 400);
+    }
+    const sessionPrice = raw === null || raw === 0 ? null : Math.round(raw as number);
+    const db = getDb();
+    await db.user.update({ where: { id: user.id }, data: { sessionPrice } });
+    return c.json({ data: { sessionPrice } });
   },
 );

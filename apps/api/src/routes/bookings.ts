@@ -6,6 +6,8 @@ import { createEmailService } from "../services/email.service";
 import { createCallsService } from "../services/calls.service";
 import { pushEventMirror, deleteEventMirror } from "./google-calendar";
 import { parseRoutine } from "../lib/routine";
+import { makeStripe } from "../lib/stripe";
+import { requiresPayment, type CoachPayInfo } from "../lib/payments";
 
 const LESSON_DURATION_MINS = 60;
 
@@ -82,6 +84,7 @@ function serializeBooking(b: any) {
     routineSnapshot: b.routineSnapshot ? parseRoutine(b.routineSnapshot) : null,
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
+    paymentStatus: b.paymentStatus ?? "NOT_REQUIRED",
     scheduleId: b.scheduleId ?? null,
     category: b.category
       ? { id: b.category.id, slug: b.category.slug, title: b.category.title, subtitle: b.category.subtitle, description: b.category.description, imageUrl: b.category.imageUrl }
@@ -166,6 +169,119 @@ async function validateCoachSlot(
   return { ok: true };
 }
 
+function stripeKey(c: any): string | undefined {
+  return (c.env as any)?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY || undefined;
+}
+
+// Hosted Stripe Checkout for a single lesson — a destination charge to the
+// coach's connected account. Returns the redirect URL, or null if Stripe isn't
+// configured (caller falls back to a free booking).
+async function createBookingCheckout(
+  c: any,
+  args: { coachAccountId: string; amountCents: number; lessonTitle: string; bookingId: string; studentEmail: string },
+): Promise<string | null> {
+  const key = stripeKey(c);
+  if (!key) return null;
+  const stripe = makeStripe(key);
+  const origin = new URL(c.req.url).origin;
+  const session = await stripe.checkout.sessions.create({
+    mode: "payment",
+    customer_email: args.studentEmail,
+    line_items: [
+      { price_data: { currency: "usd", unit_amount: args.amountCents, product_data: { name: args.lessonTitle } }, quantity: 1 },
+    ],
+    payment_intent_data: { transfer_data: { destination: args.coachAccountId } },
+    metadata: { bookingId: args.bookingId },
+    success_url: `${origin}/my-bookings?payment=success`,
+    cancel_url: `${origin}/my-bookings?payment=canceled`,
+  });
+  return session.url;
+}
+
+// Hosted Stripe Checkout for a recurring schedule — a Subscription billing the
+// session rate at the schedule's cadence (weekly / every-2-weeks), routed to
+// the coach's connected account. Returns the URL or null if Stripe is unset.
+async function createSubscriptionCheckout(
+  c: any,
+  args: { coachAccountId: string; amountCents: number; lessonTitle: string; scheduleId: string; frequency: string; studentEmail: string },
+): Promise<string | null> {
+  const key = stripeKey(c);
+  if (!key) return null;
+  const stripe = makeStripe(key);
+  const origin = new URL(c.req.url).origin;
+  const intervalCount = args.frequency === "BIWEEKLY" ? 2 : 1;
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    customer_email: args.studentEmail,
+    line_items: [
+      {
+        price_data: {
+          currency: "usd",
+          unit_amount: args.amountCents,
+          recurring: { interval: "week", interval_count: intervalCount },
+          product_data: { name: args.lessonTitle },
+        },
+        quantity: 1,
+      },
+    ],
+    subscription_data: { transfer_data: { destination: args.coachAccountId } },
+    metadata: { scheduleId: args.scheduleId },
+    success_url: `${origin}/my-bookings?payment=success`,
+    cancel_url: `${origin}/my-bookings?payment=canceled`,
+  });
+  return session.url;
+}
+
+// Regenerate a schedule's occurrence dates (future only) from its stored
+// cadence — used by both the free path and the subscription webhook so they
+// produce identical bookings without persisting the date list.
+function generateScheduleDates(schedule: any, now: Date): Date[] {
+  const intervalDays = schedule.frequency === "BIWEEKLY" ? 14 : 7;
+  const dates: Date[] = [];
+  let current = new Date(schedule.startsOn);
+  const end = new Date(schedule.endsOn);
+  while (current <= end) {
+    if (current > now) dates.push(new Date(current));
+    current = new Date(current.getTime() + intervalDays * 24 * 60 * 60 * 1000);
+  }
+  return dates;
+}
+
+// Create the CONFIRMED booking rows for a schedule. Shared by the free path
+// and the subscription webhook (which has no request context, hence no Google
+// Calendar mirroring here — the free path mirrors separately).
+export async function createScheduleBookingRows(
+  db: any,
+  schedule: any,
+  opts: { paymentStatus: string; studentNote?: string | null },
+): Promise<any[]> {
+  const dates = generateScheduleDates(schedule, new Date());
+  const rows: any[] = [];
+  for (const date of dates) {
+    const endsAt = new Date(date.getTime() + LESSON_DURATION_MINS * 60 * 1000);
+    const booking = await db.booking.create({
+      data: {
+        userId: schedule.userId,
+        coachId: schedule.coachId,
+        lessonTypeId: null,
+        categoryId: schedule.categoryId,
+        skillTreeId: schedule.skillTreeId ?? null,
+        nodeId: schedule.nodeId ?? null,
+        startsAt: date,
+        endsAt,
+        mode: schedule.mode,
+        studentNote: opts.studentNote ?? null,
+        scheduleId: schedule.id,
+        status: "CONFIRMED",
+        paymentStatus: opts.paymentStatus,
+      },
+      include: bookingInclude,
+    });
+    rows.push(booking);
+  }
+  return rows;
+}
+
 // POST /api/bookings — create a booking
 bookingRoutes.post("/", requireAuth, async (c) => {
   const user = c.get("user")!;
@@ -247,6 +363,15 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     }
   }
 
+  // Does this coach charge for lessons? Drives whether we open Checkout.
+  const coachPay: CoachPayInfo | null = coachId
+    ? await db.user.findUnique({
+        where: { id: coachId },
+        select: { stripeAccountId: true, stripeChargesEnabled: true, sessionPrice: true },
+      })
+    : null;
+  const needsPayment = requiresPayment(coachPay);
+
   const booking = await db.booking.create({
     data: {
       userId: user.id,
@@ -260,6 +385,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
       mode,
       studentNote: studentNote ?? null,
       status: "CONFIRMED",
+      paymentStatus: needsPayment ? "PENDING" : "NOT_REQUIRED",
     },
     include: bookingInclude,
   });
@@ -285,7 +411,27 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     });
   }
 
-  // Send confirmation email (fire and forget)
+  // Paid lesson: open Stripe Checkout and return its URL for the client to
+  // redirect to. The booking stays PENDING until the webhook confirms payment.
+  if (needsPayment && coachPay) {
+    try {
+      const checkoutUrl = await createBookingCheckout(c, {
+        coachAccountId: coachPay.stripeAccountId!,
+        amountCents: coachPay.sessionPrice!,
+        lessonTitle: category.title,
+        bookingId: booking.id,
+        studentEmail: user.email,
+      });
+      if (checkoutUrl) {
+        return c.json({ data: serializeBooking(booking), checkoutUrl }, 201);
+      }
+    } catch (err) {
+      console.error("Stripe Checkout creation failed:", err);
+      return c.json({ error: "Couldn't start payment. Please try again." }, 502);
+    }
+  }
+
+  // Free lesson — confirm immediately. Send confirmation email (fire and forget).
   try {
     const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
@@ -939,6 +1085,13 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     }
   }
 
+  // Does this coach charge? Drives whether we subscribe via Checkout.
+  const coachPay: CoachPayInfo | null = await db.user.findUnique({
+    where: { id: coachId },
+    select: { stripeAccountId: true, stripeChargesEnabled: true, sessionPrice: true },
+  });
+  const needsPayment = requiresPayment(coachPay);
+
   // Create schedule
   const schedule = await db.recurringSchedule.create({
     data: {
@@ -955,46 +1108,57 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
       startsOn: dates[0],
       endsOn,
       status: "ACTIVE",
+      paymentStatus: needsPayment ? "PENDING" : "NOT_REQUIRED",
     },
   });
 
-  // Create bookings
-  const createdBookings = [];
-  const studentName = user.name ?? user.email ?? "student";
-  for (const date of dates) {
-    const endsAt = new Date(date.getTime() + LESSON_DURATION_MINS * 60 * 1000);
-
-    const booking = await db.booking.create({
-      data: {
-        userId: user.id,
-        coachId,
-        lessonTypeId: null,
-        categoryId,
-        skillTreeId: skillTreeId ?? null,
-        nodeId: nodeId ?? null,
-        startsAt: date,
-        endsAt,
-        mode,
-        studentNote: studentNote ?? null,
+  // Paid series: open a subscription Checkout and DEFER booking creation until
+  // the webhook confirms payment (the schedule's bookings are created then).
+  if (needsPayment && coachPay) {
+    try {
+      const checkoutUrl = await createSubscriptionCheckout(c, {
+        coachAccountId: coachPay.stripeAccountId!,
+        amountCents: coachPay.sessionPrice!,
+        lessonTitle: `${category.title} (${frequency.toLowerCase()})`,
         scheduleId: schedule.id,
-        status: "CONFIRMED",
-      },
-      include: bookingInclude,
-    });
-
-    createdBookings.push(serializeBooking(booking));
-
-    // Mirror each booking to the coach's Google Calendar (best-effort).
-    if (coachId) {
-      await pushEventMirror(c, {
-        coachId,
-        bookingId: booking.id,
-        startsAt: date,
-        endsAt,
-        summary: `${studentName} · ${category.title}`,
-        description: studentNote ?? undefined,
+        frequency,
+        studentEmail: user.email,
       });
+      if (checkoutUrl) {
+        return c.json({
+          data: {
+            schedule: {
+              id: schedule.id, frequency: schedule.frequency, dayOfWeek: schedule.dayOfWeek,
+              startTime: schedule.startTime, startsOn: schedule.startsOn.toISOString(),
+              endsOn: schedule.endsOn.toISOString(), status: schedule.status,
+            },
+            bookings: [],
+          },
+          checkoutUrl,
+        }, 201);
+      }
+    } catch (err) {
+      console.error("Stripe subscription Checkout creation failed:", err);
+      return c.json({ error: "Couldn't start payment. Please try again." }, 502);
     }
+  }
+
+  // Free series: create the bookings now (shared helper), then mirror calendar.
+  const bookingRows = await createScheduleBookingRows(db, schedule, {
+    paymentStatus: "NOT_REQUIRED",
+    studentNote: studentNote ?? null,
+  });
+  const createdBookings = bookingRows.map(serializeBooking);
+  const studentName = user.name ?? user.email ?? "student";
+  for (const b of bookingRows) {
+    await pushEventMirror(c, {
+      coachId,
+      bookingId: b.id,
+      startsAt: new Date(b.startsAt),
+      endsAt: new Date(b.endsAt),
+      summary: `${studentName} · ${category.title}`,
+      description: studentNote ?? undefined,
+    });
   }
 
   // Notify the coach in their inbox — one summary message anchored on
@@ -1049,6 +1213,19 @@ bookingRoutes.post("/recurring/:scheduleId/cancel", requireAuth, async (c) => {
 
   // Cancel the schedule
   await db.recurringSchedule.update({ where: { id: scheduleId }, data: { status: "CANCELLED" } });
+
+  // Cancel the backing Stripe subscription, if any (best-effort). The
+  // subscription.deleted webhook will also fire, but cancelling here is idempotent.
+  if (schedule.stripeSubscriptionId) {
+    const key = stripeKey(c);
+    if (key) {
+      try {
+        await makeStripe(key).subscriptions.cancel(schedule.stripeSubscriptionId);
+      } catch (err) {
+        console.error("Stripe subscription cancel failed:", err);
+      }
+    }
+  }
 
   // Cancel all future confirmed bookings
   const now = new Date();

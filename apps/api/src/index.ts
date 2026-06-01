@@ -16,6 +16,7 @@ import { coachPaymentsRoutes } from "./routes/coach-payments";
 import { googleCalendarRoutes } from "./routes/google-calendar";
 import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
+import { paymentsRoutes } from "./routes/payments";
 import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
@@ -37,6 +38,9 @@ type Bindings = {
   // Stripe secret key (sk_test_… or sk_live_…). Optional: payment
   // endpoints 501 until this is configured via `wrangler secret put`.
   STRIPE_SECRET_KEY?: string;
+  // Stripe webhook signing secret (whsec_…). Required to verify
+  // /api/webhooks/stripe; the endpoint 400s without it.
+  STRIPE_WEBHOOK_SECRET?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -85,6 +89,7 @@ app.route("/api/coach-payments", coachPaymentsRoutes);
 app.route("/api/calendar/google", googleCalendarRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/skill-trees", skillTreeRoutes);
+app.route("/api/webhooks", paymentsRoutes);
 
 // Serve frontend assets for all non-API routes (SPA fallback)
 app.get("*", async (c) => {

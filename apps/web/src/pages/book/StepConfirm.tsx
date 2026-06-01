@@ -63,9 +63,10 @@ export function StepConfirm({ state, update }: Props) {
     setError(null);
 
     try {
+      let res: { data: unknown; checkoutUrl?: string };
       if (recurring && recurringEndDate) {
         // Create recurring schedule
-        await apiFetch("/api/bookings/recurring", {
+        res = await apiFetch<{ data: unknown; checkoutUrl?: string }>("/api/bookings/recurring", {
           method: "POST",
           body: JSON.stringify({
             categoryId: state.selectedCategory?.id ?? state.categories[0]?.id,
@@ -81,7 +82,7 @@ export function StepConfirm({ state, update }: Props) {
         });
       } else {
         // Create single booking
-        await apiFetch<{ data: BookingPublic }>("/api/bookings", {
+        res = await apiFetch<{ data: BookingPublic; checkoutUrl?: string }>("/api/bookings", {
           method: "POST",
           body: JSON.stringify({
             categoryId: state.selectedCategory?.id ?? state.categories[0]?.id,
@@ -93,6 +94,14 @@ export function StepConfirm({ state, update }: Props) {
             studentNote: note || undefined,
           }),
         });
+      }
+
+      // Paid lesson: the API returns a Stripe Checkout URL — hand off to the
+      // hosted payment page. On success Stripe returns the student to
+      // /my-bookings. Otherwise the lesson is free and we show the success step.
+      if (res.checkoutUrl) {
+        window.location.href = res.checkoutUrl;
+        return;
       }
 
       update({

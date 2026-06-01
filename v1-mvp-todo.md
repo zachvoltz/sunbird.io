@@ -69,16 +69,17 @@ Wireframe references:
 
 ## 5. Payments (Stripe) — biggest gap
 
-- [~] Schema has `stripePaymentId`, `stripeSubscriptionId`, `Subscription`, `SubscriptionPlan` — no integration code yet
-- [ ] Pick Stripe approach: Checkout Sessions (fastest) vs. Payment Element (custom UI)
-- [~] Add Stripe SDK to `apps/api` (`stripe` dep + `lib/stripe.ts` client factory present); still need keys in `.dev.vars` / Cloudflare secrets
-- [x] Coach onboarding: Stripe Connect (Express) — `routes/coach-payments.ts` (account create, onboarding/login links, status flags). Charge/subscription flows below still pending.
-- [ ] One-time payment flow: create PaymentIntent on booking, confirm on client, mark booking paid on webhook
-- [ ] Recurring payment flow: create Stripe Subscription on recurring booking, link to `RecurringSchedule`
-- [ ] Webhook endpoint: `payment_intent.succeeded`, `invoice.paid`, `invoice.payment_failed`, `customer.subscription.deleted`
-- [ ] Handle failed-payment state on the booking + notify coach + student
-- [ ] Refund / cancel-subscription UI (coach side, at minimum)
-- [ ] **Needs mockup:** Stripe Connect onboarding screen for coach, payment step in student booking flow, payment failure / retry states
+- [x] Schema wired: added `User.sessionPrice`, `Booking.paymentStatus`, `RecurringSchedule.stripeSubscriptionId`/`paymentStatus` (D1 migration `0025_add_payments.sql`)
+- [x] **Decision:** Stripe-only for V1 · hosted **Checkout Sessions** (no in-app card UI) · flat per-coach **session rate** (`User.sessionPrice`, cents). Square abstraction + `SubscriptionPlan` monthly tiers deferred (mockup-blocked).
+- [~] Add Stripe SDK to `apps/api` — `stripe` dep + `lib/stripe.ts` present and used; still need `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` in `.dev.vars` / Cloudflare secrets (declared in Bindings + `.env.example`)
+- [x] Coach onboarding: Stripe Connect (Express) — `routes/coach-payments.ts`; added `PATCH /rate` + a session-rate editor in `Payments.tsx`
+- [x] One-time payment flow: hosted Checkout (destination charge) on `POST /api/bookings` when the coach charges; booking `PENDING` → `PAID` via webhook; free path unchanged. Client redirects from `StepConfirm.tsx`.
+- [x] Recurring payment flow: `POST /api/bookings/recurring` opens a subscription Checkout (session rate × cadence) and **defers** booking creation; webhook activates the schedule + creates bookings, stores `stripeSubscriptionId`
+- [x] Webhook endpoint `POST /api/webhooks/stripe` (`routes/payments.ts`, async signature verify) → pure `handleStripeEvent`: `checkout.session.completed` (payment + subscription), `checkout.session.expired`, `invoice.payment_failed`, `customer.subscription.deleted`
+- [x] Handle failed-payment state on the booking + notify coach + student — expired checkout → `FAILED`/cancelled + notify both; subscription failure → schedule `PAST_DUE` + notify both (reuses §6 plumbing, new `sendPaymentFailed` email)
+- [~] Refund / cancel-subscription — **cancel-subscription** done (cancel-series cancels the Stripe subscription); refund UI still deferred (mockup)
+- [ ] **Needs mockup:** payment step polish, payment failure / retry screens, refund UI (hosted Checkout removed the booking-flow + onboarding mockup blockers)
+- Tests: `payments.test.ts` (free path), `stripe-events.test.ts` (handler). Live Checkout/webhook need the Stripe CLI (`stripe listen`) + test keys — can't run under plain Node dev.
 
 ### 5b. Multi-provider: Square as a Stripe alternative (let coaches pick)
 
