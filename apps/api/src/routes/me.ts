@@ -5,6 +5,7 @@ import { parseRoutine } from "../lib/routine";
 import { computeStreak, fullyCompleteDays } from "../lib/streak";
 import { serializeGoal } from "../lib/goals";
 import { createGoalSchema, updateGoalSchema, setRoleSchema } from "@sunbird/shared";
+import { createEmailService } from "../services/email.service";
 
 type MeEnv = {
   Variables: {
@@ -390,6 +391,29 @@ me.post("/takes", requireAuth, async (c) => {
     },
   });
 
+  // Notify the coach: in-app message on the most recent booking with this
+  // coach (senderId = student → coach inbox), plus an email. Best-effort.
+  const recentBooking = await db.booking.findFirst({
+    where: { userId: user.id, coachId },
+    orderBy: { startsAt: "desc" },
+    select: { id: true },
+  });
+  if (recentBooking) {
+    await db.sessionMessage
+      .create({ data: { bookingId: recentBooking.id, senderId: user.id, content: `🎤 New take: ${body.pieceTitle}` } })
+      .catch((err: unknown) => console.error("Failed to write take notification:", err));
+  }
+  try {
+    const coach = await db.user.findUnique({ where: { id: coachId }, select: { email: true, name: true } });
+    if (coach?.email) {
+      const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
+      const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+      createEmailService(apiKey, from)
+        .sendNewTakeToCoach(coach.email, coach.name, user.name, body.pieceTitle)
+        .catch(console.error);
+    }
+  } catch {}
+
   return c.json({ data: { id: take.id } }, 201);
 });
 
@@ -489,6 +513,51 @@ me.delete("/goals/:id", requireAuth, async (c) => {
   }
   await db.goal.delete({ where: { id } });
   return c.json({ data: { ok: true } });
+});
+
+// GET /api/me/inbox — list incoming SessionMessages on the student's own
+// bookings (not sent by them), newest first, capped at 50. Mirrors the coach
+// inbox list (coaches.ts) but scoped by booking.userId, with an `unread` flag.
+me.get("/inbox", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const messages: any[] = await db.sessionMessage.findMany({
+    where: { booking: { userId: user.id }, NOT: { senderId: user.id } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+    include: {
+      sender: { select: { id: true, name: true, avatarUrl: true } },
+      booking: {
+        select: {
+          id: true,
+          startsAt: true,
+          category: { select: { title: true } },
+          coach: { select: { id: true, name: true } },
+        },
+      },
+      reads: { where: { userId: user.id }, select: { readAt: true } },
+    },
+  });
+
+  return c.json({
+    data: {
+      items: messages.map((m) => ({
+        id: m.id,
+        bookingId: m.bookingId,
+        content: m.content,
+        createdAt: m.createdAt.toISOString(),
+        unread: !(Array.isArray(m.reads) && m.reads.length > 0),
+        sender: { id: m.sender.id, name: m.sender.name, avatarUrl: m.sender.avatarUrl ?? null },
+        booking: {
+          id: m.booking.id,
+          startsAt: m.booking.startsAt.toISOString(),
+          category: m.booking.category ? { title: m.booking.category.title } : null,
+          coach: m.booking.coach ? { id: m.booking.coach.id, name: m.booking.coach.name } : null,
+        },
+      })),
+    },
+  });
 });
 
 // GET /api/me/inbox-count — unread incoming SessionMessages for the

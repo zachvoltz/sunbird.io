@@ -30,6 +30,19 @@ export const rescheduleBookingSchema = z.object({
   newStartsAt: z.string().datetime(),
 });
 
+// Coach's written reply on a student's take. At least one of text/summaryText
+// must be present so an empty reply can't be posted.
+export const createTakeReplySchema = z
+  .object({
+    text: z.string().max(4000).optional(),
+    starRating: z.number().int().min(1).max(5).optional(),
+    summaryText: z.string().max(1000).optional(),
+  })
+  .refine((v) => !!(v.text?.trim() || v.summaryText?.trim()), {
+    message: "A reply needs either text or a summary",
+    path: ["text"],
+  });
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
 });

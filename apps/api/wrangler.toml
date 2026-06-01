@@ -1,7 +1,12 @@
 name = "sunbird-api"
-main = "src/index.ts"
+main = "src/worker.ts"
 compatibility_date = "2024-12-01"
 compatibility_flags = ["nodejs_compat"]
+
+# Cron-driven upcoming-lesson reminders (24h + 1h). The scheduled handler in
+# src/worker.ts is idempotent, so the 15-minute cadence just bounds latency.
+[triggers]
+crons = ["*/15 * * * *"]
 
 [assets]
 directory = "./public"

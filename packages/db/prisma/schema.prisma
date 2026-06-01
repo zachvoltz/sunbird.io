@@ -552,6 +552,10 @@ model Booking {
   studentNote         String?
   practiceNotes       String?
   practiceNotesSentAt DateTime?
+  // Set when the 24h / 1h "upcoming lesson" reminder has been sent, so the
+  // hourly cron is idempotent and never double-notifies.
+  remindedAt24h       DateTime?
+  remindedAt1h        DateTime?
   completedAt         DateTime?
   stripePaymentId     String?
   usedSubscription    Boolean   @default(false)

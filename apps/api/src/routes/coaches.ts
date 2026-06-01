@@ -4,6 +4,8 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { parseRoutine, serializeRoutine } from "../lib/routine";
 import { serializeGoal } from "../lib/goals";
 import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
+import { createTakeReplySchema } from "@sunbird/shared";
+import { createEmailService } from "../services/email.service";
 
 export const coachRoutes = new Hono();
 
@@ -254,6 +256,68 @@ coachRoutes.post("/inbox-viewed", requireAuth, requireRole("COACH", "ADMIN"), as
     });
   }
   return c.json({ data: { count: 0 } });
+});
+
+// POST /api/coaches/takes/:takeId/reply — coach leaves written feedback on a
+// student's take. Records a TakeReply, flips the take to REPLIED, and notifies
+// the student (inbox message + email).
+coachRoutes.post("/takes/:takeId/reply", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const takeId = c.req.param("takeId");
+  const db = getDb();
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = createTakeReplySchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const take = await db.take.findUnique({
+    where: { id: takeId },
+    select: { id: true, coachId: true, studentId: true, pieceTitle: true },
+  });
+  if (!take) {
+    return c.json({ error: "Take not found" }, 404);
+  }
+  if (user.role === "COACH" && take.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const reply = await db.takeReply.create({
+    data: {
+      takeId,
+      authorId: user.id,
+      text: parsed.data.text ?? null,
+      starRating: parsed.data.starRating ?? null,
+      summaryText: parsed.data.summaryText ?? null,
+    },
+  });
+  await db.take.update({ where: { id: takeId }, data: { status: "REPLIED", reviewedAt: new Date() } });
+
+  // Notify the student: message on their most recent booking with this coach
+  // (senderId = coach → student inbox), plus an email. Best-effort.
+  const booking = await db.booking.findFirst({
+    where: { userId: take.studentId, coachId: take.coachId },
+    orderBy: { startsAt: "desc" },
+    select: { id: true },
+  });
+  if (booking) {
+    await db.sessionMessage
+      .create({ data: { bookingId: booking.id, senderId: user.id, content: `💬 ${user.name} replied on your "${take.pieceTitle}" take` } })
+      .catch((err: unknown) => console.error("Failed to write take-reply notification:", err));
+  }
+  try {
+    const student = await db.user.findUnique({ where: { id: take.studentId }, select: { email: true, name: true } });
+    if (student?.email) {
+      const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
+      const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+      createEmailService(apiKey, from)
+        .sendTakeReply(student.email, student.name, user.name, take.pieceTitle)
+        .catch(console.error);
+    }
+  } catch {}
+
+  return c.json({ data: { id: reply.id } }, 201);
 });
 
 // GET /api/coaches/dashboard — aggregate powering /coach (Roster)

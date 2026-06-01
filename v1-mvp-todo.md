@@ -104,13 +104,14 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Inbox badge / unread count in left-nav (coach + student)
 - [x] Inbox routed into the main app (no longer wireframe-only)
 - [x] Booking created → coach inbox notification
-- [ ] Generic `Notification` model audit — confirm whether the current implementation is generic enough to absorb the remaining triggers below, or if it's booking-specific and needs widening
-- [ ] Remaining notification triggers for V1:
-  - [ ] Booking cancelled / rescheduled → both sides
-  - [ ] Payment failed → coach + student
-  - [ ] New take submitted → coach
-  - [ ] Coach added notes / replied on take → student
-  - [ ] Upcoming lesson reminder (24h + 1h) → both sides
+- [x] Generic `Notification` model audit — the booking-scoped `SessionMessage` model is generic enough: a message with `senderId = X` lands in the inbox of the booking's *other* participant, so "notify the other party" = `notifyOtherParty(db, { bookingId, senderId: actingUserId, content })` (`bookings.ts`). No new model needed.
+- [x] Student inbox list — `GET /api/me/inbox` + real message list rendered in `MyInbox.tsx` (mirrors coach `Inbox.tsx`, per-item read toggles). Previously count-only.
+- [~] Remaining notification triggers for V1:
+  - [x] Booking cancelled / rescheduled → both sides — cancel + reschedule now notify the non-actor in-app (`notifyOtherParty`) and email the non-actor / both sides
+  - [ ] Payment failed → coach + student — deferred (payments not built yet, §5)
+  - [x] New take submitted → coach — `POST /api/me/takes` drops a coach inbox message + emails the coach (`sendNewTakeToCoach`)
+  - [x] Coach replied on take → student — new `POST /api/coaches/takes/:takeId/reply` (creates `TakeReply`, marks take `REPLIED`) notifies the student inbox + emails (`sendTakeReply`). Annotations endpoint still TODO (§9).
+  - [x] Upcoming lesson reminder (24h + 1h) → both sides — `processLessonReminders` (`lib/reminders.ts`, idempotent via `Booking.remindedAt24h/1h`), driven by a Cloudflare cron in `src/worker.ts` (`*/15 * * * *`). Cron only fires in the deployed Worker; logic is unit-tested.
 - [x] Mark-read action (click an inbox row → marks individual notification read, not just the global `lastInboxViewedAt` watermark) — per-item read receipts via `SessionMessageRead`; `POST`/`DELETE /api/coaches/inbox/:messageId/read` toggles, wired to the inbox row checkbox in `Inbox.tsx`
 
 ---

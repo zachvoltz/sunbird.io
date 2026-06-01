@@ -23,11 +23,26 @@ function formatDateTime(date: Date): string {
   });
 }
 
-// Drop a system-style SessionMessage on a newly created booking so the
-// coach's inbox unread badge ticks up. Modeled as a message FROM the
-// student (since SessionMessage.senderId is required) so it shows up in
-// the coach's unread count (which filters out sender = self). No-op
-// when the requester is the coach themselves — they already know.
+// Drop a system-style SessionMessage on a booking. A message is shown in
+// the inbox of the booking participant who did NOT send it, so passing
+// `senderId = the acting user` notifies the *other* party. Fire-and-forget;
+// never fails the request that triggered it.
+async function notifyOtherParty(
+  db: any,
+  args: { bookingId: string; senderId: string; content: string },
+) {
+  try {
+    await db.sessionMessage.create({
+      data: { bookingId: args.bookingId, senderId: args.senderId, content: args.content },
+    });
+  } catch (err) {
+    console.error("Failed to write notification:", err);
+  }
+}
+
+// Booking-created/updated notification to the coach: a message FROM the
+// student so it lands in the coach's inbox. No-op when there's no coach or
+// the requester is the coach themselves.
 async function notifyCoachOfBooking(
   db: any,
   args: {
@@ -39,18 +54,7 @@ async function notifyCoachOfBooking(
 ) {
   if (!args.coachId) return;
   if (args.studentId === args.coachId) return;
-  try {
-    await db.sessionMessage.create({
-      data: {
-        bookingId: args.bookingId,
-        senderId: args.studentId,
-        content: args.content,
-      },
-    });
-  } catch (err) {
-    // Non-fatal; the booking itself already succeeded.
-    console.error("Failed to write booking notification:", err);
-  }
+  await notifyOtherParty(db, { bookingId: args.bookingId, senderId: args.studentId, content: args.content });
 }
 
 function parseNoteSections(raw: string | null | undefined) {
@@ -616,7 +620,11 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
 
   const booking = await db.booking.findUnique({
     where: { id },
-    include: { category: true, user: { select: { email: true, name: true } } },
+    include: {
+      category: true,
+      user: { select: { email: true, name: true } },
+      coach: { select: { email: true, name: true } },
+    },
   });
 
   if (!booking) {
@@ -643,12 +651,25 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     await deleteEventMirror(c, { coachId: booking.coachId, bookingId: id });
   }
 
-  // Send cancellation email
+  // Notify the other party in-app (senderId = actor → the non-actor sees it).
+  const lessonTitle = booking.category?.title ?? "Lesson";
+  await notifyOtherParty(db, {
+    bookingId: id,
+    senderId: user.id,
+    content: `❌ Cancelled ${lessonTitle} — ${formatDateTime(booking.startsAt)}`,
+  });
+
+  // Email the non-actor: when the student cancels, tell the coach; otherwise
+  // tell the student.
   try {
     const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
     const email = createEmailService(apiKey, from);
-    email.sendBookingCancellation(booking.user.email, booking.user.name, booking.category?.title ?? "Lesson", formatDateTime(booking.startsAt)).catch(console.error);
+    const actorIsStudent = booking.userId === user.id;
+    const recipient = actorIsStudent ? booking.coach : booking.user;
+    if (recipient?.email) {
+      email.sendBookingCancellation(recipient.email, recipient.name, lessonTitle, formatDateTime(booking.startsAt)).catch(console.error);
+    }
   } catch {}
 
   return c.json({ data: serializeBooking(updated) });
@@ -665,7 +686,11 @@ bookingRoutes.patch("/:id/reschedule", requireAuth, async (c) => {
 
   const booking = await db.booking.findUnique({
     where: { id },
-    include: { category: true, user: { select: { email: true, name: true } } },
+    include: {
+      category: true,
+      user: { select: { email: true, name: true } },
+      coach: { select: { email: true, name: true } },
+    },
   });
 
   if (!booking) {
@@ -725,22 +750,25 @@ bookingRoutes.patch("/:id/reschedule", requireAuth, async (c) => {
     description: booking.studentNote ?? undefined,
   });
 
-  // Notify the coach in their inbox.
-  await notifyCoachOfBooking(db, {
+  // Notify the other party in-app (senderId = actor → the non-actor sees it).
+  const lessonTitle = booking.category?.title ?? "lesson";
+  await notifyOtherParty(db, {
     bookingId: id,
-    studentId: booking.userId,
-    coachId: booking.coachId,
-    content: `🔄 Rescheduled ${booking.category?.title ?? "lesson"} — now ${formatDateTime(startsAt)}`,
+    senderId: user.id,
+    content: `🔄 Rescheduled ${lessonTitle} — now ${formatDateTime(startsAt)}`,
   });
 
-  // Send reschedule email (fire and forget)
+  // Email both sides (fire and forget) so the change reaches everyone.
   try {
     const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
     const email = createEmailService(apiKey, from);
-    email
-      .sendBookingReschedule(booking.user.email, booking.user.name, booking.category?.title ?? "Lesson", formatDateTime(booking.startsAt), formatDateTime(startsAt))
-      .catch(console.error);
+    const oldLabel = formatDateTime(booking.startsAt);
+    const newLabel = formatDateTime(startsAt);
+    const recipients = [booking.user, booking.coach].filter((r): r is { email: string; name: string } => !!r?.email);
+    for (const r of recipients) {
+      email.sendBookingReschedule(r.email, r.name, lessonTitle, oldLabel, newLabel).catch(console.error);
+    }
   } catch {}
 
   return c.json({ data: serializeBooking(updated) });

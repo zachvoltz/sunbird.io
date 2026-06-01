@@ -102,6 +102,61 @@ export function createEmailService(apiKey: string, from: string) {
       });
     },
 
+    async sendNewTakeToCoach(to: string, coachName: string, studentName: string, pieceTitle: string) {
+      if (!resend) {
+        console.log(`[email] New take to coach ${to} — ${studentName} submitted "${pieceTitle}"`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `New take from ${studentName} — ${pieceTitle}`,
+        html: `
+          <h2>New take to review</h2>
+          <p>Hi ${coachName}, ${studentName} just submitted a take on <strong>${pieceTitle}</strong>.</p>
+          <p>Hop in and leave them some feedback.</p>
+          <p>— Sunbird</p>
+        `.trim(),
+      });
+    },
+
+    async sendTakeReply(to: string, studentName: string, coachName: string, pieceTitle: string) {
+      if (!resend) {
+        console.log(`[email] Take reply to ${to} — ${coachName} replied on "${pieceTitle}"`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `${coachName} replied on your take — ${pieceTitle}`,
+        html: `
+          <h2>You've got feedback</h2>
+          <p>Hi ${studentName}, ${coachName} left feedback on your <strong>${pieceTitle}</strong> take.</p>
+          <p>Open Sunbird to listen and read their notes.</p>
+          <p>— Sunbird</p>
+        `.trim(),
+      });
+    },
+
+    async sendLessonReminder(to: string, name: string, lessonType: string, dateTime: string, whenLabel: string) {
+      if (!resend) {
+        console.log(`[email] Lesson reminder to ${to} — ${lessonType} ${whenLabel} (${dateTime})`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `Reminder: ${lessonType} ${whenLabel}`,
+        html: `
+          <h2>Lesson ${whenLabel}</h2>
+          <p>Hi ${name}, this is a reminder that your <strong>${lessonType}</strong> lesson is ${whenLabel}.</p>
+          <p>${dateTime}</p>
+          <p>See you soon!</p>
+          <p>— Sunbird</p>
+        `.trim(),
+      });
+    },
+
     async sendPasswordResetEmail(to: string, resetUrl: string) {
       if (!resend) {
         console.log(`[email] Password reset for ${to}: ${resetUrl}`);
