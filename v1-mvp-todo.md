@@ -122,9 +122,9 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Cloudflare Calls integration (`apps/api/src/services/calls.service.ts`)
 - [x] Coach session page with embedded video (`apps/web/src/pages/teacher/Session.tsx`)
 - [x] Student session page (recent commit: "Wrap student session page in left-nav")
-- [ ] Pre-call check (mic/cam permissions, device picker) — **may need mockup**
-- [ ] Reconnect / dropped-call handling
-- [ ] "Join lesson" entry points from inbox + dashboard + calendar
+- [ ] Pre-call check (mic/cam permissions, device picker) — **deferred, needs mockup**
+- [x] Reconnect / dropped-call handling — `useCallsSession.ts` now watches the push connection after connect; on a drop it rebuilds the push session (reusing the existing media, fresh CF session via the server's 410/425 retry) with capped exponential backoff and a `reconnecting` UI banner in `VideoCall.tsx`, giving up to a `Connection lost` error after ~5 attempts. The pull loop stays alive for the call and re-pulls if the remote drops (peer reconnect). Also fixed the latent error-state "Try again" no-op (join guard). Frontend-only; no backend change. Not auto-testable (WebRTC).
+- [x] "Join lesson" entry points — already present: explicit "join call ↗" buttons on the student dashboard (`TodayPage.tsx`) + `MyBookingsPage.tsx` and coach dashboard (`Roster.tsx`) for live ONLINE lessons; coach `Calendar.tsx` rows + inbox rows link into the session page where the call mounts.
 
 ---
 

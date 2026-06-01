@@ -70,6 +70,18 @@ export function VideoCall({ bookingId, localUserName, remoteUserName }: Props) {
     <div className="bg-charcoal rounded-card overflow-hidden relative">
       {/* Video area */}
       <div className="relative">
+        {/* Reconnecting banner — shown while recovery is in flight; the last
+            video frame stays put underneath. */}
+        {callState === "reconnecting" && (
+          <div
+            className="absolute top-3 left-1/2 -translate-x-1/2 z-20 flex items-center gap-2 text-[13px] font-medium px-3 py-1.5 rounded-full shadow"
+            style={{ background: "#f0a830", color: "#1a1612" }}
+          >
+            <span className="w-3 h-3 rounded-full animate-spin" style={{ border: "2px solid rgba(26,22,18,0.4)", borderTopColor: "#1a1612" }} />
+            Reconnecting…
+          </div>
+        )}
+
         {/* Remote video (main) */}
         <VideoTile
           stream={remoteStream}

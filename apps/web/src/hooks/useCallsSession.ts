@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { apiFetch } from "@/lib/api";
 
-type CallState = "idle" | "joining" | "connected" | "error";
+type CallState = "idle" | "joining" | "connected" | "reconnecting" | "error";
 
 type JoinResponse = {
   data: {
@@ -44,10 +44,19 @@ export function useCallsSession(bookingId: string) {
   const pullIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pulledRef = useRef(false);
   const remoteStreamRef = useRef(new MediaStream());
+  // Stable handle on the local media so recovery can re-push without
+  // re-prompting getUserMedia. closedRef aborts any in-flight reconnect when
+  // the user hangs up or the component unmounts; reconnectingRef serializes
+  // recovery so concurrent connection-state events don't stack.
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const closedRef = useRef(false);
+  const reconnectingRef = useRef(false);
 
   const apiBase = `/api/bookings/${bookingId}/call`;
 
   const cleanup = useCallback(() => {
+    closedRef.current = true;
+    reconnectingRef.current = false;
     if (pullIntervalRef.current) {
       clearInterval(pullIntervalRef.current);
       pullIntervalRef.current = null;
@@ -68,6 +77,7 @@ export function useCallsSession(bookingId: string) {
     }
     peerSessionIdRef.current = null;
     pulledRef.current = false;
+    localStreamRef.current = null;
     setLocalStream(null);
     setRemoteStream(null);
     setScreenStream(null);
@@ -230,8 +240,63 @@ export function useCallsSession(bookingId: string) {
     }
   }
 
+  // Persistent watch on the push connection (the one delivering our tracks).
+  // A one-shot waitForConnection got us connected; this catches drops AFTER
+  // that and kicks off recovery. Re-attached after every (re)connect.
+  function attachPushMonitor(pc: RTCPeerConnection) {
+    pc.onconnectionstatechange = () => {
+      if (closedRef.current || reconnectingRef.current) return;
+      if (pc.connectionState === "disconnected" || pc.connectionState === "failed") {
+        reconnectPush();
+      }
+    };
+  }
+
+  // Rebuild the push connection after a drop, reusing the existing media (no
+  // re-prompt). The server mints a fresh CF session on 410/425, so a brand-new
+  // PeerConnection re-establishes cleanly. Capped exponential backoff; gives up
+  // to "error" after the last attempt.
+  async function reconnectPush() {
+    if (closedRef.current || reconnectingRef.current) return;
+    const stream = localStreamRef.current;
+    if (!stream) return;
+    reconnectingRef.current = true;
+    setCallState("reconnecting");
+
+    const delays = [1000, 2000, 4000, 8000, 8000];
+    for (let i = 0; i < delays.length; i++) {
+      if (closedRef.current) { reconnectingRef.current = false; return; }
+      try {
+        if (pushPcRef.current) { pushPcRef.current.close(); pushPcRef.current = null; }
+        const pc = newPc();
+        pushPcRef.current = pc;
+        await pushLocalTracks(pc, stream);
+        if (closedRef.current) { reconnectingRef.current = false; return; }
+        attachPushMonitor(pc);
+        pulledRef.current = false; // re-pull the peer's (possibly new) session
+        reconnectingRef.current = false;
+        setCallState("connected");
+        return;
+      } catch (err) {
+        console.warn(`Reconnect attempt ${i + 1} failed:`, err);
+        await new Promise((r) => setTimeout(r, delays[i]));
+      }
+    }
+    reconnectingRef.current = false;
+    if (!closedRef.current) {
+      setError("Connection lost — check your network and try again.");
+      setCallState("error");
+    }
+  }
+
   const join = useCallback(async () => {
-    if (callState !== "idle") return;
+    // Block only while a call is actively up; allow (re)starting from idle or a
+    // prior error (fixes the error-state "Try again" button being a no-op).
+    if (callState === "joining" || callState === "connected" || callState === "reconnecting") return;
+    closedRef.current = false;
+    reconnectingRef.current = false;
+    pulledRef.current = false;
+    peerSessionIdRef.current = null;
     setCallState("joining");
     setError(null);
 
@@ -245,28 +310,30 @@ export function useCallsSession(bookingId: string) {
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: "user" },
       });
+      localStreamRef.current = stream;
       setLocalStream(stream);
 
       const pushPc = newPc();
       pushPcRef.current = pushPc;
 
       await pushLocalTracks(pushPc, stream);
+      attachPushMonitor(pushPc);
       setCallState("connected");
 
-      // Poll to pull remote tracks
-      const tryPull = async () => {
-        if (pulledRef.current) return;
+      // Poll to pull remote tracks. The interval runs for the whole call: once
+      // pulled it idles, but if the remote PC later drops (e.g. the peer
+      // reconnected with a new session) it clears the flag and re-pulls.
+      const tick = async () => {
+        if (closedRef.current) return;
+        const pc = pullPcRef.current;
+        const healthy = !!pc && pc.connectionState === "connected";
+        if (pulledRef.current && healthy) return;
+        if (pulledRef.current && !healthy) pulledRef.current = false;
         await pullRemoteTracks();
       };
 
-      tryPull();
-      pullIntervalRef.current = setInterval(async () => {
-        if (pulledRef.current) {
-          if (pullIntervalRef.current) clearInterval(pullIntervalRef.current);
-          return;
-        }
-        await tryPull();
-      }, 3000);
+      tick();
+      pullIntervalRef.current = setInterval(tick, 3000);
     } catch (err: any) {
       console.error("Failed to join call:", err);
       setError(err.message || "Failed to join call");
@@ -344,6 +411,7 @@ export function useCallsSession(bookingId: string) {
 
   useEffect(() => {
     return () => {
+      closedRef.current = true;
       if (pullIntervalRef.current) clearInterval(pullIntervalRef.current);
       if (pushPcRef.current) pushPcRef.current.close();
       if (pullPcRef.current) pullPcRef.current.close();
