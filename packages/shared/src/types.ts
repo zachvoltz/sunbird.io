@@ -635,6 +635,9 @@ export interface StudentDetailPublic {
   // Practice-page streak row. Optional for back-compat with the coach
   // student-detail endpoint, which doesn't populate it.
   recentPracticeDays?: string[];
+  // Fully-complete practice days (UTC `YYYY-MM-DD`) over the last ~120 days —
+  // drives the student practice Calendar heatmap. Optional for back-compat.
+  practiceDays?: string[];
 }
 
 // ── Current Routine ──

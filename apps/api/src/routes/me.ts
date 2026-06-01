@@ -329,6 +329,9 @@ me.get("/student-data", requireAuth, async (c) => {
     routine: enrichedRoutine,
     goals: goals.map(serializeGoal),
     recentPracticeDays,
+    // Full ~120-day window of fully-complete days — drives the practice
+    // Calendar heatmap (recentPracticeDays is the 14-day slice for the streak row).
+    practiceDays: completeKeys,
   };
 
   return c.json({ data });

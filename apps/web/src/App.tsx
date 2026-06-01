@@ -46,6 +46,7 @@ import { MyInboxPage } from "@/wireframe/pages/MyInbox";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
 import { MyGoalsPage } from "@/pages/MyGoals";
 import { RolePicker } from "@/pages/Onboarding";
+import { PracticeCalendarPage } from "@/wireframe/pages/PracticeCalendar";
 
 export function App() {
   return (
@@ -104,6 +105,7 @@ export function App() {
       <Route path="/my-takes" element={<AuthGate><MyTakesPage /></AuthGate>} />
       <Route path="/my-curriculum" element={<AuthGate><MyCurriculumHub /></AuthGate>} />
       <Route path="/my-profile" element={<AuthGate><MyProfilePage /></AuthGate>} />
+      <Route path="/my-calendar" element={<AuthGate><PracticeCalendarPage /></AuthGate>} />
       <Route path="/practice" element={<AuthGate><PracticePathPage /></AuthGate>} />
       <Route path="/practice/exercise/:assignmentId" element={<AuthGate><ExercisePlayerPage /></AuthGate>} />
       <Route path="/practice/record/:assignmentId" element={<AuthGate><RecordTakePage /></AuthGate>} />

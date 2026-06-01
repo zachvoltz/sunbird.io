@@ -170,8 +170,8 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Calendar wireframe (`apps/web/src/wireframe/pages/Calendar.tsx`)
 - [x] Move PracticePath into main routing — `/practice` → `PracticePathPage`
 - [x] Move ExercisePlayer into main routing — `/practice/exercise/:assignmentId` → `ExercisePlayerPage`
-- [ ] Move Calendar into main routing; ensure it pulls real `PracticeStreak` + completed-assignment data — Calendar is currently routed for the **coach** only (`/coach/calendar`, pulls bookings/availability); a **student** calendar wired to `PracticeStreak`/assignment data is still missing
-- [ ] "Mark practiced" action on exercises → updates streak + calendar
+- [x] Student practice Calendar — new `PracticeCalendarPage` at `/my-calendar` (STFrame "Calendar" nav entry): a month heatmap of fully-practiced days + lessons overlaid + streak header (current/longest). Driven by `PracticeStreak`-derived data: added `practiceDays` (full ~120-day window of fully-complete days) to `GET /api/me/student-data`; lessons from `/api/bookings`. All day math UTC to match the streak day-keys. (Distinct from the coach `/coach/calendar`.)
+- [x] "Mark practiced" action on exercises → updates streak + calendar — **already implemented** end-to-end: `POST /api/me/routine/complete` toggles a day's item completion and recomputes/persists `PracticeStreak` (`computeStreak`/`fullyCompleteDays`); the PracticePath "mark done for today" button + 7-day streak row + celebration consume it. The new Calendar reflects the same completion data.
 - [x] Confirm exercises shown on PracticePath are pulled from the **latest** lesson's assignment set — PracticePath prefers the coach-set `routine` (source of truth), falling back to current-week assignments (`PracticePath.tsx:227-237`)
 
 ---
