@@ -755,6 +755,10 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   white-space: nowrap; /* keep labels like "A–Z" on one line */
 }
 .wireframe-root .pill-row .p.on { background: var(--ink); color: var(--paper); }
+/* The Library sort toggle is the rightmost header item, flush against the
+   panel's clipping edge. Pull it clearly inward so its right cap can never
+   be shaved by the panel's overflow/rounded-corner clip on any display. */
+.wireframe-root .pill-row.sort-toggle { margin-right: 16px; }
 
 .wireframe-root .kbd {
   display: inline-block;

@@ -719,7 +719,7 @@ function LibraryDesktop() {
                 <span>⌕</span>
                 <span>search {isPaths ? "paths" : "library"}…</span>
               </div>
-              <div className="pill-row">
+              <div className="pill-row sort-toggle">
                 <span className="p on">recent</span>
                 <span className="p">A–Z</span>
                 <span className="p">most-used</span>
