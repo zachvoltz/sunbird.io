@@ -32,6 +32,7 @@ import { Icon } from "../components/Icon";
 import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
 import { Staff } from "../components/Staff";
+import { Avatar } from "../components/Avatar";
 
 // ── hooks ──────────────────────────────────────────────────
 
@@ -777,11 +778,148 @@ export function PathEditorPage() {
                   </div>
                 </>
               )}
+
+              <div className="hr-hand" />
+              <StudentsPanel
+                slug={path.slug}
+                nodes={path.nodes}
+                studentsOnIt={path.studentsOnIt}
+                onChanged={refresh}
+              />
             </div>
           </div>
         </div>
       </div>
     </DTFrame>
+  );
+}
+
+// ── StudentsPanel — assign/advance/unassign students on a path ────
+type CoachStudent = { id: string; name: string; avatarUrl: string | null };
+
+function StudentsPanel({
+  slug,
+  nodes,
+  studentsOnIt,
+  onChanged,
+}: {
+  slug: string;
+  nodes: PathLessonNode[];
+  studentsOnIt: PathStudentRef[];
+  onChanged: () => void;
+}) {
+  const [roster, setRoster] = useState<CoachStudent[]>([]);
+  const [picking, setPicking] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    apiFetch<{ data: CoachStudent[] }>("/api/coaches/students")
+      .then((r) => setRoster(r.data))
+      .catch(() => setRoster([]));
+  }, []);
+
+  const onIds = new Set(studentsOnIt.map((s) => s.id));
+  const available = roster.filter((s) => !onIds.has(s.id));
+
+  const assign = async (studentId: string) => {
+    setBusy(true);
+    try {
+      await apiFetch(`/api/paths/${slug}/assign`, { method: "POST", body: JSON.stringify({ studentId }) });
+      setPicking(false);
+      onChanged();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't assign student");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const advance = async (studentId: string, currentLessonId: string) => {
+    try {
+      await apiFetch(`/api/paths/${slug}/assign/${studentId}`, { method: "PATCH", body: JSON.stringify({ currentLessonId }) });
+      onChanged();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't update lesson");
+    }
+  };
+
+  const unassign = async (studentId: string) => {
+    if (!confirm("Remove this student from the path?")) return;
+    try {
+      await apiFetch(`/api/paths/${slug}/assign/${studentId}`, { method: "DELETE" });
+      onChanged();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't remove student");
+    }
+  };
+
+  return (
+    <div>
+      <div className="row between mb-2">
+        <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+          Students on path · {studentsOnIt.length}
+        </div>
+        {!picking && (
+          <button className="btn small ghost" onClick={() => setPicking(true)} disabled={available.length === 0}>
+            ＋ assign
+          </button>
+        )}
+      </div>
+
+      {picking && (
+        <div className="box mb-2" style={{ background: "var(--paper-2)" }}>
+          <div className="row between mb-1">
+            <div className="small bold">Assign a student</div>
+            <button className="btn small ghost" onClick={() => setPicking(false)}>done</button>
+          </div>
+          {available.length === 0 ? (
+            <div className="small muted">Everyone's already on this path.</div>
+          ) : (
+            available.map((s) => (
+              <button
+                key={s.id}
+                onClick={() => assign(s.id)}
+                disabled={busy}
+                className="box small row gap-2"
+                style={{ width: "100%", textAlign: "left", cursor: "pointer", marginBottom: 4 }}
+              >
+                <Avatar name={s.name} size={22} />
+                <span className="grow">{s.name}</span>
+              </button>
+            ))
+          )}
+        </div>
+      )}
+
+      {studentsOnIt.length === 0 && !picking && (
+        <div className="box dashed small muted">No students on this path yet.</div>
+      )}
+
+      {studentsOnIt.map((s) => (
+        <div className="box mb-2" key={s.id}>
+          <div className="row gap-2" style={{ alignItems: "center" }}>
+            <Avatar name={s.name} size={24} />
+            <span className="grow bold small">{s.name}</span>
+            <button className="btn small ghost" onClick={() => unassign(s.id)} aria-label="Remove from path">✕</button>
+          </div>
+          <select
+            value={s.currentLessonId ?? ""}
+            onChange={(e) => advance(s.id, e.target.value)}
+            style={{
+              width: "100%", marginTop: 6, fontFamily: "var(--hand)", fontSize: 13,
+              padding: "5px 8px", border: "1.5px solid var(--ink-faint)", borderRadius: 6,
+              background: "var(--paper)", color: "var(--ink)",
+            }}
+          >
+            {nodes.map((n, i) => (
+              <option key={n.id} value={n.id}>
+                {i + 1}. {`${n.title} ${n.titleB}`.trim() || "lesson"}
+              </option>
+            ))}
+          </select>
+        </div>
+      ))}
+    </div>
   );
 }
 

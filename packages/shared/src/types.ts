@@ -19,6 +19,8 @@ import type {
   updateCoachAvailabilitySchema,
   createGoalSchema,
   updateGoalSchema,
+  assignPathSchema,
+  advancePathSchema,
 } from "./validators";
 
 // ─── Inferred request types ───
@@ -273,6 +275,16 @@ export interface PathDetail extends PathSummary {
   edges: PathEdge[];
   studentsOnIt: PathStudentRef[];
 }
+
+// A path as seen by an enrolled student — the tree plus where they are on it.
+export interface StudentPathPublic extends PathSummary {
+  nodes: PathLessonNode[];
+  edges: PathEdge[];
+  currentLessonId: string | null;
+}
+
+export type AssignPathInput = z.infer<typeof assignPathSchema>;
+export type AdvancePathInput = z.infer<typeof advancePathSchema>;
 
 // ── Library · warmups, exercises, songs ──
 

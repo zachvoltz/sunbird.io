@@ -138,8 +138,10 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Audio upload + playback on library items (R2 bucket bound)
 - [x] Library item editor simplified: dropped BPM/MIDI, renamed subtitle → notes
 - [x] Paths: Khan-style lesson trees inside the Library, persisted, with "+ add lesson" affordance in both the path editor and tree canvas
-- [ ] Wire library items + paths into the per-session `Assignment` UI — coach picks items from library to assign to a specific session
-- [ ] Carry-over logic: when coach opens a new session, pre-populate exercises from the previous lesson for that student, with edit affordance
+- [x] Wire library items + paths into the per-session assignment UI
+  - **Library items** were already wired via the routine system: the coach session Follow-up tab's editable `CurrentRoutine` includes a `LibraryPicker` (search/pick warmups·exercises·songs, drag-reorder, per-step notes) saved to `User.currentRoutine` + snapshotted to `Booking.routineSnapshot`.
+  - **Paths**: added path assignment end-to-end — `POST/PATCH/DELETE /api/paths/:slug/assign[/:studentId]` (enroll / advance current lesson / unenroll, `firstLessonId` on enroll) + `GET /api/me/paths`. Coach assigns/advances/removes from a "students on path" panel in the path editor (`Paths.tsx`); students see their path + `lesson X of N` progress in `MyCurriculumHub.tsx`. Tests in `path-assignment.test.ts`.
+- [x] Carry-over logic — satisfied implicitly by the routine model: `User.currentRoutine` is global per-student, so opening the next session's Follow-up pre-populates with last session's routine, fully editable (no per-session copy needed). The orphaned per-week `Assignment` table is superseded by the routine system.
 - [x] Notes visible to student after the lesson — dedicated student notes views render full `noteSections` (intro / scales & exercises / topics / song work / suggestions / next time) with `practiceNotes` fallback (`/my-notes`, `/my-notes/:bookingId` in `wireframe/pages/MyNotes.tsx`). Also surfaced on the in-session page via the `NoteRecap` component in the Upcoming + Follow-up phases (`StudentSession.tsx`)
 
 ---

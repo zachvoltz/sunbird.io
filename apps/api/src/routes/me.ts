@@ -515,6 +515,46 @@ me.delete("/goals/:id", requireAuth, async (c) => {
   return c.json({ data: { ok: true } });
 });
 
+// GET /api/me/paths — the calling student's assigned learning paths, each with
+// the full tree and where they currently are on it.
+me.get("/paths", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const assignments: any[] = await db.pathAssignment.findMany({
+    where: { studentId: user.id },
+    orderBy: { startedAt: "asc" },
+    include: { path: true },
+  });
+
+  const parse = (raw: string | null | undefined) => {
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return []; }
+  };
+
+  return c.json({
+    data: assignments.map((a) => {
+      const p = a.path;
+      const nodes = parse(p.nodes);
+      return {
+        id: p.id,
+        slug: p.slug,
+        title: p.title,
+        sub: p.sub ?? null,
+        shape: p.shape,
+        status: p.status,
+        coral: !!p.coral,
+        lessons: Array.isArray(nodes) ? nodes.length : 0,
+        students: 0,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        nodes,
+        edges: parse(p.edges),
+        currentLessonId: a.currentLessonId ?? null,
+      };
+    }),
+  });
+});
+
 // GET /api/me/inbox — list incoming SessionMessages on the student's own
 // bookings (not sent by them), newest first, capped at 50. Mirrors the coach
 // inbox list (coaches.ts) but scoped by booking.userId, with an `unread` flag.

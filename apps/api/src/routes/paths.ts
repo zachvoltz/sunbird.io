@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { createPathSchema, updatePathSchema } from "@sunbird/shared";
+import { createPathSchema, updatePathSchema, assignPathSchema, advancePathSchema } from "@sunbird/shared";
 
 export const pathRoutes = new Hono();
 
@@ -165,5 +165,100 @@ pathRoutes.delete("/:slug", requireAuth, requireRole("COACH", "ADMIN"), async (c
   if (!existing) return c.json({ error: "Path not found" }, 404);
 
   await db.path.delete({ where: { id: existing.id } });
+  return c.json({ data: { ok: true } });
+});
+
+// The path's starting lesson — the node nearest the top-left of the canvas
+// (smallest col, then row). Used as a student's currentLessonId on enroll.
+function firstLessonId(nodes: any[]): string | null {
+  if (!Array.isArray(nodes) || nodes.length === 0) return null;
+  const sorted = [...nodes].sort((a, b) => (a.col - b.col) || (a.row - b.row));
+  return sorted[0]?.id ?? null;
+}
+
+function serializeStudentRef(a: any) {
+  return {
+    id: a.student.id,
+    name: a.student.name,
+    avatarUrl: a.student.avatarUrl ?? null,
+    currentLessonId: a.currentLessonId ?? null,
+    startedAt: a.startedAt.toISOString(),
+  };
+}
+
+// Load a path the caller coaches, or null. Shared by the assignment routes.
+async function ownedPath(db: any, coachId: string, slug: string) {
+  return db.path.findUnique({ where: { coachId_slug: { coachId, slug } } });
+}
+
+// POST /api/paths/:slug/assign — enroll a student on this path (idempotent).
+pathRoutes.post("/:slug/assign", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const slug = c.req.param("slug");
+  const db = getDb();
+  const body = await c.req.json().catch(() => null);
+  const parsed = assignPathSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const path = await ownedPath(db, user.id, slug);
+  if (!path) return c.json({ error: "Path not found" }, 404);
+
+  const student = await db.user.findUnique({ where: { id: parsed.data.studentId }, select: { id: true } });
+  if (!student) return c.json({ error: "Student not found" }, 404);
+
+  const startLesson = firstLessonId(parseJson<any[]>(path.nodes, []));
+  const assignment = await db.pathAssignment.upsert({
+    where: { pathId_studentId: { pathId: path.id, studentId: student.id } },
+    create: { pathId: path.id, studentId: student.id, coachId: user.id, currentLessonId: startLesson },
+    update: {}, // re-assigning is a no-op; keep their progress
+    include: { student: { select: { id: true, name: true, avatarUrl: true } } },
+  });
+  return c.json({ data: serializeStudentRef(assignment) }, 201);
+});
+
+// PATCH /api/paths/:slug/assign/:studentId — move a student to a lesson.
+pathRoutes.patch("/:slug/assign/:studentId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { slug, studentId } = c.req.param();
+  const db = getDb();
+  const body = await c.req.json().catch(() => null);
+  const parsed = advancePathSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const path = await ownedPath(db, user.id, slug);
+  if (!path) return c.json({ error: "Path not found" }, 404);
+
+  const nodes = parseJson<any[]>(path.nodes, []);
+  if (!nodes.some((n) => n.id === parsed.data.currentLessonId)) {
+    return c.json({ error: "That lesson isn't part of this path" }, 400);
+  }
+
+  const existing = await db.pathAssignment.findUnique({
+    where: { pathId_studentId: { pathId: path.id, studentId } },
+  });
+  if (!existing) return c.json({ error: "Student isn't on this path" }, 404);
+
+  const assignment = await db.pathAssignment.update({
+    where: { pathId_studentId: { pathId: path.id, studentId } },
+    data: { currentLessonId: parsed.data.currentLessonId },
+    include: { student: { select: { id: true, name: true, avatarUrl: true } } },
+  });
+  return c.json({ data: serializeStudentRef(assignment) });
+});
+
+// DELETE /api/paths/:slug/assign/:studentId — unenroll a student.
+pathRoutes.delete("/:slug/assign/:studentId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { slug, studentId } = c.req.param();
+  const db = getDb();
+
+  const path = await ownedPath(db, user.id, slug);
+  if (!path) return c.json({ error: "Path not found" }, 404);
+
+  await db.pathAssignment.deleteMany({ where: { pathId: path.id, studentId } });
   return c.json({ data: { ok: true } });
 });

@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { BookingPublic } from "@sunbird/shared";
+import type { BookingPublic, StudentPathPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
 import { Squiggle } from "../components/Squiggle";
 
 export function MyCurriculumHub() {
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
+  const [paths, setPaths] = useState<StudentPathPublic[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,6 +15,9 @@ export function MyCurriculumHub() {
       .then((r) => setBookings(r.data))
       .catch(() => {})
       .finally(() => setLoading(false));
+    apiFetch<{ data: StudentPathPublic[] }>("/api/me/paths")
+      .then((r) => setPaths(r.data))
+      .catch(() => {});
   }, []);
 
   // Each category/skill tree the student has touched, dedup'd by category slug.
@@ -41,7 +45,37 @@ export function MyCurriculumHub() {
           <div className="panel-body scroll col gap-3" style={{ padding: "12px 4px" }}>
             {loading && <div className="small muted">Loading…</div>}
 
-            {!loading && treesList.length === 0 && (
+            {paths.length > 0 && (
+              <>
+                <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+                  Your paths
+                </div>
+                {paths.map((p) => {
+                  const idx = p.currentLessonId
+                    ? p.nodes.findIndex((n) => n.id === p.currentLessonId)
+                    : -1;
+                  const current = idx >= 0 ? p.nodes[idx] : null;
+                  const position = idx >= 0 ? idx + 1 : 1;
+                  return (
+                    <div key={p.id} className="box">
+                      <div className="row between">
+                        <div className="wf-scrawl bold" style={{ fontSize: 20 }}>{p.title}</div>
+                        <span className="chip tiny">lesson {position} of {p.lessons || p.nodes.length}</span>
+                      </div>
+                      {p.sub && <div className="tiny muted">{p.sub}</div>}
+                      {current && (
+                        <div className="small mt-2">
+                          Up next: <span className="bold">{`${current.title} ${current.titleB}`.trim()}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+                <div className="hr-hand" />
+              </>
+            )}
+
+            {!loading && treesList.length === 0 && paths.length === 0 && (
               <div
                 className="box dashed"
                 style={{ textAlign: "center", padding: "32px 24px", color: "var(--ink-soft)" }}

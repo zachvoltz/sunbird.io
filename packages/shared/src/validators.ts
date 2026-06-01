@@ -172,6 +172,10 @@ export const createPathSchema = z.object({
 
 export const updatePathSchema = createPathSchema.partial();
 
+// Enroll a student on a path; advance their current lesson within it.
+export const assignPathSchema = z.object({ studentId: z.string().min(1) });
+export const advancePathSchema = z.object({ currentLessonId: z.string().min(1) });
+
 // ── Library · warmups, exercises, songs ──
 
 export const libraryItemKindSchema = z.enum(["warmup", "exercise", "song"]);
