@@ -14,24 +14,30 @@ availabilityRoutes.get("/", async (c) => {
     return c.json({ error: "date query parameter required (YYYY-MM-DD)" }, 400);
   }
 
-  const date = new Date(dateStr + "T00:00:00");
+  // Everything in this endpoint is UTC-anchored: slots are built as
+  // `${dateStr}T${startTime}:00Z` and booking validation matches on
+  // startsAt.getUTCDay()/getUTCHours() (bookings.ts). So we parse the date,
+  // derive the day-of-week, and bound past/future all in UTC — otherwise a
+  // non-UTC dev server (Workers run in UTC, but `tsx` dev runs local) would
+  // pick a different day-of-week here than booking validation accepts.
+  const date = new Date(dateStr + "T00:00:00Z");
   if (isNaN(date.getTime())) {
     return c.json({ error: "Invalid date" }, 400);
   }
 
   const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
   if (date < today) {
     return c.json({ error: "Cannot book dates in the past" }, 400);
   }
 
   const maxDate = new Date(today);
-  maxDate.setDate(maxDate.getDate() + 30);
+  maxDate.setUTCDate(maxDate.getUTCDate() + 30);
   if (date > maxDate) {
     return c.json({ error: "Cannot book more than 30 days ahead" }, 400);
   }
 
-  const dayOfWeek = date.getDay();
+  const dayOfWeek = date.getUTCDay();
   const categoryId = c.req.query("categoryId");
   const db = getDb();
 

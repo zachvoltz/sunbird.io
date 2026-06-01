@@ -37,7 +37,7 @@ Wireframe references:
 - [x] Per-lesson-type pricing (`LessonType.pricePerSession`)
 - [x] Recurring plan pricing data model (`SubscriptionPlan`)
 - [ ] Coach UI to create/edit `SubscriptionPlan` rows (recurring price tiers) — **needs mockup**
-- [ ] Sanity-check timezone handling on availability across DST
+- [x] Sanity-check timezone handling on availability across DST — audited every date/time site. **No DST drift bug**: the system is UTC-anchored end-to-end (availability "HH:MM" treated as UTC; slots built as `…THH:MM:00Z`; booking validation matches `getUTCDay()`/`getUTCHours()`; recurring advances by fixed ms on UTC timestamps, so occurrences don't slip across DST). Fixed one latent inconsistency: `availability.ts` listed slots using **local** `getDay()` + non-`Z` parse, which diverges from booking validation's UTC on a non-UTC dev server — now UTC throughout (`getUTCDay()`, `…Z`, UTC past/30-day bounds). Added `availability.test.ts` + a DST-safety comment on `generateScheduleDates`. **Known limitation (deferred, product decision):** no per-coach timezone — availability is implicitly UTC and emails hardcode `America/Chicago`; revisit if going multi-timezone/multi-coach.
 
 ---
 

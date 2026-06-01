@@ -235,6 +235,11 @@ async function createSubscriptionCheckout(
 // Regenerate a schedule's occurrence dates (future only) from its stored
 // cadence — used by both the free path and the subscription webhook so they
 // produce identical bookings without persisting the date list.
+//
+// DST-safe: we advance by a fixed millisecond delta on UTC timestamps, so every
+// occurrence lands at the SAME absolute instant (and the same UTC wall-clock,
+// which is what booking validation checks). Using local `setDate(getDate()+7)`
+// here would slip by an hour across a US DST boundary — we deliberately don't.
 function generateScheduleDates(schedule: any, now: Date): Date[] {
   const intervalDays = schedule.frequency === "BIWEEKLY" ? 14 : 7;
   const dates: Date[] = [];
