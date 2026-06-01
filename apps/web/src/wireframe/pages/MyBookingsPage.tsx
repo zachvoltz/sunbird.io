@@ -58,6 +58,7 @@ export function MyBookingsPage() {
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [rescheduling, setRescheduling] = useState<BookingPublic | null>(null);
 
   const load = () => {
     apiFetch<{ data: BookingPublic[] }>("/api/bookings")
@@ -172,6 +173,7 @@ export function MyBookingsPage() {
                       cancel={cancel}
                       cancelSeries={cancelSeries}
                       cancellingId={cancellingId}
+                      onReschedule={setRescheduling}
                     />
                   ))}
                 </>
@@ -208,6 +210,17 @@ export function MyBookingsPage() {
           </div>
         </div>
       </div>
+
+      {rescheduling && (
+        <RescheduleModal
+          booking={rescheduling}
+          onClose={() => setRescheduling(null)}
+          onDone={() => {
+            setRescheduling(null);
+            load();
+          }}
+        />
+      )}
     </STFrame>
   );
 }
@@ -259,11 +272,13 @@ function UpcomingLessonCard({
   cancel,
   cancelSeries,
   cancellingId,
+  onReschedule,
 }: {
   booking: BookingPublic;
   cancel: (id: string) => void;
   cancelSeries: (scheduleId: string) => void;
   cancellingId: string | null;
+  onReschedule: (booking: BookingPublic) => void;
 }) {
   const coachName = booking.coach?.name ?? "your teacher";
   const piece = booking.skillTree?.title ?? booking.category?.title ?? "lesson";
@@ -289,6 +304,12 @@ function UpcomingLessonCard({
         </div>
         <div className="col" style={{ alignItems: "flex-end", gap: 2 }}>
           <Link to={`/my-bookings/${booking.id}`} className="btn small">view</Link>
+          <button
+            onClick={() => onReschedule(booking)}
+            className="btn small ghost"
+          >
+            reschedule
+          </button>
           <button
             onClick={() => cancel(booking.id)}
             disabled={cancellingId === booking.id}
@@ -328,6 +349,156 @@ function PracticeNoteCard({ booking }: { booking: BookingPublic }) {
       </div>
       <div className="row gap-2 mt-2">
         <Link to={`/my-bookings/${booking.id}`} className="btn small ghost">open session →</Link>
+      </div>
+    </div>
+  );
+}
+
+type AvailSlot = { startsAt: string; endsAt: string; coachIds: string[] };
+
+// Move a booking to a new time with the SAME coach. Pick a date, fetch the
+// coach's open slots for that day (reusing GET /api/availability), pick a
+// time, submit. The server re-validates the slot.
+function RescheduleModal({
+  booking,
+  onClose,
+  onDone,
+}: {
+  booking: BookingPublic;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const coachId = booking.coach?.id;
+  const categoryId = booking.category?.id;
+  const coachName = booking.coach?.name ?? "your coach";
+
+  const [date, setDate] = useState("");
+  const [slots, setSlots] = useState<AvailSlot[]>([]);
+  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState("");
+
+  const minDate = ymd(new Date());
+  const maxDate = ymd(new Date(Date.now() + 30 * 86_400_000));
+
+  useEffect(() => {
+    if (!date || !categoryId) {
+      setSlots([]);
+      return;
+    }
+    setLoadingSlots(true);
+    setSelected(null);
+    apiFetch<{ data: AvailSlot[] }>(`/api/availability?date=${date}&categoryId=${categoryId}`)
+      .then((r) => setSlots(r.data.filter((s) => !!coachId && s.coachIds.includes(coachId))))
+      .catch(() => setSlots([]))
+      .finally(() => setLoadingSlots(false));
+  }, [date, categoryId, coachId]);
+
+  const submit = async () => {
+    if (!selected) return;
+    setSubmitting(true);
+    setErr("");
+    try {
+      await apiFetch(`/api/bookings/${booking.id}/reschedule`, {
+        method: "PATCH",
+        body: JSON.stringify({ newStartsAt: selected }),
+      });
+      onDone();
+    } catch (e) {
+      setErr(e instanceof ApiError ? e.body.error : "Something went wrong. Please try again.");
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.4)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 1000,
+        padding: 16,
+      }}
+    >
+      <div
+        className="box thick"
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: "min(440px, 100%)", maxHeight: "85vh", overflow: "auto", background: "var(--paper, #fff)" }}
+      >
+        <div className="row between mb-2">
+          <div className="bold big">Reschedule</div>
+          <button onClick={onClose} className="btn small ghost">close</button>
+        </div>
+        <div className="small muted mb-2">
+          Currently {formatDate(booking.startsAt)} · {formatTime(booking.startsAt)} with{" "}
+          {coachName.split(" ")[0]}. Pick a new time below.
+        </div>
+
+        <label className="small bold">New date</label>
+        <input
+          type="date"
+          value={date}
+          min={minDate}
+          max={maxDate}
+          onChange={(e) => setDate(e.target.value)}
+          style={{
+            display: "block",
+            width: "100%",
+            margin: "6px 0 12px",
+            fontFamily: "var(--hand)",
+            fontSize: 14,
+            padding: "6px 8px",
+            border: "1.5px solid var(--ink-faint)",
+            borderRadius: 6,
+            background: "var(--paper)",
+            color: "var(--ink)",
+            outline: "none",
+          }}
+        />
+
+        {date && (
+          <div className="col gap-2">
+            {loadingSlots && <div className="small muted">Loading open times…</div>}
+            {!loadingSlots && slots.length === 0 && (
+              <div className="small muted">No open times with {coachName.split(" ")[0]} that day.</div>
+            )}
+            {!loadingSlots && slots.length > 0 && (
+              <div className="row gap-2" style={{ flexWrap: "wrap" }}>
+                {slots.map((s) => (
+                  <button
+                    key={s.startsAt}
+                    onClick={() => setSelected(s.startsAt)}
+                    className={`btn small ${selected === s.startsAt ? "primary" : "ghost"}`}
+                  >
+                    {formatTime(s.startsAt)}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {err && (
+          <div className="small mt-2" style={{ color: "var(--accent)" }}>
+            {err}
+          </div>
+        )}
+
+        <div className="row gap-2 mt-3" style={{ justifyContent: "flex-end" }}>
+          <button onClick={onClose} className="btn small ghost">cancel</button>
+          <button
+            onClick={submit}
+            disabled={!selected || submitting}
+            className="btn small primary"
+          >
+            {submitting ? "moving…" : "confirm new time"}
+          </button>
+        </div>
       </div>
     </div>
   );

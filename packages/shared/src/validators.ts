@@ -24,6 +24,12 @@ export const setRoleSchema = z.object({
   role: z.enum(["STUDENT", "COACH"]),
 });
 
+// Move an existing booking to a new start time (same coach, same lesson).
+// The slot is re-validated against the coach's availability server-side.
+export const rescheduleBookingSchema = z.object({
+  newStartsAt: z.string().datetime(),
+});
+
 export const forgotPasswordSchema = z.object({
   email: z.string().email("Invalid email address"),
 });

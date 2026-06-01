@@ -59,6 +59,26 @@ export function createEmailService(apiKey: string, from: string) {
       });
     },
 
+    async sendBookingReschedule(to: string, name: string, lessonType: string, oldDateTime: string, newDateTime: string) {
+      if (!resend) {
+        console.log(`[email] Booking reschedule to ${to} — ${lessonType} moved from ${oldDateTime} to ${newDateTime}`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `Booking rescheduled — ${lessonType}`,
+        html: `
+          <h2>Your lesson moved</h2>
+          <p>Hi ${name}, your <strong>${lessonType}</strong> lesson has been rescheduled.</p>
+          <p><s>${oldDateTime}</s></p>
+          <p><strong>Now: ${newDateTime}</strong></p>
+          <p>See you then!</p>
+          <p>— Sunbird</p>
+        `.trim(),
+      });
+    },
+
     async sendPracticeNotes(to: string, name: string, lessonType: string, category: string, notes: string) {
       if (!resend) {
         console.log(`[email] Practice notes to ${to} — ${lessonType} / ${category}`);

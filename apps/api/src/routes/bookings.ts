@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
-import { createBookingSchema, createRecurringScheduleSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
+import { createBookingSchema, createRecurringScheduleSchema, rescheduleBookingSchema, practiceNotesSchema, createSessionMessageSchema, createSessionResourceSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { createCallsService } from "../services/calls.service";
 import { pushEventMirror, deleteEventMirror } from "./google-calendar";
@@ -106,6 +106,62 @@ const bookingInclude = {
   coach: { select: { id: true, name: true, avatarUrl: true, bio: true, sessionAddress: true } },
 };
 
+// Validate that a [startsAt, endsAt) slot is bookable for a specific coach:
+// not in the past, no overlapping non-cancelled booking, the coach teaches the
+// category, the slot falls on the coach's weekly availability, and no CoachBusy
+// block overlaps. Shared by create + reschedule so both stay in lockstep.
+// `excludeBookingId` skips a booking from the conflict check (the one being
+// rescheduled). Returns the first failure as { ok:false, status, error }.
+type SlotCheck = { ok: true } | { ok: false; status: 400 | 409; error: string };
+async function validateCoachSlot(
+  db: any,
+  args: { coachId: string; categoryId: string; startsAt: Date; endsAt: Date; excludeBookingId?: string },
+): Promise<SlotCheck> {
+  const { coachId, categoryId, startsAt, endsAt, excludeBookingId } = args;
+
+  if (startsAt <= new Date()) {
+    return { ok: false, status: 400, error: "Cannot book a time in the past" };
+  }
+
+  const conflictWhere: any = {
+    startsAt: { lt: endsAt },
+    endsAt: { gt: startsAt },
+    status: { not: "CANCELLED" },
+    coachId,
+  };
+  if (excludeBookingId) {
+    conflictWhere.id = { not: excludeBookingId };
+  }
+  const conflict = await db.booking.findFirst({ where: conflictWhere });
+  if (conflict) {
+    return { ok: false, status: 409, error: "This time slot is no longer available" };
+  }
+
+  const coachTeaches = await db.coachCategory.findFirst({ where: { coachId, categoryId } });
+  if (!coachTeaches) {
+    return { ok: false, status: 400, error: "This coach does not teach this category" };
+  }
+
+  const dayOfWeek = startsAt.getUTCDay();
+  const timeStr = `${String(startsAt.getUTCHours()).padStart(2, "0")}:${String(startsAt.getUTCMinutes()).padStart(2, "0")}`;
+  const coachAvail = await db.coachAvailability.findFirst({
+    where: { coachId, dayOfWeek, startTime: timeStr, isActive: true },
+  });
+  if (!coachAvail) {
+    return { ok: false, status: 400, error: "This time is not within the coach's available hours" };
+  }
+
+  // Busy beats available — reject if any CoachBusy row overlaps this slot.
+  const busyOverlap = await db.coachBusy.findFirst({
+    where: { coachId, startsAt: { lt: endsAt }, endsAt: { gt: startsAt } },
+  });
+  if (busyOverlap) {
+    return { ok: false, status: 409, error: "The coach is unavailable at this time" };
+  }
+
+  return { ok: true };
+}
+
 // POST /api/bookings — create a booking
 bookingRoutes.post("/", requireAuth, async (c) => {
   const user = c.get("user")!;
@@ -160,61 +216,25 @@ bookingRoutes.post("/", requireAuth, async (c) => {
   const startsAt = new Date(startsAtStr);
   const endsAt = new Date(startsAt.getTime() + LESSON_DURATION_MINS * 60 * 1000);
 
-  // Check if the slot is in the past
-  if (startsAt <= new Date()) {
-    return c.json({ error: "Cannot book a time in the past" }, 400);
-  }
-
-  // Check for conflicting bookings (scoped to this coach if assigned)
-  const conflictWhere: any = {
-    startsAt: { lt: endsAt },
-    endsAt: { gt: startsAt },
-    status: { not: "CANCELLED" },
-  };
   if (coachId) {
-    conflictWhere.coachId = coachId;
-  }
-
-  const conflict = await db.booking.findFirst({ where: conflictWhere });
-  if (conflict) {
-    return c.json({ error: "This time slot is no longer available" }, 409);
-  }
-
-  // Verify coach teaches this category
-  if (coachId) {
-    const coachTeaches = await db.coachCategory.findFirst({
-      where: { coachId, categoryId },
-    });
-    if (!coachTeaches) {
-      return c.json({ error: "This coach does not teach this category" }, 400);
-    }
-  }
-
-  // Verify the slot matches the coach's availability
-  const dayOfWeek = startsAt.getUTCDay();
-  const timeStr = `${String(startsAt.getUTCHours()).padStart(2, "0")}:${String(startsAt.getUTCMinutes()).padStart(2, "0")}`;
-
-  if (coachId) {
-    const coachAvail = await db.coachAvailability.findFirst({
-      where: { coachId, dayOfWeek, startTime: timeStr, isActive: true },
-    });
-    if (!coachAvail) {
-      return c.json({ error: "This time is not within the coach's available hours" }, 400);
-    }
-
-    // Busy beats available — reject if any CoachBusy row overlaps this slot.
-    const busyOverlap = await db.coachBusy.findFirst({
-      where: {
-        coachId,
-        startsAt: { lt: endsAt },
-        endsAt: { gt: startsAt },
-      },
-    });
-    if (busyOverlap) {
-      return c.json({ error: "The coach is unavailable at this time" }, 409);
+    const slot = await validateCoachSlot(db, { coachId, categoryId, startsAt, endsAt });
+    if (!slot.ok) {
+      return c.json({ error: slot.error }, slot.status);
     }
   } else {
-    // Fallback to global slots if no coach assigned
+    // No coach assigned — the helper is coach-scoped, so run the minimal
+    // legacy checks inline (past + global conflict + global availability slot).
+    if (startsAt <= new Date()) {
+      return c.json({ error: "Cannot book a time in the past" }, 400);
+    }
+    const conflict = await db.booking.findFirst({
+      where: { startsAt: { lt: endsAt }, endsAt: { gt: startsAt }, status: { not: "CANCELLED" } },
+    });
+    if (conflict) {
+      return c.json({ error: "This time slot is no longer available" }, 409);
+    }
+    const dayOfWeek = startsAt.getUTCDay();
+    const timeStr = `${String(startsAt.getUTCHours()).padStart(2, "0")}:${String(startsAt.getUTCMinutes()).padStart(2, "0")}`;
     const availSlot = await db.availabilitySlot.findFirst({
       where: { dayOfWeek, startTime: timeStr, isActive: true },
     });
@@ -629,6 +649,98 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
     const email = createEmailService(apiKey, from);
     email.sendBookingCancellation(booking.user.email, booking.user.name, booking.category?.title ?? "Lesson", formatDateTime(booking.startsAt)).catch(console.error);
+  } catch {}
+
+  return c.json({ data: serializeBooking(updated) });
+});
+
+// PATCH /api/bookings/:id/reschedule — move an upcoming booking to a new time
+// with the same coach. Re-validates the new slot against the coach's
+// availability; the booking stays CONFIRMED and keeps its category/coach/note
+// and any recurring scheduleId (only this occurrence moves).
+bookingRoutes.patch("/:id/reschedule", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const booking = await db.booking.findUnique({
+    where: { id },
+    include: { category: true, user: { select: { email: true, name: true } } },
+  });
+
+  if (!booking) {
+    return c.json({ error: "Booking not found" }, 404);
+  }
+  if (user.role === "STUDENT" && booking.userId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (user.role === "COACH" && booking.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (booking.status !== "CONFIRMED") {
+    return c.json({ error: "Only confirmed bookings can be rescheduled" }, 400);
+  }
+  if (!booking.coachId) {
+    return c.json({ error: "This booking has no coach to reschedule with" }, 400);
+  }
+  if (!booking.categoryId) {
+    return c.json({ error: "This booking has no category to reschedule" }, 400);
+  }
+
+  const body = await c.req.json().catch(() => null);
+  const parsed = rescheduleBookingSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const startsAt = new Date(parsed.data.newStartsAt);
+  const endsAt = new Date(startsAt.getTime() + LESSON_DURATION_MINS * 60 * 1000);
+
+  const slot = await validateCoachSlot(db, {
+    coachId: booking.coachId,
+    categoryId: booking.categoryId,
+    startsAt,
+    endsAt,
+    excludeBookingId: id,
+  });
+  if (!slot.ok) {
+    return c.json({ error: slot.error }, slot.status);
+  }
+
+  const updated = await db.booking.update({
+    where: { id },
+    data: { startsAt, endsAt },
+    include: bookingInclude,
+  });
+
+  // Re-mirror the Google Calendar event at the new time (best-effort).
+  await deleteEventMirror(c, { coachId: booking.coachId, bookingId: id });
+  const studentName = booking.user.name ?? booking.user.email ?? "student";
+  await pushEventMirror(c, {
+    coachId: booking.coachId,
+    bookingId: id,
+    startsAt,
+    endsAt,
+    summary: `${studentName} · ${booking.category?.title ?? "Lesson"}`,
+    description: booking.studentNote ?? undefined,
+  });
+
+  // Notify the coach in their inbox.
+  await notifyCoachOfBooking(db, {
+    bookingId: id,
+    studentId: booking.userId,
+    coachId: booking.coachId,
+    content: `🔄 Rescheduled ${booking.category?.title ?? "lesson"} — now ${formatDateTime(startsAt)}`,
+  });
+
+  // Send reschedule email (fire and forget)
+  try {
+    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
+    const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+    const email = createEmailService(apiKey, from);
+    email
+      .sendBookingReschedule(booking.user.email, booking.user.name, booking.category?.title ?? "Lesson", formatDateTime(booking.startsAt), formatDateTime(startsAt))
+      .catch(console.error);
   } catch {}
 
   return c.json({ data: serializeBooking(updated) });

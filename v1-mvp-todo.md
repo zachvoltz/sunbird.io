@@ -63,7 +63,7 @@ Wireframe references:
 - [x] Recurring booking API — weekly / biweekly / monthly (`POST /api/bookings/recurring`, `RecurringSchedule` model)
 - [x] Recurring booking UI — cadence picker (weekly / biweekly) + session-count preview in `StepConfirm.tsx`; monthly not yet exposed in UI
 - [x] Confirmation screen post-booking (`pages/book/BookingSuccess.tsx`)
-- [~] Cancel / reschedule UI for student — **cancel** done (`MyBookings.tsx` → `PATCH /api/bookings/:id/cancel`, plus recurring-series cancel); **reschedule** still missing (no API or UI)
+- [x] Cancel / reschedule UI for student — **cancel** done (`PATCH /api/bookings/:id/cancel`, plus recurring-series cancel); **reschedule** done: `PATCH /api/bookings/:id/reschedule` (same coach, re-validates the new slot via the shared `validateCoachSlot` helper + `GET /api/availability`; re-mirrors Google Calendar, notifies coach, emails student via `sendBookingReschedule`). UI is a date→time picker modal on the live `/my-bookings` (`MyBookingsPage.tsx` `RescheduleModal`). Tests in `booking-reschedule.test.ts`. Single occurrence only for recurring series.
 
 ---
 

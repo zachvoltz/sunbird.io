@@ -3,6 +3,7 @@ import type {
   registerSchema,
   loginSchema,
   setRoleSchema,
+  rescheduleBookingSchema,
   contactSchema,
   createBookingSchema,
   practiceNotesSchema,
@@ -24,6 +25,7 @@ import type {
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type SetRoleInput = z.infer<typeof setRoleSchema>;
+export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
