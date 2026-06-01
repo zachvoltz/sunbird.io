@@ -5,6 +5,7 @@ import type {
   setRoleSchema,
   rescheduleBookingSchema,
   createTakeReplySchema,
+  createTakeAnnotationSchema,
   contactSchema,
   createBookingSchema,
   practiceNotesSchema,
@@ -30,6 +31,7 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type SetRoleInput = z.infer<typeof setRoleSchema>;
 export type RescheduleBookingInput = z.infer<typeof rescheduleBookingSchema>;
 export type CreateTakeReplyInput = z.infer<typeof createTakeReplySchema>;
+export type CreateTakeAnnotationInput = z.infer<typeof createTakeAnnotationSchema>;
 export type ContactInput = z.infer<typeof contactSchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;

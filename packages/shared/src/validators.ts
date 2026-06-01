@@ -30,6 +30,16 @@ export const rescheduleBookingSchema = z.object({
   newStartsAt: z.string().datetime(),
 });
 
+// Coach pins an annotation on a take — a reaction (love/watch/try-this) at a
+// position (a score bar or a timeline second), with optional text.
+export const createTakeAnnotationSchema = z.object({
+  kind: z.enum(["LOVE", "WATCH", "TRY_THIS"]),
+  targetType: z.enum(["SCORE_BAR", "TIMELINE"]).default("TIMELINE"),
+  targetBar: z.number().int().min(0).max(2000).optional(),
+  targetTimeSec: z.number().min(0).max(36000).optional(),
+  text: z.string().max(2000).optional(),
+});
+
 // Coach's written reply on a student's take. At least one of text/summaryText
 // must be present so an empty reply can't be posted.
 export const createTakeReplySchema = z

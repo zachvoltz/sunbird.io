@@ -150,7 +150,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 
 - [x] `Take` model, `POST /api/me/takes`, audio storage
 - [x] `TakeAnnotation` + `TakeReply` data model
-- [x] Coach take-review wireframe with annotations (LOVE / WATCH / TRY_THIS)
+- [x] Coach take-review **wired to real data** — `TakeReview.tsx` rewritten from mock to functional: loads the take via new `GET /api/coaches/takes/:takeId`, plays audio (when present), and persists annotations + reply. New `POST/DELETE /api/coaches/takes/:takeId/annotations` (LOVE/WATCH/TRY_THIS at a timeline second or score bar; first annotation moves the take to REVIEWING) + the existing reply endpoint. `createTakeAnnotationSchema` in shared; `serializeTake` helper shared with student-detail. Tests in `take-review.test.ts`. (Decorative staff-notation dropped — takes carry audio, not parsed score data.)
 - [x] Student record-take wireframe
 - [x] Move record-take UI into main student app routing (`/practice/record/:assignmentId` → `RecordTakePage`)
 - [x] Move coach take-review UI into main coach app routing (`/coach/takes/:takeId` → `TakeReviewPage`)

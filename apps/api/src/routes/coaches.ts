@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { parseRoutine, serializeRoutine } from "../lib/routine";
 import { serializeGoal } from "../lib/goals";
 import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
-import { createTakeReplySchema } from "@sunbird/shared";
+import { createTakeReplySchema, createTakeAnnotationSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 
 export const coachRoutes = new Hono();
@@ -318,6 +318,111 @@ coachRoutes.post("/takes/:takeId/reply", requireAuth, requireRole("COACH", "ADMI
   } catch {}
 
   return c.json({ data: { id: reply.id } }, 201);
+});
+
+// Serialize a take (with its annotations + replies) to the TakePublic shape.
+function serializeTake(t: any) {
+  return {
+    id: t.id,
+    studentId: t.studentId,
+    coachId: t.coachId,
+    assignmentId: t.assignmentId,
+    pieceTitle: t.pieceTitle,
+    bars: t.bars,
+    takeNumber: t.takeNumber,
+    durationSec: t.durationSec,
+    audioUrl: t.audioUrl,
+    selfRating: t.selfRating,
+    selfNote: t.selfNote,
+    status: t.status,
+    reviewedAt: t.reviewedAt?.toISOString() ?? null,
+    createdAt: t.createdAt.toISOString(),
+    annotations: (t.annotations ?? []).map((a: any) => ({
+      id: a.id, takeId: a.takeId, kind: a.kind, targetType: a.targetType,
+      targetBar: a.targetBar, targetTimeSec: a.targetTimeSec, text: a.text,
+      voiceUrl: a.voiceUrl, voiceDurSec: a.voiceDurSec,
+      createdAt: a.createdAt.toISOString(), author: a.author,
+    })),
+    replies: (t.replies ?? []).map((r: any) => ({
+      id: r.id, takeId: r.takeId, text: r.text, voiceUrl: r.voiceUrl,
+      voiceDurSec: r.voiceDurSec, starRating: r.starRating, summaryText: r.summaryText,
+      createdAt: r.createdAt.toISOString(), author: r.author,
+    })),
+  };
+}
+
+const takeAuthorSelect = { select: { id: true, name: true, email: true, avatarUrl: true, role: true } };
+const takeReviewInclude = {
+  annotations: { include: { author: takeAuthorSelect }, orderBy: { createdAt: "asc" as const } },
+  replies: { include: { author: takeAuthorSelect }, orderBy: { createdAt: "asc" as const } },
+  student: { select: { id: true, name: true, avatarUrl: true } },
+};
+
+// GET /api/coaches/takes/:takeId — a single take with annotations + replies +
+// the student, for the coach review page.
+coachRoutes.get("/takes/:takeId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const takeId = c.req.param("takeId");
+  const db = getDb();
+  const take: any = await db.take.findUnique({ where: { id: takeId }, include: takeReviewInclude });
+  if (!take) return c.json({ error: "Take not found" }, 404);
+  if (user.role === "COACH" && take.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  return c.json({ data: { ...serializeTake(take), student: take.student } });
+});
+
+// POST /api/coaches/takes/:takeId/annotations — pin an annotation on a take.
+coachRoutes.post("/takes/:takeId/annotations", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const takeId = c.req.param("takeId");
+  const db = getDb();
+  const body = await c.req.json().catch(() => null);
+  const parsed = createTakeAnnotationSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const take = await db.take.findUnique({ where: { id: takeId }, select: { coachId: true, status: true } });
+  if (!take) return c.json({ error: "Take not found" }, 404);
+  if (user.role === "COACH" && take.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  const ann = await db.takeAnnotation.create({
+    data: {
+      takeId,
+      authorId: user.id,
+      kind: parsed.data.kind,
+      targetType: parsed.data.targetType,
+      targetBar: parsed.data.targetBar ?? null,
+      targetTimeSec: parsed.data.targetTimeSec ?? null,
+      text: parsed.data.text ?? null,
+    },
+    include: { author: takeAuthorSelect },
+  });
+  // Opening a review on an untouched take moves it out of the unreviewed queue.
+  if (take.status === "UNREVIEWED") {
+    await db.take.update({ where: { id: takeId }, data: { status: "REVIEWING" } });
+  }
+  return c.json({
+    data: {
+      id: ann.id, takeId: ann.takeId, kind: ann.kind, targetType: ann.targetType,
+      targetBar: ann.targetBar, targetTimeSec: ann.targetTimeSec, text: ann.text,
+      voiceUrl: ann.voiceUrl, voiceDurSec: ann.voiceDurSec,
+      createdAt: ann.createdAt.toISOString(), author: ann.author,
+    },
+  }, 201);
+});
+
+// DELETE /api/coaches/takes/:takeId/annotations/:annotationId — remove a pin.
+coachRoutes.delete("/takes/:takeId/annotations/:annotationId", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const { takeId, annotationId } = c.req.param();
+  const db = getDb();
+  const take = await db.take.findUnique({ where: { id: takeId }, select: { coachId: true } });
+  if (!take) return c.json({ error: "Take not found" }, 404);
+  if (user.role === "COACH" && take.coachId !== user.id) return c.json({ error: "Forbidden" }, 403);
+  await db.takeAnnotation.deleteMany({ where: { id: annotationId, takeId } });
+  return c.json({ data: { ok: true } });
 });
 
 // GET /api/coaches/dashboard — aggregate powering /coach (Roster)
@@ -703,46 +808,7 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
       resourceId: a.resourceId,
       createdAt: a.createdAt.toISOString(),
     })),
-    takes: takes.map((t: any) => ({
-      id: t.id,
-      studentId: t.studentId,
-      coachId: t.coachId,
-      assignmentId: t.assignmentId,
-      pieceTitle: t.pieceTitle,
-      bars: t.bars,
-      takeNumber: t.takeNumber,
-      durationSec: t.durationSec,
-      audioUrl: t.audioUrl,
-      selfRating: t.selfRating,
-      selfNote: t.selfNote,
-      status: t.status,
-      reviewedAt: t.reviewedAt?.toISOString() ?? null,
-      createdAt: t.createdAt.toISOString(),
-      annotations: t.annotations.map((a: any) => ({
-        id: a.id,
-        takeId: a.takeId,
-        kind: a.kind,
-        targetType: a.targetType,
-        targetBar: a.targetBar,
-        targetTimeSec: a.targetTimeSec,
-        text: a.text,
-        voiceUrl: a.voiceUrl,
-        voiceDurSec: a.voiceDurSec,
-        createdAt: a.createdAt.toISOString(),
-        author: a.author,
-      })),
-      replies: t.replies.map((r: any) => ({
-        id: r.id,
-        takeId: r.takeId,
-        text: r.text,
-        voiceUrl: r.voiceUrl,
-        voiceDurSec: r.voiceDurSec,
-        starRating: r.starRating,
-        summaryText: r.summaryText,
-        createdAt: r.createdAt.toISOString(),
-        author: r.author,
-      })),
-    })),
+    takes: takes.map(serializeTake),
     latestNoteBookingId: latestSentNote?.id ?? null,
     latestNoteSections,
     latestNotePracticeNotes: latestSentNote?.practiceNotes ?? null,
