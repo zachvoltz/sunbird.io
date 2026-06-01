@@ -156,7 +156,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Move coach take-review UI into main coach app routing (`/coach/takes/:takeId` → `TakeReviewPage`)
 - [ ] Student "take history" view per lesson — **confirm mockup covers this**
 - [x] Audio storage backend: R2 bucket bound (proven on library audio) — reuse for takes
-- [ ] Confirm take audio max length + file size limits, error states on oversize uploads
+- [x] Take audio upload + limits — `RecordTake.tsx` now captures real audio via `MediaRecorder` (getUserMedia), caps a take at **5 min** (auto-stop), plays it back in Review, and on send creates the take then uploads the blob to new `POST /api/me/takes/:id/audio` (multipart → R2 under `takes/…`, **25 MB** cap → 413, MIME allowlist → 415, replaces prior audio on retake). Served back via open `GET /api/me/takes/audio/*` (mirrors library). Mic-denied + oversize error states surfaced. `audioUrl` now populates, so the coach review player works. Tests in `take-audio.test.ts` (guards; R2 path is manual-only).
 - [ ] Notification on new take (see §6)
 
 ---

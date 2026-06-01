@@ -420,6 +420,94 @@ me.post("/takes", requireAuth, async (c) => {
   return c.json({ data: { id: take.id } }, 201);
 });
 
+// ── Take audio (mirrors the library audio pattern: R2 storage, served back
+// through the Worker so the <audio> element can stream it) ──
+
+const TAKE_AUDIO_TYPES = new Set([
+  "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav",
+  "audio/ogg", "audio/webm", "audio/aac", "audio/mp4", "audio/x-m4a",
+]);
+const MAX_TAKE_AUDIO_BYTES = 25 * 1024 * 1024; // 25 MB
+
+// POST /api/me/takes/:takeId/audio — multipart upload (single "file" field) of
+// the student's recording. Stores in R2 and stamps audioUrl on the take.
+me.post("/takes/:takeId/audio", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const takeId = c.req.param("takeId");
+
+  const db = getDb();
+  const take = await db.take.findUnique({ where: { id: takeId }, select: { studentId: true, audioUrl: true } });
+  if (!take) return c.json({ error: "Take not found" }, 404);
+  if (take.studentId !== user.id) return c.json({ error: "Forbidden" }, 403);
+
+  const bucket = (c.env as any)?.MEDIA_BUCKET as R2Bucket | undefined;
+  if (!bucket) {
+    return c.json({ error: "Audio uploads aren't available yet — the R2 bucket isn't bound." }, 501);
+  }
+
+  let form: FormData;
+  try {
+    form = await c.req.formData();
+  } catch {
+    return c.json({ error: "Expected multipart/form-data" }, 400);
+  }
+  const entry = form.get("file");
+  if (!entry || typeof entry === "string") {
+    return c.json({ error: "Missing `file` field" }, 400);
+  }
+  const file = entry as Blob & { name?: string };
+  const baseType = (file.type || "").split(";")[0].trim().toLowerCase();
+  if (!TAKE_AUDIO_TYPES.has(baseType)) {
+    return c.json({ error: `Unsupported file type: ${file.type || "unknown"}` }, 415);
+  }
+  if (file.size > MAX_TAKE_AUDIO_BYTES) {
+    return c.json({ error: `Recording too large (${(file.size / 1024 / 1024).toFixed(1)} MB; max 25 MB)` }, 413);
+  }
+
+  // Replace any prior audio so retakes don't orphan objects.
+  if (take.audioUrl) {
+    const marker = "/api/me/takes/audio/";
+    const idx = take.audioUrl.indexOf(marker);
+    if (idx >= 0) {
+      try { await bucket.delete(decodeURIComponent(take.audioUrl.slice(idx + marker.length))); } catch { /* ignore */ }
+    }
+  }
+
+  const safeName = (file.name ?? "take").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  const key = `takes/${user.id}/${takeId}/${Date.now()}-${safeName}`;
+  await bucket.put(key, file.stream(), {
+    httpMetadata: { contentType: baseType || "application/octet-stream" },
+  });
+
+  const audioUrl = `/api/me/takes/audio/${encodeURIComponent(key)}`;
+  await db.take.update({ where: { id: takeId }, data: { audioUrl } });
+  return c.json({ data: { audioUrl } });
+});
+
+// GET /api/me/takes/audio/* — stream a take's audio from R2. Unauthenticated
+// (like library audio) so a plain <audio src> can play it; keys are
+// unguessable and scoped to the takes/ prefix.
+me.get("/takes/audio/*", async (c) => {
+  const bucket = (c.env as any)?.MEDIA_BUCKET as R2Bucket | undefined;
+  if (!bucket) return c.text("Audio storage not configured", 501);
+  const fullPath = new URL(c.req.url).pathname;
+  const prefix = "/api/me/takes/audio/";
+  if (!fullPath.startsWith(prefix)) return c.text("Bad path", 400);
+  const key = decodeURIComponent(fullPath.slice(prefix.length));
+  if (!key.startsWith("takes/")) return c.text("Forbidden key", 403);
+
+  const obj = await bucket.get(key);
+  if (!obj) return c.text("Not found", 404);
+  return new Response(obj.body, {
+    headers: {
+      "content-type": obj.httpMetadata?.contentType ?? "audio/mpeg",
+      "content-length": String(obj.size),
+      "accept-ranges": "bytes",
+      "cache-control": "private, max-age=300",
+    },
+  });
+});
+
 // ── Goals (set + track, shared with the coach) ──
 
 // GET /api/me/goals — the calling student's goals (active + achieved).

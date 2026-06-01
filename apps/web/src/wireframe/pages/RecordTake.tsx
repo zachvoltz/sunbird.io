@@ -5,7 +5,6 @@ import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { WaveBars, waveHeights } from "../components/WaveBars";
-import { MockTag } from "../components/MockTag";
 import { useMyStudentDetail } from "../hooks/useCoachData";
 import { MobileStatusBar as StatusBar } from "../components/MobileStatusBar";
 
@@ -66,7 +65,15 @@ export function RecordTakePage() {
   const [selfRating, setSelfRating] = useState(4);
   const [note, setNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [recError, setRecError] = useState<string | null>(null);
   const timerRef = useRef<number | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const blobRef = useRef<Blob | null>(null);
+  const autoStopRef = useRef<number | null>(null);
+  const MAX_REC_SEC = 300; // hard cap a take at 5 minutes
 
   const assignment: AssignmentPublic | undefined = detail?.assignments.find(
     (a) => a.id === params.assignmentId,
@@ -88,18 +95,63 @@ export function RecordTakePage() {
     return;
   }, [state]);
 
-  function start() {
+  // Tear down the mic + any object URL if the user leaves mid-flow.
+  useEffect(() => {
+    return () => {
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      if (autoStopRef.current) window.clearTimeout(autoStopRef.current);
+      if (blobUrl) URL.revokeObjectURL(blobUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function start() {
+    setRecError(null);
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch {
+      setRecError("Microphone access was blocked. Allow it in your browser to record.");
+      return;
+    }
+    streamRef.current = stream;
+    chunksRef.current = [];
+    blobRef.current = null;
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); setBlobUrl(null); }
+
+    const mr = new MediaRecorder(stream);
+    mediaRecorderRef.current = mr;
+    mr.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
+    mr.onstop = () => {
+      const type = (mr.mimeType || "audio/webm").split(";")[0];
+      const blob = new Blob(chunksRef.current, { type });
+      blobRef.current = blob;
+      setBlobUrl(URL.createObjectURL(blob));
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
+    };
+    mr.start();
     setElapsed(0);
     setState("recording");
+    autoStopRef.current = window.setTimeout(() => stop(), MAX_REC_SEC * 1000);
   }
 
   function stop() {
+    if (autoStopRef.current) { window.clearTimeout(autoStopRef.current); autoStopRef.current = null; }
     if (timerRef.current) window.clearInterval(timerRef.current);
+    try { mediaRecorderRef.current?.stop(); } catch { /* already stopped */ }
     setState("review");
   }
 
   function cancel() {
+    if (autoStopRef.current) { window.clearTimeout(autoStopRef.current); autoStopRef.current = null; }
     if (timerRef.current) window.clearInterval(timerRef.current);
+    try { mediaRecorderRef.current?.stop(); } catch { /* ignore */ }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    chunksRef.current = [];
+    blobRef.current = null;
+    if (blobUrl) { URL.revokeObjectURL(blobUrl); setBlobUrl(null); }
     setElapsed(0);
     setState("ready");
   }
@@ -109,7 +161,7 @@ export function RecordTakePage() {
     setSubmitting(true);
     try {
       const { apiFetch } = await import("@/lib/api");
-      await apiFetch("/api/me/takes", {
+      const res = await apiFetch<{ data: { id: string } }>("/api/me/takes", {
         method: "POST",
         body: JSON.stringify({
           assignmentId: assignment.id,
@@ -121,15 +173,26 @@ export function RecordTakePage() {
           selfNote: note || null,
         }),
       });
+
+      // Upload the recording. Plain fetch — apiFetch forces a JSON content-type
+      // which would break the multipart boundary. Non-fatal: the take is saved
+      // either way, but we tell the student if the audio didn't make it.
+      if (blobRef.current) {
+        const ext = blobRef.current.type.includes("mp4") ? "mp4" : "webm";
+        const fd = new FormData();
+        fd.append("file", blobRef.current, `take.${ext}`);
+        const up = await fetch(`/api/me/takes/${res.data.id}/audio`, {
+          method: "POST", body: fd, credentials: "include",
+        });
+        if (!up.ok) {
+          const j: any = await up.json().catch(() => ({}));
+          alert(j?.error ?? "Your take was saved, but the audio upload didn't go through.");
+        }
+      }
       refresh();
       navigate("/practice");
     } catch (err) {
-      // Endpoint may not exist yet — show a friendly message but don't block.
-      console.warn("Take submit failed (endpoint not wired)", err);
-      alert(
-        "Take recorded locally. Sending to teacher requires the /api/me/takes endpoint, which is the next step on the to-do list.",
-      );
-      navigate("/practice");
+      alert("Couldn't send your take. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -156,15 +219,20 @@ export function RecordTakePage() {
           {state === "review" && <Header right={<div className="wf-avatar">{initial}</div>} />}
 
           {state === "ready" && (
-            <ReadyView
-              piece={piece}
-              bars={bars}
-              takeNumber={takeNumber}
-              tempoBpm={assignment?.tempoBpmEnd ?? 88}
-              prompt={assignment?.noteText ?? null}
-              prevTakes={prevTakes}
-              onStart={start}
-            />
+            <>
+              {recError && (
+                <div className="small" style={{ color: "var(--accent)", padding: "8px 16px 0" }}>{recError}</div>
+              )}
+              <ReadyView
+                piece={piece}
+                bars={bars}
+                takeNumber={takeNumber}
+                tempoBpm={assignment?.tempoBpmEnd ?? 88}
+                prompt={assignment?.noteText ?? null}
+                prevTakes={prevTakes}
+                onStart={start}
+              />
+            </>
           )}
           {state === "recording" && (
             <RecordingView
@@ -183,6 +251,7 @@ export function RecordTakePage() {
               elapsed={elapsed}
               rating={selfRating}
               note={note}
+              blobUrl={blobUrl}
               onRate={setSelfRating}
               onNote={setNote}
               onRetake={cancel}
@@ -393,6 +462,7 @@ function ReviewView({
   elapsed,
   rating,
   note,
+  blobUrl,
   onRate,
   onNote,
   onRetake,
@@ -403,13 +473,13 @@ function ReviewView({
   elapsed: number;
   rating: number;
   note: string;
+  blobUrl: string | null;
   onRate: (n: number) => void;
   onNote: (s: string) => void;
   onRetake: () => void;
   onSend: () => void;
   submitting: boolean;
 }) {
-  const hs = waveHeights(99 + takeNumber, 50);
   const elapsedLabel = `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`;
   return (
     <div className="wf-body col gap-3 scroll-y" style={{ paddingBottom: 24 }}>
@@ -424,25 +494,13 @@ function ReviewView({
             <Icon name="mic" size={14} stroke="var(--accent)" />
             <span className="bold" style={{ color: "var(--accent)" }}>your take</span>
           </div>
-          <span className="tiny muted">0:00 / {elapsedLabel}</span>
+          <span className="tiny muted">{elapsedLabel}</span>
         </div>
-        <WaveBars heights={hs} played={0.3} />
-        <div className="row gap-3 mt-2" style={{ justifyContent: "center" }}>
-          <button className="btn icon"><Icon name="back" size={14} /></button>
-          <button className="btn accent icon" style={{ width: 50, height: 50 }}>
-            <Icon name="play" size={20} stroke="white" />
-          </button>
-          <button className="btn icon"><Icon name="chev" size={14} /></button>
-        </div>
-        <div className="row gap-2 mt-2" style={{ justifyContent: "center" }}>
-          <span className="chip dashed tiny">
-            <Icon name="headphones" size={10} /> A/B w/ ref
-          </span>
-          <span className="chip dashed tiny">solo</span>
-        </div>
-        <div className="row gap-2 mt-2 small" style={{ justifyContent: "center", color: "var(--ink-faint)" }}>
-          <MockTag>playback (no audio yet)</MockTag>
-        </div>
+        {blobUrl ? (
+          <audio controls src={blobUrl} style={{ width: "100%" }} />
+        ) : (
+          <div className="small muted center">No audio captured — try recording again.</div>
+        )}
       </div>
 
       <div>
