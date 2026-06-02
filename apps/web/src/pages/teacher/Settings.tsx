@@ -39,6 +39,32 @@ export function CoachSettings() {
   const [saving, setSaving] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [uploadingCover, setUploadingCover] = useState(false);
+
+  // Upload a cover image to R2 (plain fetch — apiFetch forces JSON which would
+  // break the multipart boundary). On success the returned URL replaces the
+  // field value; the coach still clicks "Save profile" to persist on the row
+  // (the upload already stamps it, but this keeps the form consistent).
+  const uploadCover = async (file: File) => {
+    setUploadingCover(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file, file.name);
+      const res = await fetch("/api/coach-settings/cover-image", {
+        method: "POST", body: fd, credentials: "include",
+      });
+      const j: any = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        alert(j?.error ?? "Couldn't upload the image.");
+        return;
+      }
+      setCoverImageUrl(j.data.coverImageUrl);
+    } catch {
+      alert("Couldn't upload the image. Please try again.");
+    } finally {
+      setUploadingCover(false);
+    }
+  };
 
   useEffect(() => {
     apiFetch<{ data: CoachSettingsData }>("/api/coach-settings")
@@ -234,12 +260,40 @@ export function CoachSettings() {
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-charcoal mb-1">Cover Image URL</label>
+              <label className="block text-sm font-medium text-charcoal mb-1">Cover Image</label>
+              {coverImageUrl && (
+                <img
+                  src={coverImageUrl}
+                  alt="Cover preview"
+                  className="w-full h-32 object-cover rounded-card mb-2 border border-charcoal/10"
+                />
+              )}
+              <div className="flex items-center gap-3">
+                <label className="text-[13px] font-medium text-charcoal border border-charcoal/30 px-3 py-1.5 rounded-card cursor-pointer hover:bg-charcoal/5 transition-colors">
+                  {uploadingCover ? "Uploading…" : coverImageUrl ? "Replace image" : "Upload image"}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    disabled={uploadingCover}
+                    onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadCover(f); e.target.value = ""; }}
+                    className="hidden"
+                  />
+                </label>
+                {coverImageUrl && (
+                  <button
+                    type="button"
+                    onClick={() => setCoverImageUrl("")}
+                    className="text-[13px] text-text-secondary hover:text-coral transition-colors"
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
               <input
                 value={coverImageUrl}
                 onChange={(e) => setCoverImageUrl(e.target.value)}
-                placeholder="https://..."
-                className="w-full px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
+                placeholder="…or paste an image URL"
+                className="w-full mt-2 px-3 py-2 text-sm bg-cream border border-charcoal/10 rounded-card focus:border-charcoal/30 focus:outline-none"
               />
             </div>
             <div>

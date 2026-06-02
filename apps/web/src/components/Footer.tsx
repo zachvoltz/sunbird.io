@@ -67,10 +67,19 @@ export function Footer() {
               Elsewhere
             </p>
             <ul className="space-y-2">
-              {["Spotify", "YouTube", "Instagram"].map((label) => (
+              {[
+                // TODO: replace "#" with real URLs (content pass). Podcast URL
+                // pending — see project_podcast_link memory.
+                ["Podcast", "#"],
+                ["Spotify", "#"],
+                ["YouTube", "#"],
+                ["Instagram", "#"],
+              ].map(([label, href]) => (
                 <li key={label}>
                   <a
-                    href="#"
+                    href={href}
+                    target={href === "#" ? undefined : "_blank"}
+                    rel={href === "#" ? undefined : "noopener noreferrer"}
                     className="text-sm text-charcoal hover:text-gold transition-colors"
                   >
                     {label} &nearr;

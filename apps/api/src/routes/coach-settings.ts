@@ -104,6 +104,84 @@ coachSettingsRoutes.patch("/profile", requireAuth, requireRole("COACH", "ADMIN")
   return c.json({ data: { ok: true } });
 });
 
+const COVER_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+const MAX_COVER_IMAGE_BYTES = 8 * 1024 * 1024; // 8 MB
+
+// POST /api/coach-settings/cover-image — multipart upload (single "file" field)
+// of the coach's public-profile cover image. Stores in R2 and stamps
+// coverImageUrl. Mirrors the takes-audio upload pattern.
+coachSettingsRoutes.post("/cover-image", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const bucket = (c.env as any)?.MEDIA_BUCKET as R2Bucket | undefined;
+  if (!bucket) {
+    return c.json({ error: "Image uploads aren't available yet — the R2 bucket isn't bound." }, 501);
+  }
+
+  let form: FormData;
+  try {
+    form = await c.req.formData();
+  } catch {
+    return c.json({ error: "Expected multipart/form-data" }, 400);
+  }
+  const entry = form.get("file");
+  if (!entry || typeof entry === "string") {
+    return c.json({ error: "Missing `file` field" }, 400);
+  }
+  const file = entry as Blob & { name?: string };
+  const baseType = (file.type || "").split(";")[0].trim().toLowerCase();
+  if (!COVER_IMAGE_TYPES.has(baseType)) {
+    return c.json({ error: `Unsupported image type: ${file.type || "unknown"}` }, 415);
+  }
+  if (file.size > MAX_COVER_IMAGE_BYTES) {
+    return c.json({ error: `Image too large (${(file.size / 1024 / 1024).toFixed(1)} MB; max 8 MB)` }, 413);
+  }
+
+  const db = getDb();
+  // Replace any prior cover we own so re-uploads don't orphan objects (skip
+  // external URLs the coach may have pasted previously).
+  const prev = await db.user.findUnique({ where: { id: user.id }, select: { coverImageUrl: true } });
+  const marker = "/api/coach-settings/cover/";
+  if (prev?.coverImageUrl) {
+    const idx = prev.coverImageUrl.indexOf(marker);
+    if (idx >= 0) {
+      try { await bucket.delete(decodeURIComponent(prev.coverImageUrl.slice(idx + marker.length))); } catch { /* ignore */ }
+    }
+  }
+
+  const safeName = (file.name ?? "cover").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  const key = `covers/${user.id}/${Date.now()}-${safeName}`;
+  await bucket.put(key, file.stream(), {
+    httpMetadata: { contentType: baseType || "application/octet-stream" },
+  });
+
+  const coverImageUrl = `${marker}${encodeURIComponent(key)}`;
+  await db.user.update({ where: { id: user.id }, data: { coverImageUrl } });
+  return c.json({ data: { coverImageUrl } });
+});
+
+// GET /api/coach-settings/cover/* — stream a cover image from R2.
+// Unauthenticated (cover images are public, shown on the public profile); keys
+// are scoped to the covers/ prefix.
+coachSettingsRoutes.get("/cover/*", async (c) => {
+  const bucket = (c.env as any)?.MEDIA_BUCKET as R2Bucket | undefined;
+  if (!bucket) return c.text("Image storage not configured", 501);
+  const fullPath = new URL(c.req.url).pathname;
+  const prefix = "/api/coach-settings/cover/";
+  if (!fullPath.startsWith(prefix)) return c.text("Bad path", 400);
+  const key = decodeURIComponent(fullPath.slice(prefix.length));
+  if (!key.startsWith("covers/")) return c.text("Forbidden key", 403);
+
+  const obj = await bucket.get(key);
+  if (!obj) return c.text("Not found", 404);
+  return new Response(obj.body, {
+    headers: {
+      "content-type": obj.httpMetadata?.contentType ?? "image/jpeg",
+      "content-length": String(obj.size),
+      "cache-control": "public, max-age=3600",
+    },
+  });
+});
+
 // POST /api/coach-settings/publish — publish public page
 coachSettingsRoutes.post("/publish", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
   const user = c.get("user")!;

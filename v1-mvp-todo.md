@@ -55,8 +55,8 @@ Wireframe references:
 - [x] Profile edit screen on `/coach/account` + public-page URL surfaced there
 - [x] Account left column scrolls properly
 - [x] QR code for the published public page on `/coach/profile` — shown once published, downloadable as a PNG (`qrcode` lib, client-side data URL)
-- [ ] Cover-image upload end-to-end from the edit screen — **not wired to R2**: `Settings.tsx` takes a manual URL string into `PATCH /api/coach-settings/profile` (`coverImageUrl`). No multipart upload route exists for it (unlike takes/library audio). Needs an R2 upload endpoint + file picker to be true end-to-end.
-- [ ] Add link to Ellisa's podcast on the public profile / site (per existing project memory)
+- [x] Cover-image upload end-to-end from the edit screen — now R2-wired: `POST /api/coach-settings/cover-image` (multipart → R2 under `covers/…`, image MIME allowlist → 415, 8 MB cap → 413, replaces prior owned object) + `GET /api/coach-settings/cover/*` (public stream). `Settings.tsx` has a file picker + live preview + replace/remove; the manual URL field still works as a fallback. (Reuses the takes-audio R2 pattern; live R2 path is manual-only like takes.)
+- [~] Add link to Ellisa's podcast on the public profile / site — placed in the footer "Elsewhere" list (`Footer.tsx`), opens in a new tab. **URL still a `#` placeholder** (like the sibling Spotify/YouTube/Instagram links) — needs the real podcast URL in a content pass.
 
 ---
 
