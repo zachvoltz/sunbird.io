@@ -185,20 +185,23 @@ async function findOrCreateCustomer(
   return created.customer.id;
 }
 
-// Create a catalog subscription plan + variation for this price/cadence and
-// return the variation id (subscriptions reference a plan *variation*). We mint a
-// fresh plan per checkout; that's simplest given the Workers runtime has no place
-// to cache catalog ids, at the cost of some catalog clutter (acceptable, and
-// noted for a later "reuse by (coach,cadence,price)" optimization).
+// Create (or reuse) a catalog subscription plan + variation for this
+// price/cadence and return the variation id (subscriptions reference a plan
+// *variation*). The idempotency key is deterministic on (cadence, amountCents)
+// — and the catalog is the coach's own Square account (we call with their access
+// token) — so repeated checkouts at the same price/cadence reuse the same
+// catalog object instead of cluttering the catalog with one plan per checkout.
+// If Square ever drops the idempotency record it simply mints a fresh plan (the
+// old behavior), so this degrades gracefully.
 async function createPlanVariation(
   env: PaymentEnv,
   accessToken: string,
-  args: { name: string; cadence: string; amountCents: number; refId: string },
+  args: { name: string; cadence: string; amountCents: number },
 ): Promise<string> {
   const res = await squareFetch(env, accessToken, "/v2/catalog/batch-upsert", {
     method: "POST",
     body: {
-      idempotency_key: idemKey("plan", args.refId),
+      idempotency_key: idemKey("plan", `${args.cadence}-${args.amountCents}`),
       batches: [
         {
           objects: [
@@ -275,7 +278,6 @@ async function createInvoiceSubscription(
     name: args.name,
     cadence: args.cadence,
     amountCents: args.amountCents,
-    refId: args.refId,
   });
   const sub = await squareFetch(env, accessToken, "/v2/subscriptions", {
     method: "POST",
