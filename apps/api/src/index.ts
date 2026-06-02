@@ -44,6 +44,12 @@ type Bindings = {
   // Stripe webhook signing secret (whsec_…). Required to verify
   // /api/webhooks/stripe; the endpoint 400s without it.
   STRIPE_WEBHOOK_SECRET?: string;
+  // Square (alternative processor, §5b). All optional: Square endpoints 501
+  // until configured. SQUARE_ENVIRONMENT is "sandbox" (default) or "production".
+  SQUARE_ENVIRONMENT?: string;
+  SQUARE_APPLICATION_ID?: string;
+  SQUARE_APPLICATION_SECRET?: string;
+  SQUARE_WEBHOOK_SIGNATURE_KEY?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();

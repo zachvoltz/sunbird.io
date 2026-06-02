@@ -1,13 +1,22 @@
 import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth } from "../middleware/auth";
-import { makeStripe } from "../lib/stripe";
+import { getProvider, readPaymentEnv } from "../lib/payment-provider";
+import { coachCanCharge, toCoachConnection, type CoachPayInfo } from "../lib/payments";
 
 export const packagesRoutes = new Hono();
 
-function stripeKey(c: any): string | undefined {
-  return (c.env as any)?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY || undefined;
-}
+// Coach columns needed to decide whether (and via which provider) a package can
+// be sold — mirrors bookings.ts's coachPaySelect.
+const coachPaySelect = {
+  paymentProvider: true,
+  stripeAccountId: true,
+  stripeChargesEnabled: true,
+  squareAccessToken: true,
+  squareLocationId: true,
+  squareConnected: true,
+  sessionPrice: true,
+} as const;
 
 function creditsRemaining(plan: { lessonsPerMonth: number }, used: number): number {
   return Math.max(0, plan.lessonsPerMonth - used);
@@ -50,15 +59,12 @@ packagesRoutes.get("/", requireAuth, async (c) => {
   const coachId = c.req.query("coachId");
   if (!coachId) return c.json({ error: "coachId is required" }, 400);
   const db = getDb();
-  const coach = await db.user.findUnique({
-    where: { id: coachId },
-    select: { stripeChargesEnabled: true },
-  });
+  const coach = await db.user.findUnique({ where: { id: coachId }, select: coachPaySelect });
   const plans = await db.subscriptionPlan.findMany({
     where: { coachId, isActive: true },
     orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
-  const charges = !!coach?.stripeChargesEnabled;
+  const charges = !!coach && coachCanCharge(coach);
   return c.json({ data: plans.map((p: any) => serializePlan(p, charges)) });
 });
 
@@ -90,15 +96,16 @@ packagesRoutes.post("/subscribe", requireAuth, async (c) => {
   const plan = await db.subscriptionPlan.findUnique({ where: { id: planId } });
   if (!plan || !plan.isActive) return c.json({ error: "Package not found" }, 404);
 
-  const coach = await db.user.findUnique({
+  const coach: CoachPayInfo | null = await db.user.findUnique({
     where: { id: plan.coachId },
-    select: { stripeAccountId: true, stripeChargesEnabled: true },
+    select: coachPaySelect,
   });
-  if (!coach?.stripeAccountId || !coach.stripeChargesEnabled) {
+  if (!coach || !coachCanCharge(coach)) {
     return c.json({ error: "This coach isn't set up to take package payments yet." }, 409);
   }
 
-  // One active package per coach at a time.
+  // One active package per coach at a time (a PENDING Square row counts too, so
+  // a student can't double-subscribe while the first invoice is unpaid).
   const existing = await db.subscription.findFirst({
     where: { userId: user.id, coachId: plan.coachId, status: { not: "CANCELLED" } },
   });
@@ -106,33 +113,44 @@ packagesRoutes.post("/subscribe", requireAuth, async (c) => {
     return c.json({ error: "You already have an active package with this coach." }, 409);
   }
 
-  const key = stripeKey(c);
-  if (!key) {
-    return c.json({ error: "Stripe isn't configured yet." }, 501);
-  }
-  const stripe = makeStripe(key);
-  const origin = new URL(c.req.url).origin;
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      customer_email: user.email,
-      line_items: [
-        {
-          price_data: {
-            currency: "usd",
-            unit_amount: plan.priceMonthly,
-            recurring: { interval: "month" },
-            product_data: { name: `${plan.name} — ${plan.lessonsPerMonth} lessons/mo` },
-          },
-          quantity: 1,
-        },
-      ],
-      subscription_data: { transfer_data: { destination: coach.stripeAccountId } },
-      metadata: { planId: plan.id, studentId: user.id, coachId: plan.coachId },
-      success_url: `${origin}/my-bookings?package=success`,
-      cancel_url: `${origin}/my-bookings?package=canceled`,
+    const provider = getProvider(coach.paymentProvider);
+    const result = await provider.createPackageCheckout(readPaymentEnv(c), {
+      connection: toCoachConnection(coach),
+      amountCents: plan.priceMonthly,
+      planName: plan.name,
+      lessonsPerMonth: plan.lessonsPerMonth,
+      planId: plan.id,
+      studentId: user.id,
+      coachId: plan.coachId,
+      studentEmail: user.email,
+      studentName: user.name,
+      origin: new URL(c.req.url).origin,
     });
-    return c.json({ data: { checkoutUrl: session.url } }, 201);
+    if (!result.url) {
+      return c.json({ error: "Payments aren't configured yet." }, 501);
+    }
+    // Stripe creates the Subscription row in the webhook (from Checkout metadata).
+    // Square has no such metadata, so we create a PENDING row now carrying the
+    // Square subscription id; the invoice.payment_made webhook activates it.
+    if (result.externalRef) {
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setMonth(periodEnd.getMonth() + 1);
+      await db.subscription.create({
+        data: {
+          userId: user.id,
+          coachId: plan.coachId,
+          planId: plan.id,
+          squareSubscriptionId: result.externalRef,
+          status: "PENDING",
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+          lessonsUsedThisPeriod: 0,
+        },
+      }).catch(() => {});
+    }
+    return c.json({ data: { checkoutUrl: result.url } }, 201);
   } catch (err: any) {
     console.error("Package subscribe Checkout failed:", err);
     return c.json({ error: err?.message ?? "Couldn't start checkout" }, 502);

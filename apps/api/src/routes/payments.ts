@@ -3,6 +3,8 @@ import { getDb } from "../lib/db";
 import { makeStripe } from "../lib/stripe";
 import { createScheduleBookingRows } from "./bookings";
 import { createEmailService } from "../services/email.service";
+import { readPaymentEnv } from "../lib/payment-provider";
+import { verifySquareWebhook } from "../lib/payment-provider/square";
 
 export const paymentsRoutes = new Hono();
 
@@ -34,6 +36,42 @@ paymentsRoutes.post("/stripe", async (c) => {
     await handleStripeEvent(getDb(), event, { email: createEmailService(apiKey, from) });
   } catch (err) {
     console.error("Stripe webhook handler error:", err);
+    return c.json({ error: "Handler error" }, 500);
+  }
+  return c.json({ received: true });
+});
+
+// POST /api/webhooks/square — Square event receiver. Verifies the HMAC-SHA256
+// signature over (notification URL + raw body), then hands the parsed event to
+// the pure handleSquareEvent so the logic stays unit-testable.
+paymentsRoutes.post("/square", async (c) => {
+  const sigKey = readPaymentEnv(c).SQUARE_WEBHOOK_SIGNATURE_KEY;
+  if (!sigKey) {
+    return c.json({ error: "Square webhooks aren't configured." }, 501);
+  }
+  const signature = c.req.header("x-square-hmacsha256-signature");
+  const body = await c.req.text();
+  // Square signs against the exact notification URL it was configured to call,
+  // which equals the request URL here.
+  const ok = await verifySquareWebhook(sigKey, c.req.url, body, signature);
+  if (!ok) {
+    console.error("Square webhook signature verification failed");
+    return c.json({ error: "Invalid signature" }, 400);
+  }
+
+  let event: any;
+  try {
+    event = JSON.parse(body);
+  } catch {
+    return c.json({ error: "Invalid body" }, 400);
+  }
+
+  try {
+    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
+    const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+    await handleSquareEvent(getDb(), event, { email: createEmailService(apiKey, from) });
+  } catch (err) {
+    console.error("Square webhook handler error:", err);
     return c.json({ error: "Handler error" }, 500);
   }
   return c.json({ received: true });
@@ -241,6 +279,134 @@ export async function handleStripeEvent(db: any, event: any, deps: { email?: Ema
           where: { stripeSubscriptionId: sub.id },
           data: { status: "CANCELLED" },
         });
+      }
+      break;
+    }
+
+    default:
+      // Unhandled event types are acknowledged (200) and ignored.
+      break;
+  }
+}
+
+/**
+ * Pure Square event handler — the Square analogue of handleStripeEvent. No
+ * signature work, so tests drive it with synthetic events. Correlates to our
+ * rows via the square* columns (order id for one-time, subscription id for
+ * recurring). All writes are guarded/idempotent so duplicate deliveries are safe.
+ *
+ * Square ⇄ Stripe event mapping:
+ *   payment.updated(COMPLETED)        ⇄ checkout.session.completed (payment)
+ *   invoice.payment_made             ⇄ checkout.session.completed (subscription) + invoice.paid
+ *   invoice.scheduled_charge_failed  ⇄ invoice.payment_failed
+ *   subscription.updated(CANCELED)   ⇄ customer.subscription.deleted
+ */
+export async function handleSquareEvent(db: any, event: any, deps: { email?: EmailLike } = {}): Promise<void> {
+  switch (event.type) {
+    // One-time lesson paid — match the payment's order to the pending booking.
+    case "payment.created":
+    case "payment.updated": {
+      const p = event.data?.object?.payment;
+      if (p?.status === "COMPLETED" && p.order_id) {
+        await db.booking.updateMany({
+          where: { squareOrderId: p.order_id, paymentStatus: { not: "PAID" } },
+          data: { paymentStatus: "PAID" },
+        });
+      }
+      break;
+    }
+
+    // A subscription invoice was paid. Could be a recurring lesson schedule
+    // (first cycle → activate + create bookings) or a monthly package (first
+    // cycle → activate; later cycle → reset credits).
+    case "invoice.payment_made": {
+      const inv = event.data?.object?.invoice;
+      const subId = inv?.subscription_id;
+      if (!subId) break;
+
+      const schedule = await db.recurringSchedule.findUnique({ where: { squareSubscriptionId: subId } });
+      if (schedule) {
+        if (schedule.paymentStatus !== "PAID") {
+          await db.recurringSchedule.update({ where: { id: schedule.id }, data: { paymentStatus: "PAID" } });
+          const existing = await db.booking.count({ where: { scheduleId: schedule.id } });
+          if (existing === 0) {
+            const rows = await createScheduleBookingRows(db, schedule, { paymentStatus: "PAID" });
+            if (rows[0]) {
+              await db.sessionMessage
+                .create({ data: { bookingId: rows[0].id, senderId: schedule.userId, content: "📅 Recurring lessons booked & paid" } })
+                .catch(() => {});
+            }
+          }
+        }
+        break;
+      }
+
+      const sub = await db.subscription.findUnique({ where: { squareSubscriptionId: subId } });
+      if (sub) {
+        const now = new Date();
+        if (sub.status !== "ACTIVE") {
+          // First payment → activate (credits already start at 0).
+          await db.subscription.update({
+            where: { id: sub.id },
+            data: { status: "ACTIVE", currentPeriodStart: now, currentPeriodEnd: plusOneMonth(now), lessonsUsedThisPeriod: 0 },
+          });
+        } else if (sub.currentPeriodEnd <= now) {
+          // Renewal cycle → reset credits + roll the window. The period-end guard
+          // stops a duplicate same-period delivery from wiping mid-period usage
+          // (Square invoices carry no subscription_cycle marker like Stripe's).
+          await db.subscription.update({
+            where: { id: sub.id },
+            data: { currentPeriodStart: now, currentPeriodEnd: plusOneMonth(now), lessonsUsedThisPeriod: 0 },
+          });
+        }
+      }
+      break;
+    }
+
+    // A subscription's scheduled charge failed — mark the schedule/package
+    // past-due and notify both sides (schedules anchor on the next future booking).
+    case "invoice.payment_failed":
+    case "invoice.scheduled_charge_failed": {
+      const inv = event.data?.object?.invoice;
+      const subId = inv?.subscription_id;
+      if (!subId) break;
+      const schedule = await db.recurringSchedule.findUnique({ where: { squareSubscriptionId: subId } });
+      if (schedule && schedule.paymentStatus !== "PAST_DUE") {
+        await db.recurringSchedule.update({ where: { id: schedule.id }, data: { paymentStatus: "PAST_DUE" } });
+        const anchor = await db.booking.findFirst({
+          where: { scheduleId: schedule.id, startsAt: { gt: new Date() } },
+          orderBy: { startsAt: "asc" },
+          include: bookingNotifyInclude,
+        });
+        if (anchor) await notifyPaymentFailed(db, deps.email, anchor, "the payment for your recurring lessons failed. Please update your payment method to avoid interruption.");
+      } else if (!schedule) {
+        await db.subscription.updateMany({
+          where: { squareSubscriptionId: subId, status: { not: "CANCELLED" } },
+          data: { status: "PAST_DUE" },
+        });
+      }
+      break;
+    }
+
+    // Subscription ended (cancelled or deactivated) — cancel the schedule and its
+    // remaining future bookings, or cancel the package.
+    case "subscription.updated": {
+      const sub = event.data?.object?.subscription;
+      const status = sub?.status;
+      if (sub?.id && (status === "CANCELED" || status === "DEACTIVATED")) {
+        const schedule = await db.recurringSchedule.findUnique({ where: { squareSubscriptionId: sub.id } });
+        if (schedule) {
+          await db.recurringSchedule.update({ where: { id: schedule.id }, data: { status: "CANCELLED", paymentStatus: "CANCELLED" } });
+          await db.booking.updateMany({
+            where: { scheduleId: schedule.id, status: "CONFIRMED", startsAt: { gt: new Date() } },
+            data: { status: "CANCELLED" },
+          });
+        } else {
+          await db.subscription.updateMany({
+            where: { squareSubscriptionId: sub.id },
+            data: { status: "CANCELLED" },
+          });
+        }
       }
       break;
     }

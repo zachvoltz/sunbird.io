@@ -21,21 +21,28 @@ import { apiFetch } from "@/lib/api";
 
 type Stage = "entry" | "bank" | "verifying" | "connected";
 
-type StripeStatus = {
-  hasStripeAccount: boolean;
+type ProviderId = "STRIPE" | "SQUARE";
+
+// Provider-neutral connection status (mirrors the API's serializeStatus). Field
+// names are generic so the same UI drives Stripe Connect and Square; `provider`
+// selects the copy.
+type PaymentStatus = {
+  provider: ProviderId;
+  hasAccount: boolean;
   detailsSubmitted: boolean;
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
-  stripeAccountId: string | null;
+  accountId: string | null;
   sessionPrice: number | null;
 };
 
-const EMPTY_STATUS: StripeStatus = {
-  hasStripeAccount: false,
+const EMPTY_STATUS: PaymentStatus = {
+  provider: "STRIPE",
+  hasAccount: false,
   detailsSubmitted: false,
   chargesEnabled: false,
   payoutsEnabled: false,
-  stripeAccountId: null,
+  accountId: null,
   sessionPrice: null,
 };
 
@@ -48,7 +55,7 @@ function SessionRateCard() {
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
-    apiFetch<{ data: StripeStatus }>("/api/coach-payments/status")
+    apiFetch<{ data: PaymentStatus }>("/api/coach-payments/status")
       .then((r) => setDollars(r.data.sessionPrice ? (r.data.sessionPrice / 100).toString() : ""))
       .catch(() => {})
       .finally(() => setLoaded(true));
@@ -297,21 +304,21 @@ function PlanEditorRow({
   );
 }
 
-function stageFromStatus(s: StripeStatus): Stage {
-  if (!s.hasStripeAccount) return "entry";
+function stageFromStatus(s: PaymentStatus): Stage {
+  if (!s.hasAccount) return "entry";
   if (!s.detailsSubmitted) return "entry";
   if (!s.payoutsEnabled || !s.chargesEnabled) return "verifying";
   return "connected";
 }
 
-function useStripeStatus(opts: { poll?: boolean; refresh?: boolean }) {
-  const [status, setStatus] = useState<StripeStatus | undefined>();
+function usePaymentStatus(opts: { poll?: boolean; refresh?: boolean }) {
+  const [status, setStatus] = useState<PaymentStatus | undefined>();
   const [loading, setLoading] = useState(true);
   const [unconfigured, setUnconfigured] = useState(false);
 
   const fetchOnce = useCallback(async () => {
     try {
-      const res = await apiFetch<{ data: StripeStatus }>(
+      const res = await apiFetch<{ data: PaymentStatus }>(
         `/api/coach-payments/status${opts.refresh ? "?refresh=1" : ""}`,
       );
       setStatus(res.data);
@@ -334,7 +341,7 @@ function useStripeStatus(opts: { poll?: boolean; refresh?: boolean }) {
   useEffect(() => {
     if (!opts.poll) return;
     const handle = window.setInterval(() => {
-      apiFetch<{ data: StripeStatus }>("/api/coach-payments/status?refresh=1")
+      apiFetch<{ data: PaymentStatus }>("/api/coach-payments/status?refresh=1")
         .then((r) => setStatus(r.data))
         .catch(() => { /* keep last known */ });
     }, 3000);
@@ -404,6 +411,17 @@ function PoweredByStripe() {
   );
 }
 
+// Provider-aware variant of the trust line for the entry view.
+function PoweredBy({ provider }: { provider: ProviderId }) {
+  return (
+    <div className="onb-poweredby">
+      <span className="tiny muted">payments handled by</span>
+      <span className="onb-stripe-mark">{provider === "SQUARE" ? "square" : "stripe"}</span>
+      <span className="tiny muted">· bank-grade · we never see your account #</span>
+    </div>
+  );
+}
+
 type SideKey = "business" | "personal" | "bank" | "verify" | "review";
 function SideBenefits({ active }: { active: SideKey }) {
   const benefits: Array<{ k: SideKey; t: string; b: string }> = [
@@ -439,11 +457,16 @@ function EntryView({
   onBegin,
   resume,
   starting,
+  provider,
+  onSelectProvider,
 }: {
   onBegin: () => void;
   resume?: boolean;
   starting?: boolean;
+  provider: ProviderId;
+  onSelectProvider: (p: ProviderId) => void;
 }) {
+  const isSquare = provider === "SQUARE";
   return (
     <DTFrame side="payments">
       <div className="dt-main-head">
@@ -475,24 +498,53 @@ function EntryView({
               Connect your bank<br />
               <span className="hi">in about 4 minutes</span>
             </h1>
-            <div className="onb-hero-sub">
-              We use <span className="bold">Stripe</span> to move money safely.
-              You'll need:
+            {/* Provider chooser — pick the processor before connecting. */}
+            <div className="row gap-2 mt-2" role="radiogroup" aria-label="Payment provider">
+              {(["STRIPE", "SQUARE"] as ProviderId[]).map((p) => (
+                <button
+                  key={p}
+                  className={"btn small" + (provider === p ? " primary" : " ghost")}
+                  onClick={() => onSelectProvider(p)}
+                  aria-pressed={provider === p}
+                >
+                  {p === "STRIPE" ? "Stripe" : "Square"}
+                </button>
+              ))}
+            </div>
+            <div className="onb-hero-sub mt-2">
+              We use <span className="bold">{isSquare ? "Square" : "Stripe"}</span> to move
+              money safely. You'll need:
             </div>
             <ul className="onb-list">
-              <li><span className="onb-bullet">①</span> Legal name + date of birth</li>
-              <li><span className="onb-bullet">②</span> A US bank account (checking)</li>
-              <li><span className="onb-bullet">③</span> A photo ID (driver's license or passport)</li>
-              <li><span className="onb-bullet">④</span> Last 4 of SSN (for tax reporting)</li>
+              {isSquare ? (
+                <>
+                  <li><span className="onb-bullet">①</span> A Square account (we'll connect it)</li>
+                  <li><span className="onb-bullet">②</span> Your business / payout details on Square</li>
+                  <li><span className="onb-bullet">③</span> About 2 minutes to authorize</li>
+                </>
+              ) : (
+                <>
+                  <li><span className="onb-bullet">①</span> Legal name + date of birth</li>
+                  <li><span className="onb-bullet">②</span> A US bank account (checking)</li>
+                  <li><span className="onb-bullet">③</span> A photo ID (driver's license or passport)</li>
+                  <li><span className="onb-bullet">④</span> Last 4 of SSN (for tax reporting)</li>
+                </>
+              )}
             </ul>
             <div className="row gap-2 mt-3">
               <button className="btn primary big" onClick={onBegin} disabled={starting}>
-                {starting ? "opening Stripe…" : resume ? "resume setup →" : "begin setup →"}
+                {starting
+                  ? `opening ${isSquare ? "Square" : "Stripe"}…`
+                  : resume
+                    ? "resume setup →"
+                    : isSquare
+                      ? "connect Square →"
+                      : "begin setup →"}
               </button>
               <button className="btn ghost big">I'll do this later</button>
             </div>
             <div className="mt-3">
-              <PoweredByStripe />
+              <PoweredBy provider={provider} />
             </div>
           </div>
 
@@ -1737,7 +1789,7 @@ export function PaymentsPage() {
   // (ConnectedView) renders until the coach explicitly clicks
   // "view payments →".
   const isAfterReturn = demoRaw === "verifying";
-  const { status } = useStripeStatus({
+  const { status, refresh } = usePaymentStatus({
     poll: isAfterReturn,
     refresh: isAfterReturn,
   });
@@ -1753,6 +1805,18 @@ export function PaymentsPage() {
     }
     setStarting(false);
   }, [starting]);
+
+  // Switch the coach's processor before they connect, then re-read status so the
+  // entry copy + onboarding button follow the new provider.
+  const selectProvider = useCallback(async (provider: ProviderId) => {
+    if (provider === status.provider) return;
+    try {
+      await apiFetch("/api/coach-payments/provider", { method: "PATCH", body: JSON.stringify({ provider }) });
+      await refresh();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't switch payment provider.");
+    }
+  }, [status.provider, refresh]);
 
   const clearStage = useCallback(() => {
     const next = new URLSearchParams(params);
@@ -1781,7 +1845,15 @@ export function PaymentsPage() {
     return <ConnectedView onViewPayments={clearStage} />;
   }
   if (demoStage === "entry") {
-    return <EntryView onBegin={startOnboarding} resume={false} starting={starting} />;
+    return (
+      <EntryView
+        onBegin={startOnboarding}
+        resume={false}
+        starting={starting}
+        provider={status.provider}
+        onSelectProvider={selectProvider}
+      />
+    );
   }
 
   // Real-status path.
@@ -1799,8 +1871,10 @@ export function PaymentsPage() {
   return (
     <EntryView
       onBegin={startOnboarding}
-      resume={status.hasStripeAccount}
+      resume={status.hasAccount}
       starting={starting}
+      provider={status.provider}
+      onSelectProvider={selectProvider}
     />
   );
 }

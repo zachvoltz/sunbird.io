@@ -2,34 +2,68 @@ import { Hono } from "hono";
 import { getDb } from "../lib/db";
 import { requireAuth, requireRole } from "../middleware/auth";
 import { makeStripe } from "../lib/stripe";
+import { readPaymentEnv } from "../lib/payment-provider";
+import {
+  buildSquareAuthorizeUrl,
+  exchangeSquareCode,
+  getSquareMainLocationId,
+} from "../lib/payment-provider/square";
 
 export const coachPaymentsRoutes = new Hono();
 
-// Shape returned to the frontend. Mirrors the booleans on the User row
-// plus the stripeAccountId. The UI uses these to decide which
-// onboarding stage to render (entry vs verifying vs connected).
+// Provider-neutral connection status the frontend reads to pick the onboarding
+// stage. Field names are generic (account/charges/payouts) so the same UI drives
+// both Stripe Connect and Square — `provider` tells it which copy to show.
 type StatusPayload = {
-  hasStripeAccount: boolean;
+  provider: "STRIPE" | "SQUARE";
+  hasAccount: boolean;
   detailsSubmitted: boolean;
   chargesEnabled: boolean;
   payoutsEnabled: boolean;
-  stripeAccountId: string | null;
+  accountId: string | null;
   sessionPrice: number | null;
 };
 
+const coachSelect = {
+  paymentProvider: true,
+  stripeAccountId: true,
+  stripeChargesEnabled: true,
+  stripePayoutsEnabled: true,
+  stripeDetailsSubmitted: true,
+  squareMerchantId: true,
+  squareConnected: true,
+  sessionPrice: true,
+  email: true,
+} as const;
+
 function serializeStatus(u: any): StatusPayload {
+  if (u.paymentProvider === "SQUARE") {
+    // Square has no multi-stage verification — once OAuth completes the merchant
+    // can take charges, so all three flags collapse to squareConnected.
+    return {
+      provider: "SQUARE",
+      hasAccount: !!u.squareMerchantId,
+      detailsSubmitted: !!u.squareConnected,
+      chargesEnabled: !!u.squareConnected,
+      payoutsEnabled: !!u.squareConnected,
+      accountId: u.squareMerchantId ?? null,
+      sessionPrice: u.sessionPrice ?? null,
+    };
+  }
   return {
-    hasStripeAccount: !!u.stripeAccountId,
+    provider: "STRIPE",
+    hasAccount: !!u.stripeAccountId,
     detailsSubmitted: !!u.stripeDetailsSubmitted,
     chargesEnabled: !!u.stripeChargesEnabled,
     payoutsEnabled: !!u.stripePayoutsEnabled,
-    stripeAccountId: u.stripeAccountId ?? null,
+    accountId: u.stripeAccountId ?? null,
     sessionPrice: u.sessionPrice ?? null,
   };
 }
 
-// Fetch the account from Stripe and sync the three flags onto our row
-// so the frontend can read state cheaply between syncs.
+// Fetch the account from Stripe and sync the three flags onto our row so the
+// frontend can read state cheaply between syncs. (Square needs no equivalent —
+// its flags are derived from squareConnected, set at OAuth time.)
 async function refreshFromStripe(
   c: any,
   db: any,
@@ -48,6 +82,7 @@ async function refreshFromStripe(
         stripePayoutsEnabled: !!acct.payouts_enabled,
         stripeDetailsSubmitted: !!acct.details_submitted,
       },
+      select: coachSelect,
     });
     return updated;
   } catch (err) {
@@ -57,9 +92,8 @@ async function refreshFromStripe(
 }
 
 // GET /api/coach-payments/status?refresh=1
-// Returns the calling coach's current Stripe Connect status. When
-// `refresh=1` is set, we hit Stripe first so the response reflects any
-// state the coach changed on Stripe.com (e.g. just finished onboarding).
+// Returns the calling coach's current connection status for their chosen
+// provider. `refresh=1` re-syncs from Stripe (no-op for Square).
 coachPaymentsRoutes.get(
   "/status",
   requireAuth,
@@ -67,19 +101,10 @@ coachPaymentsRoutes.get(
   async (c) => {
     const user = c.get("user")!;
     const db = getDb();
-    let row: any = await db.user.findUnique({
-      where: { id: user.id },
-      select: {
-        stripeAccountId: true,
-        stripeChargesEnabled: true,
-        stripePayoutsEnabled: true,
-        stripeDetailsSubmitted: true,
-        sessionPrice: true,
-      },
-    });
+    let row: any = await db.user.findUnique({ where: { id: user.id }, select: coachSelect });
     if (!row) return c.json({ error: "User not found" }, 404);
 
-    if (c.req.query("refresh") === "1" && row.stripeAccountId) {
+    if (c.req.query("refresh") === "1" && row.paymentProvider !== "SQUARE" && row.stripeAccountId) {
       const fresh = await refreshFromStripe(c, db, user.id, row.stripeAccountId);
       if (fresh) row = fresh;
     }
@@ -88,31 +113,58 @@ coachPaymentsRoutes.get(
   },
 );
 
+// PATCH /api/coach-payments/provider — set the coach's payment processor.
+// Body: { provider: "STRIPE" | "SQUARE" }. Switching is allowed pre-connection;
+// the unused provider's columns simply stay dormant.
+coachPaymentsRoutes.patch(
+  "/provider",
+  requireAuth,
+  requireRole("COACH", "ADMIN"),
+  async (c) => {
+    const user = c.get("user")!;
+    const body = (await c.req.json().catch(() => null)) as { provider?: unknown } | null;
+    const provider = body?.provider;
+    if (provider !== "STRIPE" && provider !== "SQUARE") {
+      return c.json({ error: "provider must be STRIPE or SQUARE" }, 400);
+    }
+    const db = getDb();
+    await db.user.update({ where: { id: user.id }, data: { paymentProvider: provider } });
+    return c.json({ data: { provider } });
+  },
+);
+
 // POST /api/coach-payments/onboarding-link
-// Creates an Express account if the coach doesn't have one yet, then
-// generates a fresh Account Link URL the frontend redirects to. The
-// link is short-lived — generate one per click. Body is empty.
+// Returns the URL the coach is redirected to in order to connect. For Stripe
+// that's a fresh Connect Account Link (creating the Express account on first
+// use); for Square it's the OAuth authorize URL.
 coachPaymentsRoutes.post(
   "/onboarding-link",
   requireAuth,
   requireRole("COACH", "ADMIN"),
   async (c) => {
     const user = c.get("user")!;
+    const db = getDb();
+    const row: any = await db.user.findUnique({ where: { id: user.id }, select: coachSelect });
+    if (!row) return c.json({ error: "User not found" }, 404);
+
+    // ─── Square: OAuth authorize URL ───
+    if (row.paymentProvider === "SQUARE") {
+      const env = readPaymentEnv(c);
+      if (!env.SQUARE_APPLICATION_ID) {
+        return c.json({ error: "Square isn't configured yet — set SQUARE_APPLICATION_ID." }, 501);
+      }
+      // state = the coach id, verified in the callback to bind the grant.
+      const url = buildSquareAuthorizeUrl(env, user.id);
+      return c.json({ data: { url } });
+    }
+
+    // ─── Stripe: create Express account (first time) + Account Link ───
     const key = (c.env as any)?.STRIPE_SECRET_KEY as string | undefined;
     if (!key) {
-      return c.json({
-        error: "Stripe isn't configured yet — set STRIPE_SECRET_KEY.",
-      }, 501);
+      return c.json({ error: "Stripe isn't configured yet — set STRIPE_SECRET_KEY." }, 501);
     }
-    const db = getDb();
     const stripe = makeStripe(key);
     const origin = new URL(c.req.url).origin;
-
-    let row: any = await db.user.findUnique({
-      where: { id: user.id },
-      select: { stripeAccountId: true, email: true },
-    });
-    if (!row) return c.json({ error: "User not found" }, 404);
 
     let accountId = row.stripeAccountId as string | null;
     if (!accountId) {
@@ -127,45 +179,77 @@ coachPaymentsRoutes.post(
           business_type: "individual",
         });
         accountId = acct.id;
-        await db.user.update({
-          where: { id: user.id },
-          data: { stripeAccountId: accountId },
-        });
+        await db.user.update({ where: { id: user.id }, data: { stripeAccountId: accountId } });
       } catch (err: any) {
         console.error("Stripe accounts.create failed:", err);
-        return c.json({
-          error: err?.message ?? "Couldn't create Stripe account",
-        }, 502);
+        return c.json({ error: err?.message ?? "Couldn't create Stripe account" }, 502);
       }
     }
 
     try {
       const link = await stripe.accountLinks.create({
         account: accountId!,
-        // If the link expires before the coach finishes, send them
-        // back to the entry page so the frontend can re-request a
-        // fresh link.
         refresh_url: `${origin}/coach/payments?stage=entry`,
-        // After completing (or aborting) onboarding on Stripe's
-        // hosted UI, land on /coach/payments?stage=verifying so the
-        // frontend can poll status until charges/payouts unlock.
         return_url: `${origin}/coach/payments?stage=verifying`,
         type: "account_onboarding",
       });
       return c.json({ data: { url: link.url, expiresAt: link.expires_at } });
     } catch (err: any) {
       console.error("Stripe accountLinks.create failed:", err);
-      return c.json({
-        error: err?.message ?? "Couldn't generate onboarding link",
-      }, 502);
+      return c.json({ error: err?.message ?? "Couldn't generate onboarding link" }, 502);
+    }
+  },
+);
+
+// GET /api/coach-payments/square/callback?code=...&state=...
+// Square OAuth redirect target. Exchanges the auth code for tokens, stores the
+// merchant/location + tokens, marks the coach connected, and bounces back into
+// the SPA. `state` must equal the session coach id (basic CSRF binding).
+coachPaymentsRoutes.get(
+  "/square/callback",
+  requireAuth,
+  requireRole("COACH", "ADMIN"),
+  async (c) => {
+    const user = c.get("user")!;
+    const db = getDb();
+    const origin = new URL(c.req.url).origin;
+    const code = c.req.query("code");
+    const state = c.req.query("state");
+
+    if (c.req.query("error") || !code) {
+      return c.redirect(`${origin}/coach/payments?stage=entry&square_error=1`);
+    }
+    if (state !== user.id) {
+      return c.redirect(`${origin}/coach/payments?stage=entry&square_error=state`);
+    }
+
+    try {
+      const env = readPaymentEnv(c);
+      const tokens = await exchangeSquareCode(env, code);
+      const locationId = await getSquareMainLocationId(env, tokens.accessToken);
+      await db.user.update({
+        where: { id: user.id },
+        data: {
+          paymentProvider: "SQUARE",
+          squareMerchantId: tokens.merchantId,
+          squareLocationId: locationId,
+          squareAccessToken: tokens.accessToken,
+          squareRefreshToken: tokens.refreshToken,
+          squareTokenExpiresAt: tokens.expiresAt ? new Date(tokens.expiresAt) : null,
+          squareConnected: true,
+        },
+      });
+      return c.redirect(`${origin}/coach/payments?stage=connected`);
+    } catch (err) {
+      console.error("Square OAuth callback failed:", err);
+      return c.redirect(`${origin}/coach/payments?stage=entry&square_error=exchange`);
     }
   },
 );
 
 // POST /api/coach-payments/dashboard-link
-// Creates a single-use login link into the Express dashboard so the
-// coach can manage their account (update bank, view payouts, etc.).
-// Only valid once the account is detail-submitted.
+// Stripe-only: a single-use login link into the Express dashboard. Square coaches
+// manage their account in their own Square dashboard.
 coachPaymentsRoutes.post(
   "/dashboard-link",
   requireAuth,
@@ -174,9 +258,7 @@ coachPaymentsRoutes.post(
     const user = c.get("user")!;
     const key = (c.env as any)?.STRIPE_SECRET_KEY as string | undefined;
     if (!key) {
-      return c.json({
-        error: "Stripe isn't configured yet — set STRIPE_SECRET_KEY.",
-      }, 501);
+      return c.json({ error: "Stripe isn't configured yet — set STRIPE_SECRET_KEY." }, 501);
     }
     const db = getDb();
     const row: any = await db.user.findUnique({
@@ -192,9 +274,7 @@ coachPaymentsRoutes.post(
       return c.json({ data: { url: login.url } });
     } catch (err: any) {
       console.error("Stripe accounts.createLoginLink failed:", err);
-      return c.json({
-        error: err?.message ?? "Couldn't generate dashboard link",
-      }, 502);
+      return c.json({ error: err?.message ?? "Couldn't generate dashboard link" }, 502);
     }
   },
 );

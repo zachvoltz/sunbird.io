@@ -6,8 +6,20 @@ import { createEmailService } from "../services/email.service";
 import { createCallsService } from "../services/calls.service";
 import { pushEventMirror, deleteEventMirror } from "./google-calendar";
 import { parseRoutine } from "../lib/routine";
-import { makeStripe } from "../lib/stripe";
-import { requiresPayment, type CoachPayInfo } from "../lib/payments";
+import { getProvider, readPaymentEnv } from "../lib/payment-provider";
+import { requiresPayment, toCoachConnection, type CoachPayInfo } from "../lib/payments";
+
+// The columns every paid-flow query needs off the coach's User row — the
+// provider discriminator plus both providers' connection fields.
+const coachPaySelect = {
+  paymentProvider: true,
+  stripeAccountId: true,
+  stripeChargesEnabled: true,
+  squareAccessToken: true,
+  squareLocationId: true,
+  squareConnected: true,
+  sessionPrice: true,
+} as const;
 
 const LESSON_DURATION_MINS = 60;
 
@@ -170,68 +182,10 @@ async function validateCoachSlot(
   return { ok: true };
 }
 
-function stripeKey(c: any): string | undefined {
-  return (c.env as any)?.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY || undefined;
-}
-
-// Hosted Stripe Checkout for a single lesson — a destination charge to the
-// coach's connected account. Returns the redirect URL, or null if Stripe isn't
-// configured (caller falls back to a free booking).
-async function createBookingCheckout(
-  c: any,
-  args: { coachAccountId: string; amountCents: number; lessonTitle: string; bookingId: string; studentEmail: string },
-): Promise<string | null> {
-  const key = stripeKey(c);
-  if (!key) return null;
-  const stripe = makeStripe(key);
-  const origin = new URL(c.req.url).origin;
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer_email: args.studentEmail,
-    line_items: [
-      { price_data: { currency: "usd", unit_amount: args.amountCents, product_data: { name: args.lessonTitle } }, quantity: 1 },
-    ],
-    payment_intent_data: { transfer_data: { destination: args.coachAccountId } },
-    metadata: { bookingId: args.bookingId },
-    success_url: `${origin}/my-bookings?payment=success`,
-    cancel_url: `${origin}/my-bookings?payment=canceled`,
-  });
-  return session.url;
-}
-
-// Hosted Stripe Checkout for a recurring schedule — a Subscription billing the
-// session rate at the schedule's cadence (weekly / every-2-weeks), routed to
-// the coach's connected account. Returns the URL or null if Stripe is unset.
-async function createSubscriptionCheckout(
-  c: any,
-  args: { coachAccountId: string; amountCents: number; lessonTitle: string; scheduleId: string; frequency: string; studentEmail: string },
-): Promise<string | null> {
-  const key = stripeKey(c);
-  if (!key) return null;
-  const stripe = makeStripe(key);
-  const origin = new URL(c.req.url).origin;
-  const intervalCount = args.frequency === "BIWEEKLY" ? 2 : 1;
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer_email: args.studentEmail,
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          unit_amount: args.amountCents,
-          recurring: { interval: "week", interval_count: intervalCount },
-          product_data: { name: args.lessonTitle },
-        },
-        quantity: 1,
-      },
-    ],
-    subscription_data: { transfer_data: { destination: args.coachAccountId } },
-    metadata: { scheduleId: args.scheduleId },
-    success_url: `${origin}/my-bookings?payment=success`,
-    cancel_url: `${origin}/my-bookings?payment=canceled`,
-  });
-  return session.url;
-}
+// Dispatch a one-time / recurring checkout to whichever provider the coach uses.
+// Returns the redirect URL (null → provider unconfigured, caller falls back to a
+// free booking) plus an optional externalRef the caller persists for webhook
+// correlation (Square order/subscription id; Stripe correlates via metadata).
 
 // Regenerate a schedule's occurrence dates (future only) from its stored
 // cadence — used by both the free path and the subscription webhook so they
@@ -395,10 +349,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
   // Does this coach charge for lessons? Drives whether we open Checkout.
   // A package credit short-circuits per-session payment.
   const coachPay: CoachPayInfo | null = coachId
-    ? await db.user.findUnique({
-        where: { id: coachId },
-        select: { stripeAccountId: true, stripeChargesEnabled: true, sessionPrice: true },
-      })
+    ? await db.user.findUnique({ where: { id: coachId }, select: coachPaySelect })
     : null;
   const needsPayment = !creditSub && requiresPayment(coachPay);
 
@@ -451,22 +402,30 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     });
   }
 
-  // Paid lesson: open Stripe Checkout and return its URL for the client to
-  // redirect to. The booking stays PENDING until the webhook confirms payment.
+  // Paid lesson: open the coach's provider's hosted Checkout and return its URL
+  // for the client to redirect to. The booking stays PENDING until the webhook
+  // confirms payment. A Square order id (externalRef) is persisted so the
+  // payment.updated webhook can correlate the payment back to this booking.
   if (needsPayment && coachPay) {
     try {
-      const checkoutUrl = await createBookingCheckout(c, {
-        coachAccountId: coachPay.stripeAccountId!,
+      const provider = getProvider(coachPay.paymentProvider);
+      const result = await provider.createBookingCheckout(readPaymentEnv(c), {
+        connection: toCoachConnection(coachPay),
         amountCents: coachPay.sessionPrice!,
         lessonTitle: category.title,
         bookingId: booking.id,
         studentEmail: user.email,
+        studentName: user.name,
+        origin: new URL(c.req.url).origin,
       });
-      if (checkoutUrl) {
-        return c.json({ data: serializeBooking(booking), checkoutUrl }, 201);
+      if (result.externalRef) {
+        await db.booking.update({ where: { id: booking.id }, data: { squareOrderId: result.externalRef } });
+      }
+      if (result.url) {
+        return c.json({ data: serializeBooking(booking), checkoutUrl: result.url }, 201);
       }
     } catch (err) {
-      console.error("Stripe Checkout creation failed:", err);
+      console.error("Checkout creation failed:", err);
       return c.json({ error: "Couldn't start payment. Please try again." }, 502);
     }
   }
@@ -1137,7 +1096,7 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
   // Does this coach charge? Drives whether we subscribe via Checkout.
   const coachPay: CoachPayInfo | null = await db.user.findUnique({
     where: { id: coachId },
-    select: { stripeAccountId: true, stripeChargesEnabled: true, sessionPrice: true },
+    select: coachPaySelect,
   });
   const needsPayment = requiresPayment(coachPay);
 
@@ -1162,18 +1121,26 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
   });
 
   // Paid series: open a subscription Checkout and DEFER booking creation until
-  // the webhook confirms payment (the schedule's bookings are created then).
+  // the webhook confirms payment (the schedule's bookings are created then). A
+  // Square subscription id (externalRef) is persisted on the schedule so the
+  // invoice.payment_made webhook can activate it.
   if (needsPayment && coachPay) {
     try {
-      const checkoutUrl = await createSubscriptionCheckout(c, {
-        coachAccountId: coachPay.stripeAccountId!,
+      const provider = getProvider(coachPay.paymentProvider);
+      const result = await provider.createSubscriptionCheckout(readPaymentEnv(c), {
+        connection: toCoachConnection(coachPay),
         amountCents: coachPay.sessionPrice!,
         lessonTitle: `${category.title} (${frequency.toLowerCase()})`,
         scheduleId: schedule.id,
         frequency,
         studentEmail: user.email,
+        studentName: user.name,
+        origin: new URL(c.req.url).origin,
       });
-      if (checkoutUrl) {
+      if (result.externalRef) {
+        await db.recurringSchedule.update({ where: { id: schedule.id }, data: { squareSubscriptionId: result.externalRef } });
+      }
+      if (result.url) {
         return c.json({
           data: {
             schedule: {
@@ -1183,11 +1150,11 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
             },
             bookings: [],
           },
-          checkoutUrl,
+          checkoutUrl: result.url,
         }, 201);
       }
     } catch (err) {
-      console.error("Stripe subscription Checkout creation failed:", err);
+      console.error("Subscription Checkout creation failed:", err);
       return c.json({ error: "Couldn't start payment. Please try again." }, 502);
     }
   }
@@ -1263,16 +1230,20 @@ bookingRoutes.post("/recurring/:scheduleId/cancel", requireAuth, async (c) => {
   // Cancel the schedule
   await db.recurringSchedule.update({ where: { id: scheduleId }, data: { status: "CANCELLED" } });
 
-  // Cancel the backing Stripe subscription, if any (best-effort). The
-  // subscription.deleted webhook will also fire, but cancelling here is idempotent.
-  if (schedule.stripeSubscriptionId) {
-    const key = stripeKey(c);
-    if (key) {
-      try {
-        await makeStripe(key).subscriptions.cancel(schedule.stripeSubscriptionId);
-      } catch (err) {
-        console.error("Stripe subscription cancel failed:", err);
+  // Cancel the backing subscription, if any (best-effort). The provider's
+  // subscription-ended webhook also fires, but cancelling here is idempotent.
+  const externalSubId = schedule.stripeSubscriptionId ?? schedule.squareSubscriptionId;
+  if (externalSubId) {
+    try {
+      const coachConn = await db.user.findUnique({ where: { id: schedule.coachId }, select: coachPaySelect });
+      if (coachConn) {
+        await getProvider(coachConn.paymentProvider).cancelSubscription(readPaymentEnv(c), {
+          connection: toCoachConnection(coachConn),
+          externalSubscriptionId: externalSubId,
+        });
       }
+    } catch (err) {
+      console.error("Subscription cancel failed:", err);
     }
   }
 

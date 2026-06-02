@@ -56,6 +56,22 @@ model User {
   // Checkout is created). Charged once Stripe Connect charges are enabled.
   sessionPrice           Int?
 
+  // Which processor this coach uses to take payments. "STRIPE" (default, so
+  // every existing coach is unchanged) or "SQUARE". A coach uses exactly one
+  // provider at a time; the unused provider's columns stay null.
+  paymentProvider        String  @default("STRIPE")
+  // Square connection (OAuth). Set once the coach finishes the Square OAuth
+  // grant. squareConnected is the Square analogue of stripeChargesEnabled —
+  // true means we can take charges on their behalf. Access/refresh tokens are
+  // stored to call Square on the coach's behalf; tokens expire (~30 days) and
+  // are refreshed on use via squareTokenExpiresAt.
+  squareMerchantId       String?
+  squareLocationId       String?
+  squareAccessToken      String?
+  squareRefreshToken     String?
+  squareTokenExpiresAt   DateTime?
+  squareConnected        Boolean @default(false)
+
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
@@ -563,8 +579,13 @@ model Booking {
   remindedAt1h        DateTime?
   completedAt         DateTime?
   stripePaymentId     String?
-  // NOT_REQUIRED (free / coach has no Stripe) | PENDING (awaiting Checkout) |
-  // PAID | FAILED | REFUNDED. Set via the Stripe webhook.
+  // Square order id backing a one-time payment (the Checkout/Payment Link is
+  // created with reference_id = bookingId; the payment.updated webhook carries
+  // the order_id, which we match back to this row). Provider-exclusive with
+  // stripePaymentId — only one is set, per the coach's paymentProvider.
+  squareOrderId       String?
+  // NOT_REQUIRED (free / coach takes no payments) | PENDING (awaiting Checkout)
+  // | PAID | FAILED | REFUNDED. Set via the Stripe/Square webhook.
   paymentStatus       String    @default("NOT_REQUIRED")
   // True when this booking was paid with a package credit (vs per-session
   // Checkout). subscriptionId links the specific package the credit came from,
@@ -622,6 +643,9 @@ model RecurringSchedule {
   nodeId           String?
   // Stripe Subscription backing this schedule (set once Checkout completes).
   stripeSubscriptionId String? @unique
+  // Square Subscription backing this schedule (set synchronously when the
+  // subscription is created, unlike Stripe where the webhook fills it in).
+  squareSubscriptionId String? @unique
   // NOT_REQUIRED | PENDING (awaiting Checkout) | PAID | PAST_DUE | CANCELLED.
   paymentStatus    String   @default("NOT_REQUIRED")
   createdAt        DateTime @default(now())
@@ -705,7 +729,11 @@ model Subscription {
   userId                String
   coachId               String
   planId                String
-  stripeSubscriptionId  String   @unique
+  // Provider subscription id — exactly one is set per the coach's
+  // paymentProvider. Both nullable + unique so a Square-backed package can
+  // exist without a Stripe id (and vice versa).
+  stripeSubscriptionId  String?  @unique
+  squareSubscriptionId  String?  @unique
   status                String   @default("ACTIVE")
   currentPeriodStart    DateTime
   currentPeriodEnd      DateTime

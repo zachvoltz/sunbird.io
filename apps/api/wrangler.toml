@@ -18,6 +18,9 @@ port = 8787
 
 [vars]
 ENVIRONMENT = "development"
+# Square environment selector (non-secret). The Square app id/secret + webhook
+# signature key are secrets — set them with `wrangler secret put SQUARE_*`.
+SQUARE_ENVIRONMENT = "sandbox"
 
 [[d1_databases]]
 binding = "DB"

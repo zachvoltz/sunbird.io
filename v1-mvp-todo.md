@@ -92,15 +92,16 @@ Wireframe references:
 
 Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most cost is the second client checkout + subscriptions + webhooks; onboarding parity + the abstraction layer is the small part (~2–4 days). Decide *before* building Stripe checkout — the abstraction is cheap up front, expensive to retrofit.
 
-- [ ] **Spike first (½ day):** verify the `square` npm SDK runs on the Cloudflare Workers runtime (`nodejs_compat`); if not, plan to call Square's REST API via `fetch`. This is the biggest unknown.
-- [ ] Provider abstraction layer: an interface (`onboardingLink`, `createCheckout`, `createSubscription`, `verifyWebhook`) with Stripe + Square implementations; refactor `coach-payments.ts` to dispatch on the coach's chosen provider instead of calling `stripe.*` directly
-- [ ] Schema generalization (D1 migration, dev + prod): `paymentProvider` per coach + provider-neutral / Square-specific IDs (`squareMerchantId`, `squareLocationId`, OAuth token, etc.) alongside the existing `stripe*` columns
-- [ ] Square onboarding via **OAuth** (store coach access token + merchant/location) — different model than Stripe Connect account-links, not a drop-in
-- [ ] Square one-time payments: **Web Payments SDK** card tokenization in the browser → create payment server-side → confirm via webhook
-- [ ] Square subscriptions: Catalog + Subscriptions API (diverges most from Stripe; highest effort/uncertainty)
-- [ ] Square webhook endpoint + signature verification (separate from Stripe's)
-- [ ] Coach UI: provider chooser on `/coach/payments`; student checkout branches on the coach's provider (Square Web Payments card form vs Stripe)
-- [ ] End-to-end test in **both** Stripe and Square sandboxes (onboarding, one-time, recurring, failed payment, refund)
+- [x] **Spike resolved:** went with a `fetch`-based Square REST client (`lib/payment-provider/square.ts`), not the `square` npm SDK — same approach `lib/stripe.ts` takes, no Workers runtime risk.
+- [x] Provider abstraction layer: `lib/payment-provider/{types,stripe,square,index}.ts` — `PaymentProvider` interface (`createBookingCheckout`, `createSubscriptionCheckout`, `createPackageCheckout`, `cancelSubscription`) with Stripe + Square adapters; `getProvider(coach.paymentProvider)` dispatch. `bookings.ts` / `packages.ts` no longer call `stripe.*` directly. Onboarding stays route-side (Connect vs OAuth differ structurally).
+- [x] Schema generalization (`0027_add_square_multiprovider.sql`, dev pushed + prod migration): `User.paymentProvider` (default STRIPE) + `square*` columns; `Booking.squareOrderId`; `RecurringSchedule.squareSubscriptionId`; `Subscription.squareSubscriptionId` (and `stripeSubscriptionId` made nullable). Existing rows backfill to STRIPE — zero behavior change.
+- [x] Square onboarding via **OAuth** — `POST /onboarding-link` returns the authorize URL; `GET /square/callback` exchanges the code, stores merchant/location/tokens, marks `squareConnected`; `PATCH /provider` switches processor.
+- [x] Square one-time payments via **hosted Checkout** (Payment Links API; decided over the Web Payments SDK for parity with the Stripe redirect model) — order tagged with the booking id; `payment.updated` webhook → booking PAID.
+- [x] Square subscriptions (recurring schedules + monthly packages): Catalog plan/variation + Subscriptions API billed **by invoice** (no card-on-file); first invoice's `public_url` is the redirect target (else `?payment=pending`).
+- [x] Square webhook endpoint `POST /api/webhooks/square` + HMAC-SHA256 signature verification; pure `handleSquareEvent` (`payment.updated`, `invoice.payment_made`, `invoice.scheduled_charge_failed`, `subscription.updated`). Unit-tested in `square-events.test.ts` + `payment-provider.test.ts`.
+- [x] Coach UI: provider chooser on `/coach/payments` (`Payments.tsx` entry stage, generalized status payload). Student checkout needs no branching — the server returns a hosted `checkoutUrl` for either provider, so `StepConfirm.tsx` redirects unchanged.
+- [ ] **End-to-end test in both Stripe + Square sandboxes** (onboarding, one-time, recurring, failed payment, refund) — needs real sandbox creds + a public webhook tunnel; can't run in this env. Build is to-spec + unit-tested; run this before launch.
+- [ ] **Deferred follow-ups:** unattended Square OAuth token refresh (cron — tokens expire ~30 days; refresh-on-use stored via `squareTokenExpiresAt` but no background refresh yet); Square refund UI (parity with the still-deferred Stripe refund UI); reuse Square catalog plans by (coach, cadence, price) instead of minting one per checkout.
 
 ---
 
