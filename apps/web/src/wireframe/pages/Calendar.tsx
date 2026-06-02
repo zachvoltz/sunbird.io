@@ -146,7 +146,10 @@ function keysToSlots(keys: Set<string>): Array<{ dayOfWeek: number; startTime: s
 
 function CalendarDesktop({ bookings, loading }: { bookings: BookingPublic[]; loading: boolean }) {
   const now = useNow(60_000);
-  const [view, setView] = useState<ViewMode>("week");
+  // The week grid (52px + 7 columns) is unreadable on a phone; default to the
+  // scrollable list view there. The user can still switch manually.
+  const isMobile = useIsMobile();
+  const [view, setView] = useState<ViewMode>(isMobile ? "list" : "week");
   const [weekStart, setWeekStart] = useState<Date>(() => mondayOf(now));
   const [editMode, setEditMode] = useState<EditMode>("view");
 

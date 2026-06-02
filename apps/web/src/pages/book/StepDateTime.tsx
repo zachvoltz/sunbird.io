@@ -132,7 +132,7 @@ export function StepDateTime({ state, update, nextStep }: Props) {
               No available slots on this date. Try another day.
             </p>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {slots.map((slot) => (
                 <button
                   key={slot.startsAt}

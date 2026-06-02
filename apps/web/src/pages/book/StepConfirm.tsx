@@ -149,7 +149,7 @@ export function StepConfirm({ state, update }: Props) {
         <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-3">
           Lesson format
         </p>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <button
             onClick={() => update({ mode: "ONLINE" })}
             className={`p-4 rounded-card border text-left transition-all duration-200 ${

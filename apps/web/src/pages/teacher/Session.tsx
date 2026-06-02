@@ -1046,7 +1046,7 @@ export function CoachSession() {
             <div
               className="flex flex-col rounded-card overflow-hidden border border-cream/10 backdrop-blur"
               style={{
-                width: 320,
+                width: "min(320px, calc(100vw - 48px))",
                 height: "min(520px, 100%)",
                 background: "rgba(26, 22, 18, 0.35)",
               }}
