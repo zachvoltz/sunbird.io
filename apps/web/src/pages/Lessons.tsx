@@ -1,18 +1,23 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
+import { ErrorState } from "@/components/ui";
 import type { CategoryPublic } from "@sunbird/shared";
 
 export function Lessons() {
   const [lessons, setLessons] = useState<CategoryPublic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(false);
     apiFetch<{ data: CategoryPublic[] }>("/api/categories")
       .then((res) => setLessons(res.data))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   return (
     <div className="py-16 px-6 md:px-10">
@@ -33,6 +38,9 @@ export function Lessons() {
         </div>
 
         {/* Lesson cards */}
+        {error && !loading ? (
+          <ErrorState message="We couldn't load the lessons." onRetry={load} />
+        ) : (
         <div className="space-y-0 border-t border-charcoal/10">
           {loading
             ? Array.from({ length: 5 }).map((_, i) => (
@@ -88,6 +96,7 @@ export function Lessons() {
                 </Link>
               ))}
         </div>
+        )}
 
         {/* Bottom CTA */}
         <div className="mt-20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 py-10 border-t border-charcoal/10">

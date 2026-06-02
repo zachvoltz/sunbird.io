@@ -1,26 +1,25 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
+import { LoadingState, ErrorState } from "@/components/ui";
 import type { CoachPublic } from "@sunbird/shared";
 
 export function Coaches() {
   const [coaches, setCoaches] = useState<CoachPublic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(false);
     apiFetch<{ data: CoachPublic[] }>("/api/coaches")
       .then((res) => setCoaches(res.data))
-      .catch(console.error)
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
-  if (loading) {
-    return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <div className="w-6 h-6 border-2 border-charcoal/20 border-t-charcoal rounded-full animate-spin" />
-      </div>
-    );
-  }
+  if (loading) return <LoadingState className="min-h-[60vh]" />;
 
   return (
     <div className="py-16 px-6 md:px-10">
@@ -32,7 +31,9 @@ export function Coaches() {
           Meet the musicians and educators behind Sunbird.
         </p>
 
-        {coaches.length === 0 ? (
+        {error ? (
+          <ErrorState message="We couldn't load the coaches." onRetry={load} />
+        ) : coaches.length === 0 ? (
           <p className="text-text-secondary text-center py-12">
             No coaches have published their profiles yet.
           </p>

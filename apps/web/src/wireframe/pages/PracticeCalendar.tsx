@@ -3,10 +3,11 @@
 // overlaid. Data comes from /api/me/student-data (streak + practiceDays) and
 // /api/bookings (lessons). All day math is UTC to match practiceDays' keys.
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { StudentDetailPublic, BookingPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
+import { ErrorState } from "@/components/ui";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 
@@ -20,16 +21,20 @@ export function PracticeCalendarPage() {
   const [detail, setDetail] = useState<StudentDetailPublic | null>(null);
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [monthOffset, setMonthOffset] = useState(0);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    setLoading(true);
+    setError(false);
     Promise.all([
       apiFetch<{ data: StudentDetailPublic }>("/api/me/student-data").then((r) => setDetail(r.data)),
       apiFetch<{ data: BookingPublic[] }>("/api/bookings").then((r) => setBookings(r.data)),
     ])
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false));
   }, []);
+  useEffect(() => { load(); }, [load]);
 
   const practiced = useMemo(() => new Set(detail?.practiceDays ?? []), [detail]);
 
@@ -80,7 +85,11 @@ export function PracticeCalendarPage() {
           <div className="panel-body scroll" style={{ padding: 16 }}>
             {loading && <div className="small muted">Loading…</div>}
 
-            {!loading && (
+            {!loading && error && (
+              <ErrorState message="We couldn't load your practice calendar." onRetry={load} />
+            )}
+
+            {!loading && !error && (
               <>
                 <div className="row between mb-3" style={{ alignItems: "center" }}>
                   <button className="btn small ghost" onClick={() => setMonthOffset((o) => o - 1)}>← prev</button>

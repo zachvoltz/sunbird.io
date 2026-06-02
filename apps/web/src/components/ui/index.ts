@@ -8,3 +8,5 @@ export { Label } from "./Label";
 export { SectionHeading } from "./SectionHeading";
 export { Container } from "./Container";
 export { Divider } from "./Divider";
+export { Spinner, LoadingState } from "./Spinner";
+export { ErrorState } from "./ErrorState";

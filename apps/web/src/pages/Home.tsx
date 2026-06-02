@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import { ErrorState } from "@/components/ui";
 import { Wordmark } from "@/components/Wordmark";
 import { Mic, PenLine, Music, Theater, BookOpen, Flower2, Guitar } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -48,13 +49,16 @@ function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 
 export function Home() {
   const [categories, setCategories] = useState<CategoryPublic[]>([]);
+  const [categoriesError, setCategoriesError] = useState(false);
   const { isAuthenticated } = useAuth();
 
-  useEffect(() => {
+  const loadCategories = useCallback(() => {
+    setCategoriesError(false);
     apiFetch<{ data: CategoryPublic[] }>("/api/categories")
       .then((res) => setCategories(res.data))
-      .catch(() => {});
+      .catch(() => setCategoriesError(true));
   }, []);
+  useEffect(() => { loadCategories(); }, [loadCategories]);
 
   return (
     <>
@@ -137,6 +141,13 @@ export function Home() {
             </Link>
           </div>
 
+          {categoriesError && categories.length === 0 ? (
+            <ErrorState
+              variant="inline"
+              message="We couldn't load the lessons just now."
+              onRetry={loadCategories}
+            />
+          ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
             {categories.map((item) => {
               const Icon = lessonIcons[item.slug] || Music;
@@ -158,6 +169,7 @@ export function Home() {
               );
             })}
           </div>
+          )}
         </div>
       </section>
 
