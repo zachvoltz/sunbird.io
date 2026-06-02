@@ -191,7 +191,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 
 ## 12. Pre-launch polish
 
-- [~] Empty states for: no bookings, no takes, no assignments, empty inbox — **no bookings** (`MyBookings.tsx`) and **no goals** done in production pages; **no takes**, **no assignments**, and **empty inbox** only exist in wireframe pages, not the live routes
+- [x] Empty states for: no bookings, no takes, no assignments, empty inbox — all covered in the live pages: **no bookings** (`MyBookings.tsx`), **empty inbox** (`MyInbox.tsx` `InboxEmpty`, conditional on real `/api/me/inbox` data), **no assignments/routine** (`PracticePath.tsx` "No routine set yet"), and **no takes** — `MyTakes.tsx` rewritten from a static mock into a real list off `useMyStudentDetail()` (takes sorted newest-first, inline audio playback + coach reply), showing `TakesEmpty` only when the student truly has zero takes
 - [ ] Loading / error states across the app
 - [ ] Mobile responsiveness pass on booking flow, session page, practice path, calendar
 - [ ] Transactional email templates branded (currently functional, may need design pass) — **needs mockup**
