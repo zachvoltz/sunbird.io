@@ -4,6 +4,7 @@ import { useSidebarStudents } from "../hooks/useSidebarStudents";
 import { useAuth } from "@/context/AuthContext";
 import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
+import { InviteStudentModal } from "./InviteStudentModal";
 import { Icon } from "./Icon";
 import { apiFetch } from "@/lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -40,6 +41,11 @@ export type SidebarStudent = {
   dot?: boolean;
   today?: boolean;
   when: string;
+  // "PENDING" entries are invited students who haven't logged in yet — they
+  // render gray and link to the invite status page (by inviteId) rather than a
+  // real student page. Active students omit these / use "ACTIVE".
+  status?: "ACTIVE" | "PENDING";
+  inviteId?: string;
 };
 
 function DTTopBar({
@@ -106,10 +112,12 @@ function DTSidebar({
   collapsed: boolean;
   students: SidebarStudent[];
 }) {
-  const params = useParams<{ studentId?: string }>();
+  const params = useParams<{ studentId?: string; inviteId?: string }>();
   const inboxCount = useInboxCount();
+  const [inviteOpen, setInviteOpen] = useState(false);
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
+      {inviteOpen && <InviteStudentModal onClose={() => setInviteOpen(false)} />}
       <Link to="/coach" className={"item" + (on === "roster" ? " on" : "")} title="Today">
         <span className="nav-ico"><Icon name="home" size={18} /></span>
         {!collapsed && <span>Today</span>}
@@ -158,19 +166,43 @@ function DTSidebar({
         {!collapsed && <span>Account</span>}
       </Link>
 
-      {!collapsed && <div className="sec-label">STUDENTS · {students.length}</div>}
+      {!collapsed && (
+        <div className="sec-label row between" style={{ alignItems: "center" }}>
+          <span>STUDENTS · {students.length}</span>
+          <button
+            onClick={() => setInviteOpen(true)}
+            title="Invite a student"
+            aria-label="Invite a student"
+            style={{
+              border: 0,
+              background: "transparent",
+              cursor: "pointer",
+              color: "var(--ink-faint)",
+              fontSize: 16,
+              lineHeight: 1,
+              padding: "0 2px",
+            }}
+          >
+            ＋
+          </button>
+        </div>
+      )}
       {collapsed && (
         <div className="sec-label" style={{ textAlign: "center", padding: "10px 0 4px" }}>—</div>
       )}
 
       {students.map((s) => {
-        const isCurrent = on === "student" && params.studentId === s.id;
+        const pending = s.status === "PENDING";
+        const isCurrent = pending
+          ? on === "invite" && params.inviteId === s.inviteId
+          : on === "student" && params.studentId === s.id;
         return (
           <Link
             key={s.id}
-            to={`/coach/student/${s.id}`}
+            to={pending ? `/coach/invite/${s.inviteId}` : `/coach/student/${s.id}`}
             className={"item" + (isCurrent ? " on" : "")}
-            title={s.n}
+            title={pending ? `${s.n} — invited` : s.n}
+            style={pending ? { opacity: 0.55 } : undefined}
           >
             <span className="avatar">{s.n[0]}</span>
             {!collapsed && (

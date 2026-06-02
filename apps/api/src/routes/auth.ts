@@ -6,6 +6,7 @@ import { createSession, invalidateSession, clearSessionCookie, parseSessionCooki
 import { generateToken, hashToken } from "../lib/token";
 import { createGoogleClient } from "../lib/oauth";
 import { createEmailService } from "../services/email.service";
+import { claimStudentInvites } from "../lib/invites";
 import { requireAuth } from "../middleware/auth";
 import { getEnv } from "../lib/env";
 import { generateState, generateCodeVerifier } from "arctic";
@@ -49,6 +50,10 @@ auth.post("/register", async (c) => {
     data: { name, email, passwordHash, referralSource },
   });
 
+  // Claim any pending coach invites for this email — flips them to an active
+  // student in the inviting coach's list.
+  await claimStudentInvites(db, user);
+
   const { cookie } = await createSession(db, user.id);
   c.header("Set-Cookie", cookie);
 
@@ -83,6 +88,9 @@ auth.post("/login", async (c) => {
   if (!verifyPassword(password, user.passwordHash)) {
     return c.json({ error: "Invalid email or password" }, 401);
   }
+
+  // Safety net: claim any still-pending invites for this email.
+  await claimStudentInvites(db, user);
 
   const { cookie } = await createSession(db, user.id);
   c.header("Set-Cookie", cookie);
@@ -289,6 +297,10 @@ auth.get("/oauth/google/cb", async (c) => {
       });
     }
   }
+
+  // Claim any pending coach invites for this email (covers both brand-new and
+  // account-linking sign-ins).
+  await claimStudentInvites(db, user);
 
   const { cookie } = await createSession(db, user.id);
 

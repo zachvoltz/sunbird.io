@@ -24,6 +24,7 @@ import { ResetPassword } from "@/pages/ResetPassword";
 import { NotFound } from "@/pages/NotFound";
 import { RosterPage } from "@/wireframe/pages/Roster";
 import { StudentPage } from "@/wireframe/pages/StudentPage";
+import { InviteStatusPage } from "@/wireframe/pages/InviteStatusPage";
 import { TakeReviewPage } from "@/wireframe/pages/TakeReview";
 import { MidiEditorPage } from "@/wireframe/pages/MidiEditor";
 import { LibraryPage } from "@/wireframe/pages/Library";
@@ -83,6 +84,7 @@ export function App() {
       <Route path="/coach/calendar" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CalendarPage /></RoleGate></AuthGate>} />
       <Route path="/coach/student/:studentId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><StudentPage /></RoleGate></AuthGate>} />
       <Route path="/coach/student/:studentId/voice" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><VoiceRangePage /></RoleGate></AuthGate>} />
+      <Route path="/coach/invite/:inviteId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><InviteStatusPage /></RoleGate></AuthGate>} />
       <Route path="/coach/takes/:takeId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TakeReviewPage /></RoleGate></AuthGate>} />
       <Route path="/coach/library" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><LibraryPage /></RoleGate></AuthGate>} />
       <Route path="/coach/library/paths/:slug" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><PathEditorPage /></RoleGate></AuthGate>} />

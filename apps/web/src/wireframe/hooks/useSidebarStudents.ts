@@ -10,6 +10,8 @@ type StudentInfo = {
   email: string;
   bookingCount: number;
   lastLessonAt: string;
+  status?: "ACTIVE" | "PENDING";
+  inviteId?: string;
 };
 
 type BookingMin = {
@@ -58,6 +60,10 @@ function build(students: StudentInfo[], bookings: BookingMin[]): SidebarStudent[
   return students
     .slice()
     .sort((a, b) => {
+      // Pending (invited) students always sort to the bottom.
+      const ap = a.status === "PENDING";
+      const bp = b.status === "PENDING";
+      if (ap !== bp) return ap ? 1 : -1;
       const an = next.get(a.id);
       const bn = next.get(b.id);
       if (an && !bn) return -1;
@@ -66,6 +72,16 @@ function build(students: StudentInfo[], bookings: BookingMin[]): SidebarStudent[
       return a.name.localeCompare(b.name);
     })
     .map((s): SidebarStudent => {
+      if (s.status === "PENDING") {
+        return {
+          id: s.id,
+          n: s.name,
+          dot: false,
+          when: "invited",
+          status: "PENDING",
+          inviteId: s.inviteId,
+        };
+      }
       const when = next.get(s.id);
       const isToday = when ? ymd(new Date(when)) === ymd(new Date()) : false;
       return {
@@ -74,6 +90,7 @@ function build(students: StudentInfo[], bookings: BookingMin[]): SidebarStudent[
         today: isToday,
         dot: false,
         when: when ? relativeDay(when) : "—",
+        status: "ACTIVE",
       };
     });
 }
@@ -92,6 +109,14 @@ function fetchOnce(): Promise<SidebarStudent[]> {
     return out;
   });
   return inflight;
+}
+
+// Bust the module cache and refetch, notifying every mounted subscriber.
+// Call after mutating the roster (e.g. inviting or revoking a student).
+export function refreshSidebarStudents(): void {
+  cachedStudents = null;
+  inflight = null;
+  fetchOnce();
 }
 
 export function useSidebarStudents(): SidebarStudent[] | undefined {

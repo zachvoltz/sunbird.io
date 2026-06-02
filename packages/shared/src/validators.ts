@@ -362,6 +362,13 @@ export const eventRsvpSchema = z.object({
   email: z.string().email("Invalid email address"),
 });
 
+// ── Coach invites a student by email ──
+
+export const createStudentInviteSchema = z.object({
+  email: z.string().email("Enter a valid email address"),
+  name: z.string().min(1).max(100).optional(),
+});
+
 // ── Student goals (set + track, shared with coach) ──
 
 export const createGoalSchema = z.object({

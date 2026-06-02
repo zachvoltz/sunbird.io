@@ -35,8 +35,10 @@ export function Login() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const [loading, setLoading] = useState(false);
 
-  // Form fields
-  const [email, setEmail] = useState("");
+  // Form fields — a coach invite link arrives with ?email= so the new student
+  // signs up with the exact address the invite was sent to (that's how the
+  // invite gets claimed and they flip from gray to active in the coach's list).
+  const [email, setEmail] = useState(() => searchParams.get("email") ?? "");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
 

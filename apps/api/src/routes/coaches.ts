@@ -4,8 +4,9 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { parseRoutine, serializeRoutine } from "../lib/routine";
 import { serializeGoal } from "../lib/goals";
 import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
-import { createTakeReplySchema, createTakeAnnotationSchema } from "@sunbird/shared";
+import { createTakeReplySchema, createTakeAnnotationSchema, createStudentInviteSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
+import { getEnv } from "../lib/env";
 
 export const coachRoutes = new Hono();
 
@@ -108,11 +109,203 @@ coachRoutes.get("/students", requireAuth, requireRole("COACH", "ADMIN"), async (
     }
   }
 
-  const students = Array.from(studentMap.values()).sort((a, b) =>
-    b.lastLessonAt.localeCompare(a.lastLessonAt),
-  );
+  // Merge in this coach's invites. ACCEPTED invites guarantee a student shows
+  // even with zero bookings; PENDING invites appear as gray placeholder entries
+  // (keyed by invite id) until the invitee logs in. See lib/invites.ts.
+  const invites = user.role === "COACH"
+    ? await db.studentInvite.findMany({
+        where: { coachId: user.id },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          status: true,
+          createdAt: true,
+          student: { select: { id: true, name: true, avatarUrl: true, bio: true, email: true } },
+        },
+      })
+    : [];
 
-  return c.json({ data: students });
+  const pending: Array<{
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+    bio: string | null;
+    email: string;
+    bookingCount: number;
+    lastLessonAt: string;
+    status: "PENDING";
+    inviteId: string;
+  }> = [];
+
+  for (const inv of invites) {
+    if (inv.status === "ACCEPTED" && inv.student) {
+      // Ensure linked students appear even without bookings.
+      if (!studentMap.has(inv.student.id)) {
+        studentMap.set(inv.student.id, {
+          id: inv.student.id,
+          name: inv.student.name,
+          avatarUrl: inv.student.avatarUrl,
+          bio: inv.student.bio,
+          email: inv.student.email,
+          bookingCount: 0,
+          lastLessonAt: inv.createdAt.toISOString(),
+        });
+      }
+    } else if (inv.status === "PENDING") {
+      pending.push({
+        id: inv.id,
+        name: inv.name || inv.email,
+        avatarUrl: null,
+        bio: null,
+        email: inv.email,
+        bookingCount: 0,
+        lastLessonAt: inv.createdAt.toISOString(),
+        status: "PENDING",
+        inviteId: inv.id,
+      });
+    }
+  }
+
+  const active = Array.from(studentMap.values())
+    .sort((a, b) => b.lastLessonAt.localeCompare(a.lastLessonAt))
+    .map((s) => ({ ...s, status: "ACTIVE" as const }));
+
+  return c.json({ data: [...active, ...pending] });
+});
+
+// ─── Student invites ───
+// A coach invites a student by email. See lib/invites.ts for how a PENDING
+// invite is claimed (→ ACCEPTED) when the invitee logs in.
+
+type InviteRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  status: string;
+  createdAt: Date;
+  acceptedAt: Date | null;
+};
+
+function serializeInvite(inv: InviteRow) {
+  return {
+    id: inv.id,
+    email: inv.email,
+    name: inv.name,
+    status: inv.status,
+    createdAt: inv.createdAt.toISOString(),
+    acceptedAt: inv.acceptedAt ? inv.acceptedAt.toISOString() : null,
+  };
+}
+
+function inviteUrlFor(c: any, token: string, email: string): string {
+  const origin = c.req.header("Origin") || "http://localhost:5173";
+  return `${origin}/login?tab=register&role=student&invite=${token}&email=${encodeURIComponent(email)}`;
+}
+
+// POST /api/coaches/invites — invite a student by email
+coachRoutes.post("/invites", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const body = await c.req.json();
+  const parsed = createStudentInviteSchema.safeParse(body);
+  if (!parsed.success) {
+    return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
+  }
+
+  const email = parsed.data.email.toLowerCase();
+  const name = parsed.data.name;
+  const db = getDb();
+  const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+
+  const existingInvite = await db.studentInvite.findUnique({
+    where: { coachId_email: { coachId: user.id, email } },
+  });
+  if (existingInvite) {
+    return c.json({ error: "You've already invited that email" }, 409);
+  }
+
+  // If they already have an account, link them immediately (active, not gray).
+  const existingUser = await db.user.findUnique({ where: { email } });
+
+  try {
+    if (existingUser) {
+      const invite = await db.studentInvite.create({
+        data: {
+          coachId: user.id,
+          email,
+          name,
+          status: "ACCEPTED",
+          studentId: existingUser.id,
+          acceptedAt: new Date(),
+        },
+      });
+      emailService.sendStudentAddedEmail(email, user.name).catch((err) => {
+        console.error("Failed to send student-added email:", err);
+      });
+      return c.json({ data: serializeInvite(invite) }, 201);
+    }
+
+    const invite = await db.studentInvite.create({
+      data: { coachId: user.id, email, name },
+    });
+    emailService
+      .sendStudentInviteEmail(email, user.name, inviteUrlFor(c, invite.token, email), name ?? undefined)
+      .catch((err) => {
+        console.error("Failed to send student invite email:", err);
+      });
+    return c.json({ data: serializeInvite(invite) }, 201);
+  } catch (err: any) {
+    if (String(err?.message ?? "").includes("Unique constraint")) {
+      return c.json({ error: "You've already invited that email" }, 409);
+    }
+    throw err;
+  }
+});
+
+// GET /api/coaches/invites/:id — invite status (for the pending-student page)
+coachRoutes.get("/invites/:id", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const invite = await db.studentInvite.findUnique({ where: { id: c.req.param("id") } });
+  if (!invite || (user.role === "COACH" && invite.coachId !== user.id)) {
+    return c.json({ error: "Invite not found" }, 404);
+  }
+  return c.json({ data: serializeInvite(invite) });
+});
+
+// POST /api/coaches/invites/:id/resend — re-send a pending invite email
+coachRoutes.post("/invites/:id/resend", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const invite = await db.studentInvite.findUnique({ where: { id: c.req.param("id") } });
+  if (!invite || (user.role === "COACH" && invite.coachId !== user.id)) {
+    return c.json({ error: "Invite not found" }, 404);
+  }
+  if (invite.status !== "PENDING") {
+    return c.json({ error: "This invite has already been accepted" }, 409);
+  }
+  const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+  emailService
+    .sendStudentInviteEmail(invite.email, user.name, inviteUrlFor(c, invite.token, invite.email), invite.name ?? undefined)
+    .catch((err) => {
+      console.error("Failed to resend student invite email:", err);
+    });
+  return c.json({ data: serializeInvite(invite) });
+});
+
+// DELETE /api/coaches/invites/:id — revoke a pending invite
+coachRoutes.delete("/invites/:id", requireAuth, requireRole("COACH", "ADMIN"), async (c) => {
+  const user = c.get("user")!;
+  const db = getDb();
+  const invite = await db.studentInvite.findUnique({ where: { id: c.req.param("id") } });
+  if (!invite || (user.role === "COACH" && invite.coachId !== user.id)) {
+    return c.json({ error: "Invite not found" }, 404);
+  }
+  if (invite.status !== "PENDING") {
+    return c.json({ error: "Can't revoke an accepted invite" }, 409);
+  }
+  await db.studentInvite.delete({ where: { id: invite.id } });
+  return c.json({ data: { id: invite.id } });
 });
 
 // GET /api/coaches/inbox-count — number of unread incoming

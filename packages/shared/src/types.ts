@@ -20,6 +20,7 @@ import type {
   updateCoachAvailabilitySchema,
   createGoalSchema,
   updateGoalSchema,
+  createStudentInviteSchema,
   assignPathSchema,
   advancePathSchema,
 } from "./validators";
@@ -36,6 +37,7 @@ export type ContactInput = z.infer<typeof contactSchema>;
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
 export type CreateGoalInput = z.infer<typeof createGoalSchema>;
 export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
+export type CreateStudentInviteInput = z.infer<typeof createStudentInviteSchema>;
 export type PracticeNotesInput = z.infer<typeof practiceNotesSchema>;
 export type CreateAvailabilityInput = z.infer<typeof createAvailabilitySchema>;
 export type CreateSongInput = z.infer<typeof createSongSchema>;

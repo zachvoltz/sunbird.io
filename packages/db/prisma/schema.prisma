@@ -124,6 +124,34 @@ model User {
   routineCompletions    RoutineCompletion[]
   studentGoals          Goal[]              @relation("studentGoals")
   coachGoals            Goal[]              @relation("coachGoals")
+  sentStudentInvites     StudentInvite[]    @relation("coachInvites")
+  receivedStudentInvites StudentInvite[]    @relation("invitedStudent")
+}
+
+// A coach's invitation of a student by email. This is the first explicit
+// coach→student link in the schema (the student list is otherwise derived
+// from bookings). A PENDING invite shows as a gray entry in the coach's
+// sidebar; it flips to ACCEPTED (and gains a studentId) once the invited
+// person logs in with that email — see claimStudentInvites in lib/invites.ts.
+// Inviting an email that already has an account creates the invite ACCEPTED
+// straight away, linking the existing user.
+model StudentInvite {
+  id         String    @id @default(cuid())
+  coachId    String
+  email      String    // lowercased
+  name       String?   // optional, coach-provided display name
+  status     String    @default("PENDING") // PENDING | ACCEPTED
+  token      String    @unique @default(cuid())
+  studentId  String?   // set once linked to a real User
+  createdAt  DateTime  @default(now())
+  acceptedAt DateTime?
+
+  coach   User  @relation("coachInvites", fields: [coachId], references: [id], onDelete: Cascade)
+  student User? @relation("invitedStudent", fields: [studentId], references: [id], onDelete: SetNull)
+
+  @@unique([coachId, email])
+  @@index([coachId, status])
+  @@index([email, status])
 }
 
 model Session {

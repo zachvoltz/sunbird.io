@@ -194,5 +194,48 @@ export function createEmailService(apiKey: string, from: string) {
         `.trim(),
       });
     },
+
+    // A coach invites someone who doesn't have an account yet. The link lands on
+    // signup pre-filled with the invite token; once they sign up, the invite is
+    // claimed and they appear as an active student in the coach's list.
+    async sendStudentInviteEmail(to: string, coachName: string, inviteUrl: string, studentName?: string) {
+      const greeting = studentName ? `Hi ${studentName},` : "Hi there,";
+      if (!resend) {
+        console.log(`[email] Student invite to ${to} from ${coachName}: ${inviteUrl}`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `${coachName} invited you to Sunbird`,
+        html: `
+          <h2>${coachName} invited you to Sunbird</h2>
+          <p>${greeting}</p>
+          <p>${coachName} would like to work with you on Sunbird. Create your account to see your lessons, practice plans, and progress in one place.</p>
+          <p><a href="${inviteUrl}">Accept the invitation</a></p>
+          <p>If you weren't expecting this, you can safely ignore this email.</p>
+          <p>— The Sunbird Team</p>
+        `.trim(),
+      });
+    },
+
+    // A coach invites someone who already has an account — they're linked
+    // immediately, so this is just a heads-up rather than a call to action.
+    async sendStudentAddedEmail(to: string, coachName: string) {
+      if (!resend) {
+        console.log(`[email] Student added notice to ${to} from ${coachName}`);
+        return;
+      }
+      await resend.emails.send({
+        from,
+        to,
+        subject: `${coachName} added you as a student`,
+        html: `
+          <h2>${coachName} added you as a student</h2>
+          <p>${coachName} added you to their student roster on Sunbird. Log in any time to see your lessons and practice plans.</p>
+          <p>— The Sunbird Team</p>
+        `.trim(),
+      });
+    },
   };
 }
