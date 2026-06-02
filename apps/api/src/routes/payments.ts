@@ -72,6 +72,39 @@ const bookingNotifyInclude = {
   coach: { select: { email: true, name: true } },
 };
 
+// Approximate a one-month period end. Display-only — the credit reset is driven
+// by Stripe's invoice.paid (subscription_cycle) events, not by these dates.
+function plusOneMonth(from: Date): Date {
+  const d = new Date(from);
+  d.setMonth(d.getMonth() + 1);
+  return d;
+}
+
+// Create a package Subscription row from a completed subscription Checkout.
+// Idempotent on the Stripe subscription id, and nudges the coach's inbox.
+async function createPackageSubscription(db: any, s: any): Promise<void> {
+  const subId = typeof s.subscription === "string" ? s.subscription : null;
+  const { planId, studentId, coachId } = s.metadata ?? {};
+  if (!subId || !planId || !studentId || !coachId) return;
+  const existing = await db.subscription.findUnique({ where: { stripeSubscriptionId: subId } });
+  if (existing) return;
+  const now = new Date();
+  await db.subscription
+    .create({
+      data: {
+        userId: studentId,
+        coachId,
+        planId,
+        stripeSubscriptionId: subId,
+        status: "ACTIVE",
+        currentPeriodStart: now,
+        currentPeriodEnd: plusOneMonth(now),
+        lessonsUsedThisPeriod: 0,
+      },
+    })
+    .catch(() => {});
+}
+
 /**
  * Pure Stripe event handler — no signature work, so tests can drive it with
  * synthetic events. All DB writes are guarded/idempotent so duplicate webhook
@@ -115,6 +148,12 @@ export async function handleStripeEvent(db: any, event: any, deps: { email?: Ema
             }
           }
         }
+      } else if (s.mode === "subscription" && s.metadata?.planId) {
+        // A monthly package was purchased — create the Subscription row
+        // (idempotent on the Stripe subscription id). Period dates are an
+        // approximation refined by the invoice.paid renewal events; the credit
+        // reset is driven by those, not by these dates.
+        await createPackageSubscription(db, s);
       }
       break;
     }
@@ -136,8 +175,31 @@ export async function handleStripeEvent(db: any, event: any, deps: { email?: Ema
       break;
     }
 
+    // A package subscription renewed — reset this period's credits and update
+    // the period window. subscription_cycle distinguishes renewals from the
+    // initial create invoice (which already starts at 0 credits).
+    case "invoice.paid": {
+      const inv = event.data.object;
+      const subId = typeof inv.subscription === "string" ? inv.subscription : null;
+      if (subId && inv.billing_reason === "subscription_cycle") {
+        const now = new Date();
+        await db.subscription.updateMany({
+          where: { stripeSubscriptionId: subId },
+          data: {
+            lessonsUsedThisPeriod: 0,
+            status: "ACTIVE",
+            currentPeriodStart: now,
+            currentPeriodEnd: plusOneMonth(now),
+          },
+        });
+      }
+      break;
+    }
+
     // A recurring subscription's invoice failed — mark the schedule past-due
     // and notify both sides (anchored on the schedule's next future booking).
+    // Package subscriptions don't have bookings to anchor on, so they're just
+    // flagged PAST_DUE.
     case "invoice.payment_failed": {
       const inv = event.data.object;
       const subId = typeof inv.subscription === "string" ? inv.subscription : null;
@@ -151,6 +213,11 @@ export async function handleStripeEvent(db: any, event: any, deps: { email?: Ema
             include: bookingNotifyInclude,
           });
           if (anchor) await notifyPaymentFailed(db, deps.email, anchor, "the payment for your recurring lessons failed. Please update your card to avoid interruption.");
+        } else if (!schedule) {
+          await db.subscription.updateMany({
+            where: { stripeSubscriptionId: subId, status: { not: "CANCELLED" } },
+            data: { status: "PAST_DUE" },
+          });
         }
       }
       break;
@@ -165,6 +232,13 @@ export async function handleStripeEvent(db: any, event: any, deps: { email?: Ema
         await db.recurringSchedule.update({ where: { id: schedule.id }, data: { status: "CANCELLED", paymentStatus: "CANCELLED" } });
         await db.booking.updateMany({
           where: { scheduleId: schedule.id, status: "CONFIRMED", startsAt: { gt: new Date() } },
+          data: { status: "CANCELLED" },
+        });
+      } else {
+        // A package subscription ended — mark it cancelled. Already-booked
+        // lessons that consumed credits stay (the student keeps what they used).
+        await db.subscription.updateMany({
+          where: { stripeSubscriptionId: sub.id },
           data: { status: "CANCELLED" },
         });
       }

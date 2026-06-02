@@ -81,6 +81,67 @@ describe("handleStripeEvent", () => {
     expect(bookings.every((b) => b.paymentStatus === "PAID")).toBe(true);
   });
 
+  it("checkout.session.completed (subscription + planId) creates a package Subscription", async () => {
+    const db = getDb();
+    const plan = await db.subscriptionPlan.create({
+      data: { coachId, name: "Starter", lessonsPerMonth: 4, priceMonthly: 8000 },
+    });
+    await handleStripeEvent(db, {
+      type: "checkout.session.completed",
+      data: { object: { mode: "subscription", subscription: "sub_pkg_1", metadata: { planId: plan.id, studentId, coachId } } },
+    });
+    const sub = await db.subscription.findUnique({ where: { stripeSubscriptionId: "sub_pkg_1" } });
+    expect(sub).toBeTruthy();
+    expect(sub?.planId).toBe(plan.id);
+    expect(sub?.status).toBe("ACTIVE");
+    expect(sub?.lessonsUsedThisPeriod).toBe(0);
+    // Idempotent — a duplicate delivery doesn't create a second row.
+    await handleStripeEvent(db, {
+      type: "checkout.session.completed",
+      data: { object: { mode: "subscription", subscription: "sub_pkg_1", metadata: { planId: plan.id, studentId, coachId } } },
+    });
+    expect(await db.subscription.count({ where: { stripeSubscriptionId: "sub_pkg_1" } })).toBe(1);
+  });
+
+  it("invoice.paid (subscription_cycle) resets package credits", async () => {
+    const db = getDb();
+    await db.subscription.update({
+      where: { stripeSubscriptionId: "sub_pkg_1" },
+      data: { lessonsUsedThisPeriod: 3, status: "PAST_DUE" },
+    });
+    await handleStripeEvent(db, {
+      type: "invoice.paid",
+      data: { object: { subscription: "sub_pkg_1", billing_reason: "subscription_cycle" } },
+    });
+    const sub = await db.subscription.findUnique({ where: { stripeSubscriptionId: "sub_pkg_1" } });
+    expect(sub?.lessonsUsedThisPeriod).toBe(0);
+    expect(sub?.status).toBe("ACTIVE");
+  });
+
+  it("invoice.paid (subscription_create) does NOT reset (no cycle)", async () => {
+    const db = getDb();
+    await db.subscription.update({
+      where: { stripeSubscriptionId: "sub_pkg_1" },
+      data: { lessonsUsedThisPeriod: 2 },
+    });
+    await handleStripeEvent(db, {
+      type: "invoice.paid",
+      data: { object: { subscription: "sub_pkg_1", billing_reason: "subscription_create" } },
+    });
+    const sub = await db.subscription.findUnique({ where: { stripeSubscriptionId: "sub_pkg_1" } });
+    expect(sub?.lessonsUsedThisPeriod).toBe(2);
+  });
+
+  it("customer.subscription.deleted cancels a package Subscription", async () => {
+    const db = getDb();
+    await handleStripeEvent(db, {
+      type: "customer.subscription.deleted",
+      data: { object: { id: "sub_pkg_1" } },
+    });
+    const sub = await db.subscription.findUnique({ where: { stripeSubscriptionId: "sub_pkg_1" } });
+    expect(sub?.status).toBe("CANCELLED");
+  });
+
   it("invoice.payment_failed marks the schedule PAST_DUE + notifies", async () => {
     const db = getDb();
     const schedule = await db.recurringSchedule.create({

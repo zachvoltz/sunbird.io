@@ -1,7 +1,71 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
-import type { CoachProfilePublic } from "@sunbird/shared";
+import type { CoachProfilePublic, SubscriptionPlanPublic } from "@sunbird/shared";
+
+// Monthly lesson packages a coach sells (Model B). Coexists with per-session
+// booking — a student can subscribe here or just "Book a lesson" below. The
+// list endpoint is auth-gated, so logged-out visitors simply see no section.
+function PackagesSection({ coachId, coachName }: { coachId: string; coachName: string }) {
+  const [plans, setPlans] = useState<SubscriptionPlanPublic[]>([]);
+  const [subscribingId, setSubscribingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    apiFetch<{ data: SubscriptionPlanPublic[] }>(`/api/packages?coachId=${coachId}`)
+      .then((r) => setPlans(r.data.filter((p) => p.subscribable)))
+      .catch(() => setPlans([]));
+  }, [coachId]);
+
+  if (plans.length === 0) return null;
+
+  const subscribe = async (planId: string) => {
+    setSubscribingId(planId);
+    try {
+      const res = await apiFetch<{ data: { checkoutUrl: string | null } }>(
+        "/api/packages/subscribe",
+        { method: "POST", body: JSON.stringify({ planId }) },
+      );
+      if (res.data.checkoutUrl) {
+        window.location.href = res.data.checkoutUrl;
+        return;
+      }
+      window.alert("Couldn't start checkout — please try again.");
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't start checkout.");
+    } finally {
+      setSubscribingId(null);
+    }
+  };
+
+  return (
+    <section className="mb-16">
+      <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-6">
+        Monthly packages
+      </h2>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {plans.map((p) => (
+          <div key={p.id} className="bg-surface rounded-card shadow-card p-6 flex flex-col">
+            <h3 className="font-display text-lg font-semibold mb-1">{p.name}</h3>
+            <p className="font-handwritten text-gold mb-2">
+              {p.lessonsPerMonth} lessons / month
+            </p>
+            <div className="text-2xl font-display font-bold mb-4">
+              ${(p.priceMonthly / 100).toFixed(0)}
+              <span className="text-sm font-normal text-text-secondary">/mo</span>
+            </div>
+            <button
+              onClick={() => subscribe(p.id)}
+              disabled={subscribingId === p.id}
+              className="mt-auto text-[13px] font-medium text-charcoal border border-charcoal px-4 py-2 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide disabled:opacity-50"
+            >
+              {subscribingId === p.id ? "Starting…" : `Subscribe — ${coachName}`}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function CoachProfile() {
   const { slug } = useParams<{ slug: string }>();
@@ -131,6 +195,9 @@ export function CoachProfile() {
               </div>
             </section>
           )}
+
+          {/* Monthly packages */}
+          <PackagesSection coachId={coach.id} coachName={coach.name} />
 
           {/* Social Links */}
           {coach.socialLinks && Object.keys(coach.socialLinks).length > 0 && (
