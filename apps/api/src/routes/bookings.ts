@@ -84,6 +84,7 @@ function serializeBooking(b: any) {
     routineSnapshot: b.routineSnapshot ? parseRoutine(b.routineSnapshot) : null,
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
+    subscriptionId: b.subscriptionId ?? null,
     paymentStatus: b.paymentStatus ?? "NOT_REQUIRED",
     scheduleId: b.scheduleId ?? null,
     category: b.category

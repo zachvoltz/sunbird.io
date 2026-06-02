@@ -61,7 +61,9 @@ model User {
 
   sessions        Session[]
   oauthAccounts   OAuthAccount[]
-  subscription    Subscription?
+  subscriptions      Subscription[]     @relation("studentSubscriptions")
+  coachSubscriptions Subscription[]     @relation("coachSubscriptions")
+  coachPlans         SubscriptionPlan[] @relation("coachPlans")
   bookings        Booking[]
   songs           Song[]
   songLikes       SongLike[]
@@ -564,7 +566,11 @@ model Booking {
   // NOT_REQUIRED (free / coach has no Stripe) | PENDING (awaiting Checkout) |
   // PAID | FAILED | REFUNDED. Set via the Stripe webhook.
   paymentStatus       String    @default("NOT_REQUIRED")
+  // True when this booking was paid with a package credit (vs per-session
+  // Checkout). subscriptionId links the specific package the credit came from,
+  // so cancel/reschedule can return the credit to the right subscription.
   usedSubscription    Boolean   @default(false)
+  subscriptionId      String?
   scheduleId          String?
   categoryId          String?
   skillTreeId         String?
@@ -587,6 +593,7 @@ model Booking {
   node           SkillTreeNode?     @relation("bookingNode", fields: [nodeId], references: [id])
   lessonCategory LessonCategory?    @relation(fields: [lessonCategoryId], references: [id])
   schedule       RecurringSchedule? @relation(fields: [scheduleId], references: [id])
+  subscription   Subscription?      @relation(fields: [subscriptionId], references: [id])
   messages       SessionMessage[]
   resources      SessionResource[]
 
@@ -672,19 +679,31 @@ model SessionResource {
 
 model SubscriptionPlan {
   id              String   @id @default(cuid())
+  // Owner. Packages are per-coach (a coach defines their own tiers).
+  coachId         String
   name            String
   lessonsPerMonth Int
   priceMonthly    Int
-  stripePriceId   String   @unique
+  // Stripe Price backing this tier. Null while a plan is a draft or when Stripe
+  // is unconfigured (dev); populated when the Price is created on save.
+  stripePriceId   String?  @unique
   isActive        Boolean  @default(true)
   sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 
+  coach         User           @relation("coachPlans", fields: [coachId], references: [id], onDelete: Cascade)
   subscriptions Subscription[]
+
+  @@index([coachId])
 }
 
 model Subscription {
   id                    String   @id @default(cuid())
-  userId                String   @unique
+  // Not unique: a student may hold packages with multiple coaches at once
+  // (additive model — per-session and packages coexist).
+  userId                String
+  coachId               String
   planId                String
   stripeSubscriptionId  String   @unique
   status                String   @default("ACTIVE")
@@ -693,8 +712,12 @@ model Subscription {
   lessonsUsedThisPeriod Int      @default(0)
   createdAt             DateTime @default(now())
 
-  user User             @relation(fields: [userId], references: [id])
-  plan SubscriptionPlan @relation(fields: [planId], references: [id])
+  user  User             @relation("studentSubscriptions", fields: [userId], references: [id])
+  coach User             @relation("coachSubscriptions", fields: [coachId], references: [id])
+  plan  SubscriptionPlan @relation(fields: [planId], references: [id])
+  bookings Booking[]
+
+  @@index([userId, coachId])
 }
 
 // ─── Workshops & Events ───

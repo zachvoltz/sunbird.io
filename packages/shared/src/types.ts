@@ -327,6 +327,9 @@ export interface BookingPublic {
   routineSnapshot: RoutinePublic | null;
   completedAt: string | null;
   usedSubscription: boolean;
+  // Set when this booking was paid with a package credit — links the
+  // Subscription the credit came from (null for per-session/free bookings).
+  subscriptionId: string | null;
   paymentStatus: "NOT_REQUIRED" | "PENDING" | "PAID" | "FAILED" | "REFUNDED";
   scheduleId: string | null;
   category: CategoryPublic | null;
@@ -673,5 +676,39 @@ export interface RoutineItem {
 export interface RoutinePublic {
   items: RoutineItem[];
   updatedAt: string | null;
+}
+
+// ─── Packages (N-per-month subscription plans) ───
+
+// A coach-defined package tier, e.g. "4 lessons/month for $80". priceMonthly
+// is in cents. stripePriceId is null while the plan is a draft or when Stripe
+// is unconfigured (dev) — such a plan can't be subscribed to yet.
+export interface SubscriptionPlanPublic {
+  id: string;
+  coachId: string;
+  name: string;
+  lessonsPerMonth: number;
+  priceMonthly: number;
+  isActive: boolean;
+  sortOrder: number;
+  // Whether the plan is actually subscribable (active + has a Stripe Price).
+  subscribable: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// A student's active package with a given coach, plus remaining credits this
+// period (lessonsPerMonth - lessonsUsedThisPeriod, floored at 0).
+export interface SubscriptionPublic {
+  id: string;
+  coachId: string;
+  planId: string;
+  plan: SubscriptionPlanPublic;
+  status: SubscriptionStatus;
+  currentPeriodStart: string;
+  currentPeriodEnd: string;
+  lessonsUsedThisPeriod: number;
+  creditsRemaining: number;
+  createdAt: string;
 }
 

@@ -654,6 +654,7 @@ function serializeBookingLight(b: any) {
     noteSections,
     completedAt: b.completedAt?.toISOString() ?? null,
     usedSubscription: b.usedSubscription,
+    subscriptionId: b.subscriptionId ?? null,
     scheduleId: b.scheduleId,
     category: b.category ?? null,
     skillTree: b.skillTree ?? null,

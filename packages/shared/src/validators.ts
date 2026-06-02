@@ -119,6 +119,26 @@ export const cancelBookingSchema = z.object({
   reason: z.string().max(500).optional(),
 });
 
+// ─── Packages (subscription plan tiers) ───
+
+// Coach creates a package tier. priceMonthly is in cents ($1–$10,000/mo).
+export const createPlanSchema = z.object({
+  name: z.string().min(1, "Name is required").max(80),
+  lessonsPerMonth: z.number().int().min(1).max(31),
+  priceMonthly: z.number().int().min(100).max(1_000_000),
+  isActive: z.boolean().default(true),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+});
+
+// All fields optional for a partial edit; same bounds as create.
+export const updatePlanSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  lessonsPerMonth: z.number().int().min(1).max(31).optional(),
+  priceMonthly: z.number().int().min(100).max(1_000_000).optional(),
+  isActive: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(1000).optional(),
+});
+
 // Sectioned lesson notes — five labeled fields the coach fills in.
 // Each section is optional, but at least one must be non-empty.
 export const noteSectionsSchema = z.object({
