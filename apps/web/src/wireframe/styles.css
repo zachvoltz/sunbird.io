@@ -595,7 +595,9 @@ html[data-theme="dark"] .wireframe-root .onb-success {
   font-size: 22px; font-weight: 700; line-height: 1;
 }
 .wireframe-root .panel-body { flex: 1 1 auto; overflow: hidden; min-height: 0; }
-.wireframe-root .panel-body.scroll { overflow-y: auto; }
+/* Top padding gives hovered `.box.wobble` cards room to lift (translateY(-2px)
+   + de-rotate) without the scroll container clipping their top edge. */
+.wireframe-root .panel-body.scroll { overflow-y: auto; padding-top: 6px; }
 .wireframe-root .panel.tinted { background: var(--paper-2); }
 .wireframe-root .panel.panel-warm { background: #fbeee2; }
 .wireframe-root .panel.panel-cool { background: #e7eef0; }
