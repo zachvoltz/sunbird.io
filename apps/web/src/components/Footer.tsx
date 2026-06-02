@@ -96,6 +96,10 @@ export function Footer() {
           <p className="text-[12px] text-text-secondary tracking-wide">
             &copy; {new Date().getFullYear()} <Wordmark />
           </p>
+          <div className="flex items-center gap-4 text-[12px] text-text-secondary">
+            <Link to="/terms" className="hover:text-charcoal transition-colors">Terms</Link>
+            <Link to="/privacy" className="hover:text-charcoal transition-colors">Privacy</Link>
+          </div>
           <p className="font-handwritten text-text-secondary text-base">
             made with good intentions
           </p>

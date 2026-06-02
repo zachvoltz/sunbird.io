@@ -2,6 +2,7 @@ import { Routes, Route } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Home } from "@/pages/Home";
 import { Pricing } from "@/pages/Pricing";
+import { Terms, Privacy } from "@/pages/Legal";
 import { Lessons } from "@/pages/Lessons";
 import { LessonDetail } from "@/pages/LessonDetail";
 import { Workshops } from "@/pages/Workshops";
@@ -54,6 +55,8 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<Home />} />
         <Route path="pricing" element={<Pricing />} />
+        <Route path="terms" element={<Terms />} />
+        <Route path="privacy" element={<Privacy />} />
         <Route path="lessons" element={<Lessons />} />
         <Route path="lessons/:slug" element={<LessonDetail />} />
         <Route path="categories" element={<Lessons />} />
