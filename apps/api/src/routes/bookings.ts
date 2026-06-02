@@ -297,7 +297,7 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     return c.json({ error: "Validation failed", details: parsed.error.flatten().fieldErrors }, 400);
   }
 
-  const { categoryId, skillTreeId, nodeId, coachId: providedCoachId, startsAt: startsAtStr, mode, studentNote } = parsed.data;
+  const { categoryId, skillTreeId, nodeId, coachId: providedCoachId, startsAt: startsAtStr, mode, studentNote, usePackage } = parsed.data;
   const db = getDb();
 
   // Verify category exists
@@ -369,14 +369,38 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     }
   }
 
+  // Pay with a package credit when asked: requires an active, non-exhausted
+  // subscription with this coach. The booking is then PAID (the credit covers
+  // it) and no Stripe Checkout is opened. We re-check credits here rather than
+  // trusting the client.
+  let creditSub: { id: string; lessonsUsedThisPeriod: number; lessonsPerMonth: number } | null = null;
+  if (usePackage) {
+    if (!coachId) {
+      return c.json({ error: "A package credit needs a specific coach." }, 400);
+    }
+    const sub = await db.subscription.findFirst({
+      where: { userId: user.id, coachId, status: "ACTIVE" },
+      include: { plan: { select: { lessonsPerMonth: true } } },
+      orderBy: { createdAt: "desc" },
+    });
+    if (!sub) {
+      return c.json({ error: "You don't have an active package with this coach." }, 409);
+    }
+    if (sub.lessonsUsedThisPeriod >= sub.plan.lessonsPerMonth) {
+      return c.json({ error: "You've used all your package credits this month." }, 409);
+    }
+    creditSub = { id: sub.id, lessonsUsedThisPeriod: sub.lessonsUsedThisPeriod, lessonsPerMonth: sub.plan.lessonsPerMonth };
+  }
+
   // Does this coach charge for lessons? Drives whether we open Checkout.
+  // A package credit short-circuits per-session payment.
   const coachPay: CoachPayInfo | null = coachId
     ? await db.user.findUnique({
         where: { id: coachId },
         select: { stripeAccountId: true, stripeChargesEnabled: true, sessionPrice: true },
       })
     : null;
-  const needsPayment = requiresPayment(coachPay);
+  const needsPayment = !creditSub && requiresPayment(coachPay);
 
   const booking = await db.booking.create({
     data: {
@@ -391,10 +415,20 @@ bookingRoutes.post("/", requireAuth, async (c) => {
       mode,
       studentNote: studentNote ?? null,
       status: "CONFIRMED",
-      paymentStatus: needsPayment ? "PENDING" : "NOT_REQUIRED",
+      usedSubscription: !!creditSub,
+      subscriptionId: creditSub?.id ?? null,
+      paymentStatus: creditSub ? "PAID" : needsPayment ? "PENDING" : "NOT_REQUIRED",
     },
     include: bookingInclude,
   });
+
+  // Consume the credit now that the booking exists.
+  if (creditSub) {
+    await db.subscription.update({
+      where: { id: creditSub.id },
+      data: { lessonsUsedThisPeriod: { increment: 1 } },
+    });
+  }
 
   // Notify the coach in their inbox.
   await notifyCoachOfBooking(db, {
@@ -797,6 +831,15 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
     data: { status: "CANCELLED" },
     include: bookingInclude,
   });
+
+  // Return the package credit if this booking was paid with one (guarded so a
+  // period rollover can't push the counter negative).
+  if (booking.usedSubscription && booking.subscriptionId) {
+    await db.subscription.updateMany({
+      where: { id: booking.subscriptionId, lessonsUsedThisPeriod: { gt: 0 } },
+      data: { lessonsUsedThisPeriod: { decrement: 1 } },
+    });
+  }
 
   // Tear down the mirrored Google Calendar event, if any.
   if (booking.coachId) {

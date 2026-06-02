@@ -101,6 +101,10 @@ export const createBookingSchema = z.object({
   startsAt: z.string().datetime(),
   mode: z.enum(["ONLINE", "IN_PERSON"]).default("IN_PERSON"),
   studentNote: z.string().max(500).optional(),
+  // When true, pay for this lesson with a package credit instead of a
+  // per-session charge — requires an active subscription with the coach that
+  // still has credits this period.
+  usePackage: z.boolean().optional(),
 });
 
 export const createRecurringScheduleSchema = z.object({

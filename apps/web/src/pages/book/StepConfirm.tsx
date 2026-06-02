@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
-import type { BookingPublic } from "@sunbird/shared";
+import type { BookingPublic, SubscriptionPublic } from "@sunbird/shared";
 import type { BookingState } from "./BookPage";
 
 type Props = {
@@ -28,6 +28,21 @@ export function StepConfirm({ state, update }: Props) {
   const [note, setNote] = useState(state.studentNote);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Active package with the selected coach that still has credits this period.
+  const [creditSub, setCreditSub] = useState<SubscriptionPublic | null>(null);
+  const [useCredit, setUseCredit] = useState(false);
+
+  useEffect(() => {
+    if (!state.selectedCoachId) { setCreditSub(null); return; }
+    apiFetch<{ data: SubscriptionPublic[] }>("/api/packages/mine")
+      .then((r) => {
+        const match = r.data.find(
+          (s) => s.coachId === state.selectedCoachId && s.status === "ACTIVE" && s.creditsRemaining > 0,
+        );
+        setCreditSub(match ?? null);
+      })
+      .catch(() => setCreditSub(null));
+  }, [state.selectedCoachId]);
 
   const typeName = state.selectedCategory?.title ?? "Open";
   const skillTreeName = state.notSureSkillTree
@@ -92,6 +107,7 @@ export function StepConfirm({ state, update }: Props) {
             mode,
             startsAt: slot.startsAt,
             studentNote: note || undefined,
+            usePackage: useCredit && !!creditSub ? true : undefined,
           }),
         });
       }
@@ -167,7 +183,7 @@ export function StepConfirm({ state, update }: Props) {
           <input
             type="checkbox"
             checked={recurring}
-            onChange={(e) => update({ recurring: e.target.checked, frequency: e.target.checked ? "WEEKLY" : null, recurringEndDate: null })}
+            onChange={(e) => { if (e.target.checked) setUseCredit(false); update({ recurring: e.target.checked, frequency: e.target.checked ? "WEEKLY" : null, recurringEndDate: null }); }}
             className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
           />
           <span className="text-sm font-medium">Make this recurring</span>
@@ -256,6 +272,32 @@ export function StepConfirm({ state, update }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Package credit — only for single bookings, when the student holds an
+          active package with this coach that still has credits. */}
+      {creditSub && !recurring && (
+        <div className="mb-8 bg-iris/5 border border-iris/30 rounded-card p-4">
+          <label className="flex items-start gap-3 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={useCredit}
+              onChange={(e) => setUseCredit(e.target.checked)}
+              className="w-4 h-4 mt-0.5 rounded border-warm-gray text-iris focus:ring-iris/20"
+            />
+            <span>
+              <span className="text-sm font-medium block">
+                Use a package credit
+              </span>
+              <span className="text-[12px] text-text-secondary">
+                {creditSub.plan.name} · {creditSub.creditsRemaining} of{" "}
+                {creditSub.plan.lessonsPerMonth} lesson
+                {creditSub.plan.lessonsPerMonth !== 1 ? "s" : ""} left this month.
+                {useCredit ? " No charge for this lesson." : ""}
+              </span>
+            </span>
+          </label>
+        </div>
+      )}
 
       <div className="mb-8">
         <label className="block text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-2">
