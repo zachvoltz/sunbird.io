@@ -19,6 +19,7 @@ import { googleCalendarRoutes } from "./routes/google-calendar";
 import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
 import { paymentsRoutes } from "./routes/payments";
+import { clientErrorsRoutes } from "./routes/client-errors";
 import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
@@ -94,6 +95,7 @@ app.route("/api/calendar/google", googleCalendarRoutes);
 app.route("/api/categories", categoryRoutes);
 app.route("/api/skill-trees", skillTreeRoutes);
 app.route("/api/webhooks", paymentsRoutes);
+app.route("/api/client-errors", clientErrorsRoutes);
 
 // Serve frontend assets for all non-API routes (SPA fallback)
 app.get("*", async (c) => {

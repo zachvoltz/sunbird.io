@@ -204,7 +204,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [ ] Transactional email templates branded (currently functional, may need design pass) — **needs mockup**
 - [x] Terms of service + privacy policy pages (required for Stripe Connect onboarding) — `/terms` + `/privacy` (`pages/Legal.tsx`), routed inside `<Layout>`, linked from the footer. Starter content tailored to Birdie's stack (Stripe/Connect, coach/student roles, Google OAuth, media uploads, email, video calls). **Needs a legal review + real contact entity before launch** (currently uses `hello@ellisasun.com`); placeholder dates via `LAST_UPDATED`.
 - [ ] Production env: Cloudflare secrets for Resend, Stripe, Calls; D1 prod database; domain + SSL
-- [ ] Basic analytics / error reporting (Sentry?)
+- [~] Basic analytics / error reporting (Sentry?) — **error reporting wired** (Sentry-swappable, no SDK/account yet): a React `ErrorBoundary` (friendly fallback, no white screen) + `lib/reportError.ts` (global `window.onerror`/`unhandledrejection` handlers, throttled + deduped) POST to `POST /api/client-errors`, which logs structured reports to the Worker (`wrangler tail` / CF logs). One-file swap to forward to Sentry when a DSN exists. Tests in `client-errors.test.ts`. **Remaining:** product analytics (page/usage events) not started; wire a real Sentry DSN if/when desired.
 
 ---
 
