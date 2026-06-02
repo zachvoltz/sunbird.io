@@ -197,6 +197,7 @@ function TakeCard({ take, prominent }: { take: TakePublic; prominent: boolean })
 }
 
 function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | undefined; loading: boolean }) {
+  const isMobile = useIsMobile();
   // Locally track the routine so save edits show immediately without
   // having to refetch the entire StudentDetail aggregate.
   const [routine, setRoutine] = useState<RoutinePublic | null>(null);
@@ -276,7 +277,7 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
       </div>
 
       <div className="dt-main-body">
-        <div className="dt-cols" style={{ gridTemplateColumns: "1.3fr 1fr", height: "100%" }}>
+        <div className="dt-cols" style={{ gridTemplateColumns: isMobile ? "1fr" : "1.3fr 1fr", height: isMobile ? "auto" : "100%" }}>
           {/* LEFT: this week */}
           <div className="panel" style={{ padding: 0 }}>
             <div className="panel-head" style={{ padding: "12px 16px 0" }}>

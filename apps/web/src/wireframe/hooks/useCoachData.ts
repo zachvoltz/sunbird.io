@@ -164,17 +164,22 @@ function fetchSelfDetail(): Promise<StudentDetailPublic | undefined> {
 export function useMyStudentDetail(): {
   detail: StudentDetailPublic | undefined;
   loading: boolean;
+  error: boolean;
   refresh: () => void;
 } {
   const [detail, setDetail] = useState<StudentDetailPublic | undefined>(
     selfDetailCache ?? undefined,
   );
   const [loading, setLoading] = useState(!detail);
+  // fetchSelfDetail resolves undefined only on failure, so a falsy result with
+  // no cached detail means the load errored.
+  const [error, setError] = useState(false);
   useEffect(() => {
     let alive = true;
     fetchSelfDetail().then((d) => {
       if (!alive) return;
       setDetail(d);
+      setError(!d);
       setLoading(false);
     });
     return () => {
@@ -183,9 +188,10 @@ export function useMyStudentDetail(): {
   }, []);
   const refresh = () => {
     selfDetailCache = null;
-    fetchSelfDetail().then((d) => setDetail(d));
+    setError(false);
+    fetchSelfDetail().then((d) => { setDetail(d); setError(!d); });
   };
-  return { detail, loading, refresh };
+  return { detail, loading, error, refresh };
 }
 
 export function useStudentDetail(studentId: string | undefined): {

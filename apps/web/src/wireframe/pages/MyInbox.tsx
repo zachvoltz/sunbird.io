@@ -11,6 +11,7 @@ import { Icon } from "../components/Icon";
 import { Squiggle } from "../components/Squiggle";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { apiFetch } from "@/lib/api";
+import { ErrorState } from "@/components/ui";
 
 type InboxItem = {
   id: string;
@@ -32,12 +33,14 @@ type Filter = "all" | "unread";
 function useInbox() {
   const [items, setItems] = useState<InboxItem[] | undefined>();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
 
   const refresh = useCallback(() => {
     setLoading(true);
+    setError(false);
     apiFetch<{ data: { items: InboxItem[] } }>("/api/me/inbox")
       .then((r) => setItems(r.data.items))
-      .catch(() => setItems([]))
+      .catch(() => { setItems(undefined); setError(true); })
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
@@ -70,7 +73,7 @@ function useInbox() {
     }
   }, [refresh]);
 
-  return { items, loading, setRead, markAllRead };
+  return { items, loading, error, refresh, setRead, markAllRead };
 }
 
 // Email-inbox "time" column: hour for today, weekday for this week, date otherwise.
@@ -192,7 +195,7 @@ function InboxRow({
 }
 
 function MyInboxDesktop() {
-  const { items, loading, setRead, markAllRead } = useInbox();
+  const { items, loading, error, refresh, setRead, markAllRead } = useInbox();
   const [filter, setFilter] = useState<Filter>("all");
   const now = Date.now();
 
@@ -245,7 +248,10 @@ function MyInboxDesktop() {
             {loading && !items && (
               <div className="small muted" style={{ padding: 20 }}>loading inbox…</div>
             )}
-            {!loading && (items?.length ?? 0) === 0 && <InboxEmpty />}
+            {!loading && error && (
+              <ErrorState message="We couldn't load your inbox." onRetry={refresh} />
+            )}
+            {!loading && !error && (items?.length ?? 0) === 0 && <InboxEmpty />}
             {!loading && items && items.length > 0 && visible.length === 0 && (
               <div className="small muted" style={{ padding: 20, textAlign: "center" }}>
                 No unread items — switch to <b>all</b> above to see everything.
@@ -271,7 +277,7 @@ function MyInboxDesktop() {
 }
 
 function MyInboxMobile() {
-  const { items, loading, setRead, markAllRead } = useInbox();
+  const { items, loading, error, refresh, setRead, markAllRead } = useInbox();
   const now = Date.now();
   const unreadCount = (items ?? []).filter((i) => i.unread).length;
 
@@ -297,7 +303,10 @@ function MyInboxMobile() {
         {loading && !items && (
           <div className="small muted center" style={{ padding: 20 }}>loading…</div>
         )}
-        {!loading && (items?.length ?? 0) === 0 && <InboxEmpty />}
+        {!loading && error && (
+          <ErrorState message="We couldn't load your inbox." onRetry={refresh} />
+        )}
+        {!loading && !error && (items?.length ?? 0) === 0 && <InboxEmpty />}
         {(items ?? []).length > 0 && (
           <div className="inbox-list">
             {groupByBucket(items ?? [], now).map(([label, rows]) => (

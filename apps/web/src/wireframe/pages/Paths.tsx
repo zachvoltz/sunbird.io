@@ -33,6 +33,7 @@ import { Tag } from "../components/Tag";
 import { Squiggle } from "../components/Squiggle";
 import { Staff } from "../components/Staff";
 import { Avatar } from "../components/Avatar";
+import { useIsMobile } from "../hooks/useIsMobile";
 
 // ── hooks ──────────────────────────────────────────────────
 
@@ -529,6 +530,7 @@ function findCurrentLessonId(nodes: PathLessonNode[]): string | undefined {
 export function PathEditorPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const { path, loading, notFound, refresh } = useCoachPath(slug);
   const { paths } = useCoachPaths();
 
@@ -625,7 +627,7 @@ export function PathEditorPage() {
       </div>
 
       <div className="dt-main-body">
-        <div className="dt-cols" style={{ gridTemplateColumns: "200px 1fr 340px", height: "100%", gap: 14 }}>
+        <div className="dt-cols" style={{ gridTemplateColumns: isMobile ? "1fr" : "200px 1fr 340px", height: isMobile ? "auto" : "100%", gap: 14 }}>
           {/* path list rail */}
           <div className="panel" style={{ padding: "10px 8px" }}>
             <div className="small muted mb-2">YOUR PATHS</div>
@@ -927,6 +929,7 @@ function StudentsPanel({
 
 export function PathLessonDetailPage() {
   const { slug, lessonId } = useParams<{ slug: string; lessonId: string }>();
+  const isMobile = useIsMobile();
   const { path, loading, notFound } = useCoachPath(slug);
   const node = path?.nodes.find((n) => n.id === lessonId);
 
@@ -988,7 +991,7 @@ export function PathLessonDetailPage() {
       </div>
 
       <div className="dt-main-body">
-        <div className="dt-cols" style={{ gridTemplateColumns: "1fr 320px", height: "100%", gap: 14 }}>
+        <div className="dt-cols" style={{ gridTemplateColumns: isMobile ? "1fr" : "1fr 320px", height: isMobile ? "auto" : "100%", gap: 14 }}>
           {/* main editor — content blocks are illustrative for now */}
           <div className="panel" style={{ padding: 0 }}>
             <div className="panel-head" style={{ padding: "10px 16px" }}>

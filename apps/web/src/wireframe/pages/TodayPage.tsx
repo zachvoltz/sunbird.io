@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { AssignmentPublic, BookingPublic, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
+import { ErrorState } from "@/components/ui";
 import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Avatar } from "../components/Avatar";
@@ -68,7 +69,7 @@ function thisWeeksAssignments(detail: StudentDetailPublic | undefined): Assignme
 
 export function TodayPage() {
   const { user } = useAuth();
-  const { detail, loading } = useMyStudentDetail();
+  const { detail, loading, error, refresh } = useMyStudentDetail();
   const [bookings, setBookings] = useState<BookingPublic[]>([]);
 
   useEffect(() => {
@@ -137,6 +138,12 @@ export function TodayPage() {
       </div>
 
       <div className="dt-main-body">
+        {!loading && error && !detail ? (
+          <ErrorState
+            message="We couldn't load your dashboard."
+            onRetry={refresh}
+          />
+        ) : (
         <div className="dt-cols thirds" style={{ height: "100%" }}>
           {/* TODAY — lesson + path */}
           <div className="panel">
@@ -276,6 +283,7 @@ export function TodayPage() {
             </div>
           </div>
         </div>
+        )}
       </div>
     </STFrame>
   );
