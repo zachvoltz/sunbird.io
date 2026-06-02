@@ -100,6 +100,203 @@ function SessionRateCard() {
   );
 }
 
+// Coach's N-per-month package tiers (Model B). Coexists with the per-session
+// rate above — a coach can offer both. Each tier: name, lessons/month, monthly
+// price. "subscribable" reflects whether students can actually buy it yet
+// (active + Stripe charges enabled).
+type PlanRow = {
+  id: string;
+  name: string;
+  lessonsPerMonth: number;
+  priceMonthly: number;
+  isActive: boolean;
+  subscribable: boolean;
+};
+
+function PackagePlansCard() {
+  const [plans, setPlans] = useState<PlanRow[] | undefined>();
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const refresh = useCallback(() => {
+    apiFetch<{ data: PlanRow[] }>("/api/coach-plans")
+      .then((r) => setPlans(r.data))
+      .catch(() => setPlans([]));
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+
+  const addPlan = async () => {
+    setBusyId("new");
+    try {
+      await apiFetch("/api/coach-plans", {
+        method: "POST",
+        body: JSON.stringify({ name: "New package", lessonsPerMonth: 4, priceMonthly: 8000 }),
+      });
+      refresh();
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't create the package");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const savePlan = async (p: PlanRow, patch: Partial<PlanRow>) => {
+    setBusyId(p.id);
+    try {
+      const updated = await apiFetch<{ data: PlanRow }>(`/api/coach-plans/${p.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(patch),
+      });
+      setPlans((prev) => prev?.map((x) => (x.id === p.id ? updated.data : x)));
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't save the package");
+      refresh();
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  const deletePlan = async (p: PlanRow) => {
+    if (!window.confirm(`Delete "${p.name}"?`)) return;
+    setBusyId(p.id);
+    try {
+      await apiFetch(`/api/coach-plans/${p.id}`, { method: "DELETE" });
+      setPlans((prev) => prev?.filter((x) => x.id !== p.id));
+    } catch (err: any) {
+      window.alert(err?.body?.error ?? "Couldn't delete the package");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className="box" style={{ margin: "0 0 14px" }}>
+      <div className="row between" style={{ alignItems: "flex-start", marginBottom: 8 }}>
+        <div>
+          <div className="bold">Monthly packages</div>
+          <div className="tiny muted">
+            Sell bundles of lessons per month (e.g. 4 lessons for $80). Students
+            can subscribe to a package or pay per session.
+          </div>
+        </div>
+        <button
+          className="btn small primary"
+          onClick={addPlan}
+          disabled={busyId === "new"}
+        >
+          {busyId === "new" ? "adding…" : "＋ add package"}
+        </button>
+      </div>
+
+      {plans === undefined ? (
+        <div className="tiny muted" style={{ padding: 8 }}>loading packages…</div>
+      ) : plans.length === 0 ? (
+        <div className="tiny muted" style={{ padding: 8 }}>
+          No packages yet. Add one to offer monthly lesson bundles alongside your
+          per-session rate.
+        </div>
+      ) : (
+        <div className="col gap-2">
+          {plans.map((p) => (
+            <PlanEditorRow
+              key={p.id}
+              plan={p}
+              busy={busyId === p.id}
+              onSave={(patch) => savePlan(p, patch)}
+              onDelete={() => deletePlan(p)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanEditorRow({
+  plan,
+  busy,
+  onSave,
+  onDelete,
+}: {
+  plan: PlanRow;
+  busy: boolean;
+  onSave: (patch: Partial<PlanRow>) => void;
+  onDelete: () => void;
+}) {
+  const [name, setName] = useState(plan.name);
+  const [lessons, setLessons] = useState(String(plan.lessonsPerMonth));
+  const [dollars, setDollars] = useState((plan.priceMonthly / 100).toString());
+
+  const dirty =
+    name !== plan.name ||
+    lessons !== String(plan.lessonsPerMonth) ||
+    dollars !== (plan.priceMonthly / 100).toString();
+
+  const save = () => {
+    const lpm = parseInt(lessons, 10);
+    const cents = Math.round(parseFloat(dollars) * 100);
+    if (!name.trim() || !Number.isFinite(lpm) || lpm < 1 || !Number.isFinite(cents) || cents < 100) {
+      window.alert("Need a name, ≥1 lesson/month, and a price of at least $1.");
+      return;
+    }
+    onSave({ name: name.trim(), lessonsPerMonth: lpm, priceMonthly: cents });
+  };
+
+  const inputStyle = {
+    fontFamily: "var(--hand)", fontSize: 14, padding: "6px 8px",
+    border: "1.5px solid var(--ink-faint)", borderRadius: 6,
+    background: "var(--paper)", color: "var(--ink)",
+  } as const;
+
+  return (
+    <div
+      className="row gap-2"
+      style={{ alignItems: "center", flexWrap: "wrap", opacity: plan.isActive ? 1 : 0.6 }}
+    >
+      <input
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        placeholder="package name"
+        style={{ ...inputStyle, flex: "1 1 140px", minWidth: 120 }}
+      />
+      <input
+        type="number" min={1} step="1" value={lessons}
+        onChange={(e) => setLessons(e.target.value)}
+        style={{ ...inputStyle, width: 64 }}
+        title="lessons per month"
+      />
+      <span className="tiny muted">/mo</span>
+      <span className="bold">$</span>
+      <input
+        type="number" min={1} step="1" value={dollars}
+        onChange={(e) => setDollars(e.target.value)}
+        style={{ ...inputStyle, width: 80 }}
+        title="monthly price"
+      />
+      <label className="tiny row gap-1" style={{ alignItems: "center" }} title="visible to students">
+        <input
+          type="checkbox"
+          checked={plan.isActive}
+          disabled={busy}
+          onChange={(e) => onSave({ isActive: e.target.checked })}
+          style={{ accentColor: "var(--accent)" }}
+        />
+        active
+      </label>
+      {plan.isActive && !plan.subscribable && (
+        <span className="chip tiny" title="connect Stripe + finish onboarding to take charges">
+          needs Stripe
+        </span>
+      )}
+      <button className="btn small primary" onClick={save} disabled={busy || !dirty}>
+        {busy ? "…" : "save"}
+      </button>
+      <button className="btn small ghost" onClick={onDelete} disabled={busy} title="delete package">
+        ✕
+      </button>
+    </div>
+  );
+}
+
 function stageFromStatus(s: StripeStatus): Stage {
   if (!s.hasStripeAccount) return "entry";
   if (!s.detailsSubmitted) return "entry";
@@ -1325,6 +1522,7 @@ function PaymentsOverviewDesktop() {
 
       <div className="dt-main-body">
         <SessionRateCard />
+        <PackagePlansCard />
         {scope === "month" ? (
           <div className="col gap-3" style={{ height: "100%" }}>
             <div className="pay-kpis">
