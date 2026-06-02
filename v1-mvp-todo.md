@@ -49,7 +49,7 @@ Wireframe references:
 - [x] Profile edit screen on `/coach/account` + public-page URL surfaced there
 - [x] Account left column scrolls properly
 - [x] QR code for the published public page on `/coach/profile` — shown once published, downloadable as a PNG (`qrcode` lib, client-side data URL)
-- [ ] Confirm cover-image upload works end-to-end from the edit screen (R2 binding now exists — verify it's used here too)
+- [ ] Cover-image upload end-to-end from the edit screen — **not wired to R2**: `Settings.tsx` takes a manual URL string into `PATCH /api/coach-settings/profile` (`coverImageUrl`). No multipart upload route exists for it (unlike takes/library audio). Needs an R2 upload endpoint + file picker to be true end-to-end.
 - [ ] Add link to Ellisa's podcast on the public profile / site (per existing project memory)
 
 ---
@@ -107,9 +107,9 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [x] Booking created → coach inbox notification
 - [x] Generic `Notification` model audit — the booking-scoped `SessionMessage` model is generic enough: a message with `senderId = X` lands in the inbox of the booking's *other* participant, so "notify the other party" = `notifyOtherParty(db, { bookingId, senderId: actingUserId, content })` (`bookings.ts`). No new model needed.
 - [x] Student inbox list — `GET /api/me/inbox` + real message list rendered in `MyInbox.tsx` (mirrors coach `Inbox.tsx`, per-item read toggles). Previously count-only.
-- [~] Remaining notification triggers for V1:
+- [x] Remaining notification triggers for V1:
   - [x] Booking cancelled / rescheduled → both sides — cancel + reschedule now notify the non-actor in-app (`notifyOtherParty`) and email the non-actor / both sides
-  - [ ] Payment failed → coach + student — deferred (payments not built yet, §5)
+  - [x] Payment failed → coach + student — shipped with §5: `notifyPaymentFailed` (`payments.ts`) drops inbox messages to both parties + `sendPaymentFailed` emails both; wired to `checkout.session.expired`, `async_payment_failed`, and (recurring) `invoice.payment_failed`
   - [x] New take submitted → coach — `POST /api/me/takes` drops a coach inbox message + emails the coach (`sendNewTakeToCoach`)
   - [x] Coach replied on take → student — new `POST /api/coaches/takes/:takeId/reply` (creates `TakeReply`, marks take `REPLIED`) notifies the student inbox + emails (`sendTakeReply`). Annotations endpoint still TODO (§9).
   - [x] Upcoming lesson reminder (24h + 1h) → both sides — `processLessonReminders` (`lib/reminders.ts`, idempotent via `Booking.remindedAt24h/1h`), driven by a Cloudflare cron in `src/worker.ts` (`*/15 * * * *`). Cron only fires in the deployed Worker; logic is unit-tested.
@@ -157,7 +157,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [ ] Student "take history" view per lesson — **confirm mockup covers this**
 - [x] Audio storage backend: R2 bucket bound (proven on library audio) — reuse for takes
 - [x] Take audio upload + limits — `RecordTake.tsx` now captures real audio via `MediaRecorder` (getUserMedia), caps a take at **5 min** (auto-stop), plays it back in Review, and on send creates the take then uploads the blob to new `POST /api/me/takes/:id/audio` (multipart → R2 under `takes/…`, **25 MB** cap → 413, MIME allowlist → 415, replaces prior audio on retake). Served back via open `GET /api/me/takes/audio/*` (mirrors library). Mic-denied + oversize error states surfaced. `audioUrl` now populates, so the coach review player works. Tests in `take-audio.test.ts` (guards; R2 path is manual-only).
-- [ ] Notification on new take (see §6)
+- [x] Notification on new take (see §6) — `POST /api/me/takes` drops a coach inbox message (`me.ts`) + emails via `sendNewTakeToCoach`
 
 ---
 
@@ -191,7 +191,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 
 ## 12. Pre-launch polish
 
-- [ ] Empty states for: no bookings, no takes, no assignments, empty inbox
+- [~] Empty states for: no bookings, no takes, no assignments, empty inbox — **no bookings** (`MyBookings.tsx`) and **no goals** done in production pages; **no takes**, **no assignments**, and **empty inbox** only exist in wireframe pages, not the live routes
 - [ ] Loading / error states across the app
 - [ ] Mobile responsiveness pass on booking flow, session page, practice path, calendar
 - [ ] Transactional email templates branded (currently functional, may need design pass) — **needs mockup**
