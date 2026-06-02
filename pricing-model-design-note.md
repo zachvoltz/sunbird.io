@@ -115,9 +115,34 @@ Implications:
   with per-session; mockup-gated**, not "deferred / drop."
 - Do **not** write a cleanup migration to drop the B tables — they're now the
   foundation of the packages feature.
-- A coexistence design decision is deferred to build time (see below).
+- Coexistence model (decided at build time): **additive** — a coach offers
+  per-session AND packages; the student picks per booking ("use a package
+  credit" vs pay per session). Chosen over the per-coach exclusive toggle this
+  note first recommended, so every booking records how it was paid
+  (`Booking.usedSubscription` / `subscriptionId`).
 
-## Model B — build outline (when scheduled)
+## Model B — IMPLEMENTED (2026-06-02)
+
+Built additively (see decision below; product chose "offer both"). Shipped:
+schema + D1 migration `0026`; coach plan CRUD (`/api/coach-plans`) + editor on
+`/coach/payments`; student `/api/packages` (list / mine / subscribe); webhook
+subscription create + credit reset + cancel; per-booking credit consumption
+(`usePackage`) with credit return on cancel; "use a package credit" in the
+booking confirm step and a Packages section on the coach public profile. Tests:
+`coach-plans`, `packages`, `package-credits`, `stripe-events`.
+
+**Deviation from the outline below:** we did **not** pre-create Stripe `Price`
+objects per tier. The subscribe Checkout builds inline `price_data` with a
+destination transfer to the coach's connected account — identical to the shipped
+per-session recurring flow — so plan CRUD needs no Stripe round-trip and
+`SubscriptionPlan.stripePriceId` stays reserved/unused. This sidesteps the
+platform-vs-connected-account Price ownership question entirely.
+
+**Period dates** on a `Subscription` are an approximation (`+1 month`) set at
+creation and refreshed on each `invoice.paid` (`subscription_cycle`); the credit
+reset is driven by those Stripe cycle events, not by comparing dates.
+
+## Model B — original build outline (for reference)
 
 Mockup-gated, but the shape is known. Roughly in dependency order:
 
