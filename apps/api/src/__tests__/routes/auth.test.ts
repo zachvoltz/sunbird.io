@@ -127,3 +127,27 @@ describe("POST /api/auth/logout", () => {
     expect(res.status).toBe(401);
   });
 });
+
+describe("GET /api/auth/oauth/google", () => {
+  it("bounces to /login?oauth=unconfigured when Google isn't configured", async () => {
+    const saved = {
+      id: process.env.GOOGLE_CLIENT_ID,
+      secret: process.env.GOOGLE_CLIENT_SECRET,
+      uri: process.env.GOOGLE_REDIRECT_URI,
+    };
+    delete process.env.GOOGLE_CLIENT_ID;
+    delete process.env.GOOGLE_CLIENT_SECRET;
+    delete process.env.GOOGLE_REDIRECT_URI;
+    try {
+      const res = await app.request(
+        new Request("http://localhost/api/auth/oauth/google", { redirect: "manual" }),
+      );
+      expect(res.status).toBe(302);
+      expect(res.headers.get("Location")).toBe("/login?oauth=unconfigured");
+    } finally {
+      if (saved.id) process.env.GOOGLE_CLIENT_ID = saved.id;
+      if (saved.secret) process.env.GOOGLE_CLIENT_SECRET = saved.secret;
+      if (saved.uri) process.env.GOOGLE_REDIRECT_URI = saved.uri;
+    }
+  });
+});

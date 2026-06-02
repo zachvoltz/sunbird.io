@@ -13,20 +13,21 @@ Wireframe references:
 - [x] Email/password register, login, logout, session cookie
 - [x] Password reset via email
 - [x] Final pass on logout UX — "sign out" button in the topbar for both student (`STFrame.tsx`) and coach (`DTFrame.tsx`); coach also retains the Account-page logout
-- [~] **Add a "student or coach?" step to the signup flow** — applies to both email/password and Google OAuth signup. Implemented as a **post-signup landing step** at `/onboarding/role` (`apps/web/src/pages/Onboarding.tsx`), gated by `AuthGate` for any authed user with `roleChosen = false`.
+- [x] **Add a "student or coach?" step to the signup flow** — applies to both email/password and Google OAuth signup. Implemented as a **post-signup landing step** at `/onboarding/role` (`apps/web/src/pages/Onboarding.tsx`), gated by `AuthGate` for any authed user with `roleChosen = false`.
   - [x] Decide placement: **post-signup landing step** chosen. Added `User.roleChosen Boolean @default(false)` (schema + D1 migration `0023_add_role_chosen.sql`, existing users backfilled to true) as the "no role set yet" signal — schema previously had no unset state.
   - [x] Persist the chosen role on the `User` record (`COACH` or `STUDENT`) — `POST /api/me/role` (one-time; 409 on re-pick), wired to the picker buttons
   - [x] Email/password signup: lands on the picker (`Login.tsx` routes to `/onboarding/role` when `roleChosen` is false). Role chosen post-signup, not in the register payload.
   - [x] Google OAuth signup: callback now redirects first-time Google users to `/onboarding/role` before any dashboard (`auth.ts`); `AuthGate` is the safety net
   - [x] Returning Google users (already have a role / `roleChosen = true`) skip the picker and land on their dashboard as before
-  - [ ] Surface "Sign up as a student" / "Sign up as a coach" entry points on the marketing/home page (optional polish — the post-signup picker covers the core flow)
-- [ ] **Google sign-up / sign-in working end-to-end for both coaches and students** (must ship in V1)
+  - [x] Surface "Sign up as a student" / "Sign up as a coach" entry points on the marketing/home page — Home hero CTAs ("Sign up as a student" / "Teach on Birdie", logged-out only) + a "Sign up" link in the Header (desktop + mobile). Role-aware links carry `?role=` → stashed in `localStorage` (`signupIntent.ts`) so it survives the Google redirect; the picker pre-selects it (still confirm — one-time).
+- [~] **Google sign-up / sign-in working end-to-end for both coaches and students** (must ship in V1) — **all code shipped**; only the Google Cloud credentials/redirect-URI setup (the two `(you)` items below) and the live e2e pass remain.
   - [x] Backend OAuth start + callback wired (`/api/auth/oauth/google`, `/api/auth/oauth/google/cb`), arctic-based; links by email if user exists, otherwise creates user + sends welcome email
   - [x] "Continue with Google" button on Login page
-  - [ ] Configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` in `.dev.vars` and Cloudflare secrets (prod)
-  - [ ] Register dev + prod redirect URIs in the Google Cloud Console OAuth client
-  - [ ] Surface "Continue with Google" on the coach signup path too (not just Login)
-  - [ ] End-to-end test: new coach via Google, new student via Google, existing email/password user adding Google as a linked account
+  - [x] Start route guarded when unconfigured — `GET /api/auth/oauth/google` bounces to `/login?oauth=unconfigured` (friendly notice on Login) instead of a broken Google redirect when creds are unset. Test in `auth.test.ts`.
+  - [x] Surface "Continue with Google" on the coach signup path — `/login?tab=register&role=coach` opens the Create-Account tab (where the Google button lives) with a "Create your coach account" heading; reachable from the Home "Teach on Birdie" CTA + Header "Sign up".
+  - [ ] **(you)** Configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` in `.dev.vars` and Cloudflare secrets (prod) — code is ready; this is the only thing gating live Google sign-in
+  - [ ] **(you)** Register dev + prod redirect URIs in the Google Cloud Console OAuth client
+  - [ ] End-to-end test once creds are set: new coach via Google, new student via Google, existing email/password user adding Google as a linked account
 
 ---
 

@@ -140,12 +140,20 @@ export function Header() {
               </button>
             </>
           ) : (
-            <Link
-              to="/login"
-              className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
-            >
-              Log in
-            </Link>
+            <>
+              <Link
+                to="/login"
+                className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
+              >
+                Log in
+              </Link>
+              <Link
+                to="/login?tab=register"
+                className="text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors tracking-wide"
+              >
+                Sign up
+              </Link>
+            </>
           )}
           <Link
             to="/book"
@@ -230,13 +238,22 @@ export function Header() {
               </button>
             </>
           ) : (
-            <Link
-              to="/login"
-              onClick={() => setMenuOpen(false)}
-              className="block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
-            >
-              Log in
-            </Link>
+            <>
+              <Link
+                to="/login"
+                onClick={() => setMenuOpen(false)}
+                className="block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+              >
+                Log in
+              </Link>
+              <Link
+                to="/login?tab=register"
+                onClick={() => setMenuOpen(false)}
+                className="block text-[13px] font-medium text-text-secondary hover:text-charcoal transition-colors"
+              >
+                Sign up
+              </Link>
+            </>
           )}
           <Link
             to="/book"

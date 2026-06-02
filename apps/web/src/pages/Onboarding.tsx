@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, ApiError } from "@/lib/api";
+import { getIntendedRole, clearIntendedRole } from "@/lib/signupIntent";
 
 type Choice = "STUDENT" | "COACH";
 
@@ -26,6 +27,9 @@ export function RolePicker() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState<Choice | null>(null);
   const [error, setError] = useState("");
+  // Role the visitor signaled at a "Sign up as a …" entry point. We pre-emphasize
+  // it but still require a tap — the choice is one-time.
+  const [intended] = useState(() => getIntendedRole());
 
   const choose = async (role: Choice) => {
     setError("");
@@ -35,6 +39,7 @@ export function RolePicker() {
         method: "POST",
         body: JSON.stringify({ role }),
       });
+      clearIntendedRole();
       await refresh();
       navigate(role === "COACH" ? "/coach" : "/today", { replace: true });
     } catch (err) {
@@ -54,20 +59,30 @@ export function RolePicker() {
         </p>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          {OPTIONS.map((opt) => (
-            <button
-              key={opt.role}
-              type="button"
-              disabled={submitting !== null}
-              onClick={() => choose(opt.role)}
-              className="text-left border border-warm-gray rounded-xl p-6 bg-surface hover:border-charcoal hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="font-display text-xl font-bold text-charcoal mb-2">
-                {submitting === opt.role ? "Setting up…" : opt.title}
-              </div>
-              <p className="text-sm text-text-secondary leading-relaxed">{opt.blurb}</p>
-            </button>
-          ))}
+          {OPTIONS.map((opt) => {
+            const highlighted = intended === opt.role;
+            return (
+              <button
+                key={opt.role}
+                type="button"
+                disabled={submitting !== null}
+                onClick={() => choose(opt.role)}
+                className={`relative text-left border rounded-xl p-6 bg-surface hover:border-charcoal hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                  highlighted ? "border-charcoal ring-2 ring-charcoal/15" : "border-warm-gray"
+                }`}
+              >
+                {highlighted && (
+                  <span className="absolute top-3 right-3 text-[10px] font-medium uppercase tracking-[0.1em] text-iris">
+                    Based on your signup
+                  </span>
+                )}
+                <div className="font-display text-xl font-bold text-charcoal mb-2">
+                  {submitting === opt.role ? "Setting up…" : opt.title}
+                </div>
+                <p className="text-sm text-text-secondary leading-relaxed">{opt.blurb}</p>
+              </button>
+            );
+          })}
         </div>
 
         {error && (

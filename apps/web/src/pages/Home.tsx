@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { useAuth } from "@/context/AuthContext";
 import { Wordmark } from "@/components/Wordmark";
 import { Mic, PenLine, Music, Theater, BookOpen, Flower2, Guitar } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -47,6 +48,7 @@ function NavBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 
 export function Home() {
   const [categories, setCategories] = useState<CategoryPublic[]>([]);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
     apiFetch<{ data: CategoryPublic[] }>("/api/categories")
@@ -77,6 +79,26 @@ export function Home() {
           <div id="hero-nav-sentinel">
             <NavBar size="lg" />
           </div>
+
+          {/* Role-aware signup entry points (logged-out only). Both land on the
+              register tab; the chosen role is remembered for the post-signup
+              picker. */}
+          {!isAuthenticated && (
+            <div className="mt-10 flex flex-col sm:flex-row items-center gap-3">
+              <Link
+                to="/login?tab=register&role=student"
+                className="text-[13px] font-medium text-cream bg-charcoal px-6 py-2.5 rounded-full hover:bg-ink transition-all duration-300 tracking-wide"
+              >
+                Sign up as a student
+              </Link>
+              <Link
+                to="/login?tab=register&role=coach"
+                className="text-[13px] font-medium text-charcoal border border-charcoal/20 px-6 py-2.5 rounded-full hover:border-charcoal/50 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
+              >
+                Teach on Birdie
+              </Link>
+            </div>
+          )}
         </div>
       </section>
 

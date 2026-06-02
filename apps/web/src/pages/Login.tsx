@@ -1,16 +1,35 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api";
+import { setIntendedRole, clearIntendedRole, type IntendedRole } from "@/lib/signupIntent";
 
 type Tab = "signin" | "register";
 
 export function Login() {
-  const [tab, setTab] = useState<Tab>("signin");
   const { login, register } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get("redirect") || "/";
+
+  // Entry-point hints: ?tab=register opens on Create Account; ?role flavors the
+  // copy and is remembered so the post-signup picker can pre-select it (it
+  // survives the Google redirect via localStorage). ?oauth=unconfigured is set
+  // when the Google start route bounced back (creds not configured).
+  const intendedRole = ((): IntendedRole | null => {
+    const r = searchParams.get("role");
+    return r === "coach" ? "COACH" : r === "student" ? "STUDENT" : null;
+  })();
+  const oauthUnconfigured = searchParams.get("oauth") === "unconfigured";
+  const [tab, setTab] = useState<Tab>(
+    searchParams.get("tab") === "register" || intendedRole ? "register" : "signin",
+  );
+
+  // Persist the role intent as soon as we land here from a role-aware link, so
+  // it's available after the Google redirect / email signup.
+  useEffect(() => {
+    if (intendedRole) setIntendedRole(intendedRole);
+  }, [intendedRole]);
 
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
@@ -32,6 +51,9 @@ export function Login() {
         tab === "signin"
           ? await login(email, password)
           : await register({ name, email, password });
+      // A returning user with a role already set has no use for a lingering
+      // intent from a prior visit.
+      if (tab === "signin" && user.roleChosen) clearIntendedRole();
       // Fresh accounts (and anyone who never finished the picker) choose their
       // role before landing anywhere else.
       navigate(user.roleChosen ? redirectTo : "/onboarding/role", { replace: true });
@@ -51,8 +73,20 @@ export function Login() {
     <div className="min-h-[80vh] flex items-center justify-center px-6 py-16">
       <div className="w-full max-w-md">
         <h1 className="font-display text-3xl font-bold text-charcoal text-center mb-8">
-          {tab === "signin" ? "Welcome back" : "Create your account"}
+          {tab === "signin"
+            ? "Welcome back"
+            : intendedRole === "COACH"
+              ? "Create your coach account"
+              : intendedRole === "STUDENT"
+                ? "Create your student account"
+                : "Create your account"}
         </h1>
+
+        {oauthUnconfigured && (
+          <div className="bg-coral/10 text-coral text-sm px-4 py-3 rounded-lg mb-6 text-center">
+            Google sign-in isn't available right now. Please use email and password.
+          </div>
+        )}
 
         {/* Tab toggle */}
         <div className="flex border-b border-warm-gray mb-8">

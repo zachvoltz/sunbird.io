@@ -185,11 +185,18 @@ auth.post("/reset-password", async (c) => {
 // ─── Google OAuth: Start ───
 
 auth.get("/oauth/google", async (c) => {
-  const google = createGoogleClient(
-    getEnv(c, "GOOGLE_CLIENT_ID"),
-    getEnv(c, "GOOGLE_CLIENT_SECRET"),
-    getEnv(c, "GOOGLE_REDIRECT_URI"),
-  );
+  const clientId = getEnv(c, "GOOGLE_CLIENT_ID");
+  const clientSecret = getEnv(c, "GOOGLE_CLIENT_SECRET");
+  const redirectUri = getEnv(c, "GOOGLE_REDIRECT_URI");
+
+  // The button is a full-page navigation, so when Google isn't configured we
+  // bounce back to /login with a flag (rather than redirecting to Google with
+  // empty creds, which dead-ends on Google's own error page).
+  if (!clientId || !clientSecret || !redirectUri) {
+    return c.redirect("/login?oauth=unconfigured");
+  }
+
+  const google = createGoogleClient(clientId, clientSecret, redirectUri);
 
   const state = generateState();
   const codeVerifier = generateCodeVerifier();
