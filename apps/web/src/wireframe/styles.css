@@ -620,6 +620,14 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
 .wireframe-root .dt .box.wobble.dashed { border-style: dashed; }
 
 /* ── inbox: email-style flat list ──────────────────────── */
+.wireframe-root .inbox-toolbar {
+  position: sticky; top: 0; z-index: 2;
+  display: flex; align-items: center; gap: 12px;
+  padding: 8px 14px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--ink-faint);
+}
+.wireframe-root .inbox-toolbar .tb-spacer { flex: 1 1 auto; }
 .wireframe-root .inbox-list { display: flex; flex-direction: column; }
 .wireframe-root .inbox-group + .inbox-group { margin-top: 6px; }
 .wireframe-root .inbox-day-label {
@@ -640,6 +648,8 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   min-height: 44px;
 }
 .wireframe-root .inbox-row:hover { background: var(--paper-2); }
+.wireframe-root .inbox-row.selected,
+.wireframe-root .inbox-row.selected:hover { background: var(--accent-soft); }
 .wireframe-root .inbox-row.unread { background: var(--paper); font-weight: 500; }
 .wireframe-root .inbox-row.unread::before {
   content: ""; position: absolute; left: 0; top: 0; bottom: 0;
@@ -684,6 +694,20 @@ html[data-theme="dark"] .wireframe-root .panel.panel-cool { background: #1d2940;
   font-variant-numeric: tabular-nums;
 }
 .wireframe-root .inbox-row.unread .ibx-when { color: var(--accent); }
+/* Apple-Mail-style read/unread dot toggle on the right edge. Filled when
+   unread; a hollow ring appears on hover so read items can be re-flagged. */
+.wireframe-root .inbox-row .ibx-dot {
+  flex: 0 0 auto;
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 1.5px solid transparent; background: transparent;
+  padding: 0; cursor: pointer;
+}
+.wireframe-root .inbox-row.unread .ibx-dot {
+  background: var(--accent); border-color: var(--accent);
+}
+.wireframe-root .inbox-row:not(.unread):hover .ibx-dot {
+  border-color: var(--ink-faint);
+}
 
 .wireframe-root .roster-row {
   display: grid;
