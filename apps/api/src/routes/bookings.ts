@@ -601,6 +601,56 @@ bookingRoutes.get("/:id/previous", requireAuth, requireRole("COACH", "ADMIN"), a
   return c.json({ data: previous ? serializeBooking(previous) : null });
 });
 
+// GET /api/bookings/:id/adjacent — the immediately previous and next lessons
+// for the SAME coach+student pair, by start time (excluding cancelled). Powers
+// the Prev/Next buttons in the session-page header. Works for both the student
+// (must own the booking) and the coach (must own it); admins see any.
+// Returns { data: { prev: {id, startsAt} | null, next: {id, startsAt} | null } }.
+bookingRoutes.get("/:id/adjacent", requireAuth, async (c) => {
+  const { id } = c.req.param();
+  const user = c.get("user")!;
+  const db = getDb();
+
+  const current = await db.booking.findUnique({
+    where: { id },
+    select: { coachId: true, userId: true, startsAt: true },
+  });
+  if (!current) {
+    return c.json({ error: "Booking not found" }, 404);
+  }
+  if (user.role === "STUDENT" && current.userId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+  if (user.role === "COACH" && current.coachId !== user.id) {
+    return c.json({ error: "Forbidden" }, 403);
+  }
+
+  const pairWhere = {
+    coachId: current.coachId,
+    userId: current.userId,
+    status: { not: "CANCELLED" },
+  };
+  const [prev, next] = await Promise.all([
+    db.booking.findFirst({
+      where: { ...pairWhere, startsAt: { lt: current.startsAt } },
+      orderBy: { startsAt: "desc" },
+      select: { id: true, startsAt: true },
+    }),
+    db.booking.findFirst({
+      where: { ...pairWhere, startsAt: { gt: current.startsAt } },
+      orderBy: { startsAt: "asc" },
+      select: { id: true, startsAt: true },
+    }),
+  ]);
+
+  return c.json({
+    data: {
+      prev: prev ? { id: prev.id, startsAt: prev.startsAt.toISOString() } : null,
+      next: next ? { id: next.id, startsAt: next.startsAt.toISOString() } : null,
+    },
+  });
+});
+
 // POST /api/bookings/:id/next-week — coach quick-action that books the
 // same student at the same UTC time +7 days, reusing category / skill
 // tree / node / mode / coach. Used by the Next tab on the coach session

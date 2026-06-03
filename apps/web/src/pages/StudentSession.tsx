@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
 import { STFrame } from "@/wireframe/components/STFrame";
 import { SessionStepper } from "@/components/SessionStepper";
+import { useAdjacentLessons } from "@/hooks/useAdjacentLessons";
 import { GoalCard } from "@/components/GoalCard";
 import { Badge } from "@/components/ui/Badge";
 import type {
@@ -89,6 +90,8 @@ const ROUTINE_KIND_ICON: Record<string, string> = { warmup: "🔥", exercise: "�
 export function StudentSession() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const adjacent = useAdjacentLessons(bookingId);
 
   const [booking, setBooking] = useState<BookingPublic | null>(null);
   const [messages, setMessages] = useState<SessionMessagePublic[]>([]);
@@ -262,6 +265,11 @@ export function StudentSession() {
             steps={STEPPER_STEPS}
             activeKey={phase}
             onSelect={(k) => setPhase(k as Phase)}
+            showNav
+            hasPrev={!!adjacent.prev}
+            hasNext={!!adjacent.next}
+            onPrev={() => adjacent.prev && navigate(`/my-bookings/${adjacent.prev.id}`)}
+            onNext={() => adjacent.next && navigate(`/my-bookings/${adjacent.next.id}`)}
             meta={
               <span>
                 {coach?.name ? `with ${coach.name.split(" ")[0]}` : ""} · {formatShortDate(booking.startsAt)} · {formatTime(booking.startsAt)}
@@ -323,7 +331,6 @@ export function StudentSession() {
                 <section>
                   <div className="flex items-baseline justify-between mb-3">
                     <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">Your goals · shared</h2>
-                    <Link to="/my-goals" className="text-[11px] font-medium text-iris hover:text-iris-hover">all goals →</Link>
                   </div>
                   <div className="space-y-3">
                     {goals.slice(0, 2).map((g) => (

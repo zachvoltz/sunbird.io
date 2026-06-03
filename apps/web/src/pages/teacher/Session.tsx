@@ -1,11 +1,12 @@
 import { useState, useEffect, useRef } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
 import { DTFrame } from "@/wireframe/components/DTFrame";
 import { CurrentRoutine } from "@/components/coach/CurrentRoutine";
 import { SessionStepper } from "@/components/SessionStepper";
+import { useAdjacentLessons } from "@/hooks/useAdjacentLessons";
 import { GoalCard } from "@/components/GoalCard";
 import { Badge } from "@/components/ui/Badge";
 import type {
@@ -175,6 +176,8 @@ function phaseHint(booking: BookingPublic, phase: Phase, now = Date.now()): stri
 export function CoachSession() {
   const { bookingId } = useParams<{ bookingId: string }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const adjacent = useAdjacentLessons(bookingId);
 
   const [booking, setBooking] = useState<BookingPublic | null>(null);
   const [messages, setMessages] = useState<SessionMessagePublic[]>([]);
@@ -571,6 +574,11 @@ export function CoachSession() {
           steps={STEPPER_STEPS}
           activeKey={phase}
           onSelect={(key) => setPhase(key as Phase)}
+          showNav
+          hasPrev={!!adjacent.prev}
+          hasNext={!!adjacent.next}
+          onPrev={() => adjacent.prev && navigate(`/coach/session/${adjacent.prev.id}`)}
+          onNext={() => adjacent.next && navigate(`/coach/session/${adjacent.next.id}`)}
           meta={
             <span className="flex items-center gap-3">
               <span>{phaseHint(booking, phase)}</span>

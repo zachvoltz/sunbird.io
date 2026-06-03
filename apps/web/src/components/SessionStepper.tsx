@@ -11,13 +11,43 @@ type Props = {
   /** Right-aligned context line, e.g. "Maya R. · piano · 30 min". */
   meta?: React.ReactNode;
   onSelect?: (key: string) => void;
+  /** Show Prev/Next lesson buttons (for the same coach+student pair). */
+  showNav?: boolean;
+  hasPrev?: boolean;
+  hasNext?: boolean;
+  onPrev?: () => void;
+  onNext?: () => void;
 };
 
-export function SessionStepper({ steps, activeKey, meta, onSelect }: Props) {
+const navBtn =
+  "text-[12px] font-medium text-text-secondary hover:text-charcoal disabled:opacity-30 disabled:cursor-not-allowed px-2 py-1 rounded-card hover:enabled:bg-warm-gray/40 transition-colors";
+
+export function SessionStepper({
+  steps,
+  activeKey,
+  meta,
+  onSelect,
+  showNav,
+  hasPrev,
+  hasNext,
+  onPrev,
+  onNext,
+}: Props) {
   const activeIdx = steps.findIndex((s) => s.key === activeKey);
 
   return (
     <div className="flex items-center gap-3 flex-wrap mb-8">
+      {showNav && (
+        <button
+          type="button"
+          onClick={onPrev}
+          disabled={!hasPrev}
+          className={navBtn}
+          title={hasPrev ? "Previous lesson" : "No earlier lesson"}
+        >
+          ‹ Prev
+        </button>
+      )}
       <span className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary">
         Session
       </span>
@@ -74,6 +104,17 @@ export function SessionStepper({ steps, activeKey, meta, onSelect }: Props) {
         })}
       </div>
       {meta && <span className="text-[11px] text-text-secondary ml-auto">{meta}</span>}
+      {showNav && (
+        <button
+          type="button"
+          onClick={onNext}
+          disabled={!hasNext}
+          className={`${navBtn}${meta ? "" : " ml-auto"}`}
+          title={hasNext ? "Next lesson" : "No later lesson"}
+        >
+          Next ›
+        </button>
+      )}
     </div>
   );
 }
