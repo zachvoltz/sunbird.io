@@ -13,14 +13,11 @@ type NavIcon = "home" | "note" | "cal" | "cap" | "inbox" | "journal" | "star" | 
 const NAV: Array<{ id: NavId; label: string; icon: NavIcon; to: string }> = [
   { id: "home", label: "Today", icon: "home", to: "/today" },
   { id: "practice", label: "Practice", icon: "note", to: "/practice" },
-  { id: "calendar", label: "Calendar", icon: "cal", to: "/my-calendar" },
   { id: "lessons", label: "Lessons", icon: "cap", to: "/my-bookings" },
-  { id: "inbox", label: "Inbox", icon: "inbox", to: "/my-inbox" },
-  { id: "notes", label: "Journal", icon: "journal", to: "/my-notes" },
-  { id: "goals", label: "Goals", icon: "star", to: "/my-goals" },
   { id: "takes", label: "My takes", icon: "mic", to: "/my-takes" },
-  { id: "curriculum", label: "Curriculum", icon: "map", to: "/my-curriculum" },
-  { id: "profile", label: "Profile", icon: "user", to: "/my-profile" },
+  // Calendar, Inbox, Journal, Goals, Curriculum, and Profile are intentionally
+  // hidden from the student dashboard nav. Their routes still exist (reachable
+  // by direct URL / contextual links); re-add entries here to surface them.
 ];
 
 // Same shape as DTFrame's useInboxCount, just pointed at /api/me.
