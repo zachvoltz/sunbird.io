@@ -1,7 +1,9 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
-import { sessionMiddleware } from "./middleware/auth";
+import { sessionMiddleware, requireAuth } from "./middleware/auth";
+import { createEmailService } from "./services/email.service";
+import { getEnv } from "./lib/env";
 import { authRoutes } from "./routes/auth";
 import { meRoutes } from "./routes/me";
 import { availabilityRoutes } from "./routes/availability";
@@ -82,6 +84,24 @@ app.use("/api/*", sessionMiddleware);
 
 app.get("/api/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
+});
+
+// Diagnostic: fire a test email and return the Resend result inline (id on
+// success, the error reason on failure). Auth-gated so it can't be used to spam;
+// defaults to sending to the caller's own address. Optional ?to= override.
+//   curl -X POST https://…/api/health/email -H "Cookie: session=…"
+//   curl -X POST "https://…/api/health/email?to=me@example.com" -H "Cookie: …"
+app.post("/api/health/email", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const to = c.req.query("to") || user.email;
+  const email = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM") || "noreply@sunbird.io");
+  try {
+    const result = await email.sendTest(to);
+    const ok = !result.skipped && !result.error;
+    return c.json({ data: { to, ok, ...result } }, ok ? 200 : 400);
+  } catch (err: any) {
+    return c.json({ error: err?.message ?? "Send failed", to }, 502);
+  }
 });
 
 app.route("/api/auth", authRoutes);

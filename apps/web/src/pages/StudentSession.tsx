@@ -18,7 +18,7 @@ import type {
 function SessionShell({ children }: { children: React.ReactNode }) {
   return (
     <STFrame side="lessons">
-      <div style={{ flex: 1, minHeight: 0, overflowY: "auto", background: "var(--color-cream)" }}>
+      <div style={{ position: "relative", flex: 1, minHeight: 0, overflowY: "auto", background: "var(--color-cream)" }}>
         {children}
       </div>
     </STFrame>
@@ -108,6 +108,7 @@ export function StudentSession() {
   // Chat state (kept for the Live phase)
   const [chatInput, setChatInput] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+  const [chatOpen, setChatOpen] = useState(true);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const loadBooking = () =>
@@ -239,7 +240,7 @@ export function StudentSession() {
       {isLive && (
         <div className="absolute inset-0 z-0">
           {booking.mode === "ONLINE" && booking.status === "CONFIRMED" ? (
-            <div className="w-full h-full p-4 md:p-6">
+            <div className="w-full h-full" style={{ background: "#1a1612" }}>
               <VideoCall bookingId={bookingId!} localUserName={user?.name ?? "You"} remoteUserName={coach?.name ?? "Coach"} />
             </div>
           ) : (
@@ -248,7 +249,13 @@ export function StudentSession() {
         </div>
       )}
 
-      <div className={isLive ? "absolute inset-0 z-10 overflow-y-auto py-8 px-6 md:px-10 pointer-events-none" : "py-10 px-6 md:px-10"}>
+      <div
+        className={
+          isLive
+            ? `absolute inset-0 z-10 overflow-y-auto py-8 px-6 md:px-10 pointer-events-none ${chatOpen ? "md:pr-[372px]" : ""}`
+            : "py-10 px-6 md:px-10"
+        }
+      >
         <div className="mx-auto max-w-[1000px]" style={isLive ? { pointerEvents: "auto" } : undefined}>
           {/* Phase stepper — walks Upcoming → Live → Follow-up */}
           <SessionStepper
@@ -359,51 +366,10 @@ export function StudentSession() {
           )}
 
           {/* ── LIVE ───────────────────────────────────────── */}
-          {phase === "live" && (
-            <div className="space-y-4 max-w-[420px]">
-              <div className="bg-surface/95 backdrop-blur rounded-card shadow-card p-4">
-                <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center text-[12px] font-medium text-iris">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-iris mr-2 animate-pulse" />
-                    in your lesson
-                  </span>
-                  <span className="text-[11px] text-text-secondary ml-auto">your lesson is being recorded</span>
-                </div>
-              </div>
-
-              {/* Lightweight chat alongside the call */}
-              <div className="bg-surface/95 backdrop-blur rounded-card shadow-card overflow-hidden flex flex-col" style={{ height: "min(420px, 50vh)" }}>
-                <div className="px-4 py-2 border-b border-charcoal/10 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
-                  Chat{messages.length > 0 ? ` · ${messages.length}` : ""}
-                </div>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                  {messages.length === 0 && <p className="text-[12px] text-text-secondary text-center py-6">No messages yet.</p>}
-                  {messages.map((m) => {
-                    const isMe = m.sender.id === user?.id;
-                    return (
-                      <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
-                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-iris text-cream" : "bg-warm-gray/70 text-charcoal"}`}>
-                          <p className="text-[13px] whitespace-pre-line">{m.content}</p>
-                          <p className={`text-[10px] mt-1 ${isMe ? "text-cream/60" : "text-text-secondary"}`}>{formatTimestamp(m.createdAt)}</p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                  <div ref={chatEndRef} />
-                </div>
-                <div className="border-t border-charcoal/10 p-2 flex gap-2">
-                  <input
-                    value={chatInput}
-                    onChange={(e) => setChatInput(e.target.value)}
-                    onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                    placeholder="Message…"
-                    className="flex-1 px-3 py-1.5 text-[13px] bg-cream border border-charcoal/10 rounded-full focus:border-charcoal/30 focus:outline-none"
-                  />
-                  <button onClick={sendMessage} disabled={sendingChat || !chatInput.trim()} className="text-[12px] font-medium text-cream bg-iris px-3 py-1.5 rounded-full hover:bg-iris-hover disabled:opacity-50">Send</button>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* The live phase fills the screen with the video (background layer
+              above) and docks chat to the right as a collapsible column
+              (rendered as a sibling of this scroll overlay, below). Only the
+              phase stepper stays in this centered column. */}
 
           {/* ── FOLLOW-UP ──────────────────────────────────── */}
           {phase === "followup" && (
@@ -493,6 +459,66 @@ export function StudentSession() {
           )}
         </div>
       </div>
+
+      {/* ── LIVE: chat docked to the right, collapsible ──────── */}
+      {isLive && chatOpen && (
+        <aside className="absolute top-0 right-0 bottom-0 z-20 w-full max-w-[360px] flex flex-col bg-surface/95 backdrop-blur border-l border-charcoal/10 shadow-xl">
+          <header className="flex items-center gap-2 px-4 py-3 border-b border-charcoal/10">
+            <span className="inline-flex items-center text-[12px] font-medium text-iris">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-iris mr-2 animate-pulse" />
+              in your lesson
+            </span>
+            <button
+              onClick={() => setChatOpen(false)}
+              className="ml-auto text-text-secondary hover:text-charcoal text-lg leading-none px-1"
+              title="Collapse chat"
+              aria-label="Collapse chat"
+            >
+              ›
+            </button>
+          </header>
+          <div className="px-4 py-2 border-b border-charcoal/10 text-[11px] font-medium uppercase tracking-wider text-text-secondary">
+            Chat{messages.length > 0 ? ` · ${messages.length}` : ""}
+          </div>
+          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 && <p className="text-[12px] text-text-secondary text-center py-6">No messages yet.</p>}
+            {messages.map((m) => {
+              const isMe = m.sender.id === user?.id;
+              return (
+                <div key={m.id} className={`flex ${isMe ? "justify-end" : "justify-start"}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3 py-2 ${isMe ? "bg-iris text-cream" : "bg-warm-gray/70 text-charcoal"}`}>
+                    <p className="text-[13px] whitespace-pre-line">{m.content}</p>
+                    <p className={`text-[10px] mt-1 ${isMe ? "text-cream/60" : "text-text-secondary"}`}>{formatTimestamp(m.createdAt)}</p>
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={chatEndRef} />
+          </div>
+          <div className="border-t border-charcoal/10 p-2 flex gap-2">
+            <input
+              value={chatInput}
+              onChange={(e) => setChatInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+              placeholder="Message…"
+              className="flex-1 px-3 py-1.5 text-[13px] bg-cream border border-charcoal/10 rounded-full focus:border-charcoal/30 focus:outline-none"
+            />
+            <button onClick={sendMessage} disabled={sendingChat || !chatInput.trim()} className="text-[12px] font-medium text-cream bg-iris px-3 py-1.5 rounded-full hover:bg-iris-hover disabled:opacity-50">Send</button>
+          </div>
+          <p className="px-4 py-1.5 text-[10px] text-text-secondary border-t border-charcoal/10">your lesson is being recorded</p>
+        </aside>
+      )}
+
+      {isLive && !chatOpen && (
+        <button
+          onClick={() => setChatOpen(true)}
+          className="absolute top-3 right-3 z-20 inline-flex items-center gap-2 text-[12px] font-medium text-charcoal bg-surface/95 backdrop-blur border border-charcoal/10 shadow-card rounded-full px-3 py-1.5 hover:bg-surface"
+          title="Open chat"
+          aria-label="Open chat"
+        >
+          💬 Chat{messages.length > 0 ? ` · ${messages.length}` : ""}
+        </button>
+      )}
     </SessionShell>
   );
 }

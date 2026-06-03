@@ -219,6 +219,28 @@ export function createEmailService(apiKey: string, from: string) {
       });
     },
 
+    // Diagnostic send used by POST /api/health/email. Unlike the templated
+    // senders above, this RETURNS the Resend result (including the error reason)
+    // so the health endpoint can surface delivery success/failure inline.
+    async sendTest(to: string): Promise<{ skipped: boolean; from: string; id?: string; error?: string }> {
+      if (!resend) {
+        return { skipped: true, from, error: "RESEND_API_KEY not set" };
+      }
+      const { data, error } = await resend.emails.send({
+        from,
+        to,
+        subject: "Birdie email test ✅",
+        html: `<p>If you're reading this, Birdie email delivery is working. 🎉</p>
+               <p style="color:#888;font-size:12px">Sent from <code>${from}</code> via the /api/health/email diagnostic.</p>`.trim(),
+      });
+      return {
+        skipped: false,
+        from,
+        id: data?.id,
+        error: error ? (error.message ?? JSON.stringify(error)) : undefined,
+      };
+    },
+
     // A coach invites someone who already has an account — they're linked
     // immediately, so this is just a heads-up rather than a call to action.
     async sendStudentAddedEmail(to: string, coachName: string) {
