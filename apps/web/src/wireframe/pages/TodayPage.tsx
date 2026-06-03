@@ -200,23 +200,10 @@ export function TodayPage() {
           <div className="panel">
             <div className="panel-head">
               <div className="panel-title">From your teacher</div>
-              {detail?.latestNoteBookingId && (
-                <Link to={`/my-notes/${detail.latestNoteBookingId}`} className="btn small ghost">
-                  read note →
-                </Link>
-              )}
             </div>
             <div className="panel-body scroll col gap-3">
               {detail?.latestNoteSections?.intro || detail?.latestNotePracticeNotes ? (
-                <Link
-                  to={
-                    detail.latestNoteBookingId
-                      ? `/my-notes/${detail.latestNoteBookingId}`
-                      : "/my-notes"
-                  }
-                  className="box"
-                  style={{ textDecoration: "none", color: "inherit", position: "relative" }}
-                >
+                <div className="box" style={{ position: "relative" }}>
                   <div className="corner">latest note</div>
                   <div className="row between mb-1 mt-1">
                     <span className="wf-scrawl bold" style={{ fontSize: 18 }}>
@@ -237,7 +224,7 @@ export function TodayPage() {
                       ? "…"
                       : ""}
                   </div>
-                </Link>
+                </div>
               ) : (
                 !loading && (
                   <div className="small muted">

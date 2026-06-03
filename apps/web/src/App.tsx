@@ -1,4 +1,4 @@
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
 import { Home } from "@/pages/Home";
 import { Pricing } from "@/pages/Pricing";
@@ -16,7 +16,6 @@ import { CoachSettings } from "@/pages/teacher/Settings";
 import { CurriculumEditor } from "@/pages/teacher/CurriculumEditor";
 import { CoachManage } from "@/pages/teacher/Manage";
 import { StudentSession } from "@/pages/StudentSession";
-import { MyCurriculum } from "@/pages/MyCurriculum";
 import { AuthGate } from "@/components/AuthGate";
 import { RoleGate } from "@/components/RoleGate";
 import { Login } from "@/pages/Login";
@@ -33,10 +32,7 @@ import { VoiceRangePage } from "@/wireframe/pages/VoiceRange";
 import { InboxPage } from "@/wireframe/pages/Inbox";
 import { CalendarPage } from "@/wireframe/pages/Calendar";
 import { MyBookingsPage } from "@/wireframe/pages/MyBookingsPage";
-import { MyNotesPage, MyNoteExpandedPage } from "@/wireframe/pages/MyNotes";
 import { MyTakesPage } from "@/wireframe/pages/MyTakes";
-import { MyCurriculumHub } from "@/wireframe/pages/MyCurriculumHub";
-import { MyProfilePage } from "@/wireframe/pages/MyProfile";
 import { PracticePathPage } from "@/wireframe/pages/PracticePath";
 import { ExercisePlayerPage } from "@/wireframe/pages/ExercisePlayer";
 import { RecordTakePage } from "@/wireframe/pages/RecordTake";
@@ -44,11 +40,8 @@ import { TodayPage } from "@/wireframe/pages/TodayPage";
 import { AccountPage } from "@/wireframe/pages/Account";
 import { ProfilePage } from "@/wireframe/pages/Profile";
 import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
-import { MyInboxPage } from "@/wireframe/pages/MyInbox";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
-import { MyGoalsPage } from "@/pages/MyGoals";
 import { RolePicker } from "@/pages/Onboarding";
-import { PracticeCalendarPage } from "@/wireframe/pages/PracticeCalendar";
 
 export function App() {
   return (
@@ -67,7 +60,7 @@ export function App() {
         <Route path="coaches/:slug" element={<CoachProfile />} />
         <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
         <Route path="my-bookings-legacy" element={<AuthGate><MyBookings /></AuthGate>} />
-        <Route path="my-curriculum/:slug" element={<AuthGate><MyCurriculum /></AuthGate>} />
+        <Route path="my-curriculum/:slug" element={<Navigate to="/today" replace />} />
         <Route path="coach/dashboard-legacy" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />
         <Route path="coach/settings" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSettings /></RoleGate></AuthGate>} />
         <Route path="coach/manage" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachManage /></RoleGate></AuthGate>} />
@@ -101,16 +94,17 @@ export function App() {
 
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
       <Route path="/today" element={<AuthGate><TodayPage /></AuthGate>} />
-      <Route path="/my-inbox" element={<AuthGate><MyInboxPage /></AuthGate>} />
       <Route path="/my-bookings" element={<AuthGate><MyBookingsPage /></AuthGate>} />
       <Route path="/my-bookings/:bookingId" element={<AuthGate><StudentSession /></AuthGate>} />
-      <Route path="/my-notes" element={<AuthGate><MyNotesPage /></AuthGate>} />
-      <Route path="/my-notes/:bookingId" element={<AuthGate><MyNoteExpandedPage /></AuthGate>} />
-      <Route path="/my-goals" element={<AuthGate><MyGoalsPage /></AuthGate>} />
       <Route path="/my-takes" element={<AuthGate><MyTakesPage /></AuthGate>} />
-      <Route path="/my-curriculum" element={<AuthGate><MyCurriculumHub /></AuthGate>} />
-      <Route path="/my-profile" element={<AuthGate><MyProfilePage /></AuthGate>} />
-      <Route path="/my-calendar" element={<AuthGate><PracticeCalendarPage /></AuthGate>} />
+      {/* Disabled student views — hidden from the nav and redirected to Today. */}
+      <Route path="/my-inbox" element={<Navigate to="/today" replace />} />
+      <Route path="/my-notes" element={<Navigate to="/today" replace />} />
+      <Route path="/my-notes/:bookingId" element={<Navigate to="/today" replace />} />
+      <Route path="/my-goals" element={<Navigate to="/today" replace />} />
+      <Route path="/my-curriculum" element={<Navigate to="/today" replace />} />
+      <Route path="/my-profile" element={<Navigate to="/today" replace />} />
+      <Route path="/my-calendar" element={<Navigate to="/today" replace />} />
       <Route path="/practice" element={<AuthGate><PracticePathPage /></AuthGate>} />
       <Route path="/practice/exercise/:assignmentId" element={<AuthGate><ExercisePlayerPage /></AuthGate>} />
       <Route path="/practice/record/:assignmentId" element={<AuthGate><RecordTakePage /></AuthGate>} />
