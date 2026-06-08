@@ -239,21 +239,36 @@ coachRoutes.post("/invites", requireAuth, requireRole("COACH", "ADMIN"), async (
           acceptedAt: new Date(),
         },
       });
-      emailService.sendStudentAddedEmail(email, user.name).catch((err) => {
+      // Await so we can tell the coach if the heads-up email didn't go out
+      // (e.g. sending domain not verified). The invite itself still succeeds.
+      let emailWarning: string | undefined;
+      try {
+        const r = await emailService.sendStudentAddedEmail(email, user.name);
+        emailWarning = r?.error;
+      } catch (err: any) {
         console.error("Failed to send student-added email:", err);
-      });
-      return c.json({ data: serializeInvite(invite) }, 201);
+        emailWarning = err?.message ?? "Couldn't send the notification email.";
+      }
+      return c.json({ data: serializeInvite(invite), emailWarning }, 201);
     }
 
     const invite = await db.studentInvite.create({
       data: { coachId: user.id, email, name },
     });
-    emailService
-      .sendStudentInviteEmail(email, user.name, inviteUrlFor(c, invite.token, email), name ?? undefined)
-      .catch((err) => {
-        console.error("Failed to send student invite email:", err);
-      });
-    return c.json({ data: serializeInvite(invite) }, 201);
+    // The invite email is how a brand-new student claims the invite, so surface
+    // a clear warning to the coach if it couldn't be sent (the PENDING invite is
+    // still created and can be resent once email is configured).
+    let emailWarning: string | undefined;
+    try {
+      const r = await emailService.sendStudentInviteEmail(
+        email, user.name, inviteUrlFor(c, invite.token, email), name ?? undefined,
+      );
+      emailWarning = r?.error;
+    } catch (err: any) {
+      console.error("Failed to send student invite email:", err);
+      emailWarning = err?.message ?? "Couldn't send the invite email.";
+    }
+    return c.json({ data: serializeInvite(invite), emailWarning }, 201);
   } catch (err: any) {
     if (String(err?.message ?? "").includes("Unique constraint")) {
       return c.json({ error: "You've already invited that email" }, 409);

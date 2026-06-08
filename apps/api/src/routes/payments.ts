@@ -78,7 +78,7 @@ paymentsRoutes.post("/square", async (c) => {
 });
 
 type EmailLike = {
-  sendPaymentFailed(to: string, name: string, lessonType: string, detail: string): Promise<void>;
+  sendPaymentFailed(to: string, name: string, lessonType: string, detail: string): Promise<unknown>;
 };
 
 // Notify both sides of a booking about a payment problem: an inbox message in

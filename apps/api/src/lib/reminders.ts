@@ -7,7 +7,7 @@
 const HOUR_MS = 60 * 60 * 1000;
 
 type EmailLike = {
-  sendLessonReminder(to: string, name: string, lessonType: string, dateTime: string, whenLabel: string): Promise<void>;
+  sendLessonReminder(to: string, name: string, lessonType: string, dateTime: string, whenLabel: string): Promise<unknown>;
 };
 
 function formatDateTime(date: Date): string {
