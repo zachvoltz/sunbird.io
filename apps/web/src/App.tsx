@@ -1,6 +1,5 @@
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Layout } from "@/components/Layout";
-import { Home } from "@/pages/Home";
 import { Pricing } from "@/pages/Pricing";
 import { Terms, Privacy } from "@/pages/Legal";
 import { Lessons } from "@/pages/Lessons";
@@ -44,12 +43,16 @@ import { PaymentsPage } from "@/wireframe/pages/Payments";
 import { RolePicker } from "@/pages/Onboarding";
 import { CoachEntry } from "@/pages/CoachLanding";
 import { StudentEntry } from "@/pages/StudentLanding";
+import { OverviewLanding } from "@/pages/OverviewLanding";
 
 export function App() {
   return (
     <Routes>
+      {/* Homepage — the sunbird Overview. Full-bleed (own nav + footer), so it
+          renders outside the main Layout chrome. */}
+      <Route path="/" element={<OverviewLanding />} />
+
       <Route element={<Layout />}>
-        <Route index element={<Home />} />
         <Route path="pricing" element={<Pricing />} />
         <Route path="terms" element={<Terms />} />
         <Route path="privacy" element={<Privacy />} />
