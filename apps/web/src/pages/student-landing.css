@@ -1,0 +1,142 @@
+/* Student landing — additions on top of the shared sunbird-page base
+   (coach-landing.css). Faithful port of student-page.css from the Claude
+   Design handoff: phone mock, practice path, streak/ring, journal, families.
+   Scoped under .sunbird-landing, same as the base. */
+
+/* ── hero phone mock ──────────────────────────────────── */
+.sunbird-landing .sp-heroart { position: relative; display: flex; justify-content: center; }
+.sunbird-landing .sp-heroart .bloom { position: absolute; inset: -30px -10px; border-radius: 40px;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--accent-light) 40%, transparent), color-mix(in srgb, var(--accent) 16%, transparent));
+  filter: blur(12px); z-index: 0; }
+
+.sunbird-landing .phone {
+  position: relative; z-index: 1; width: 310px; flex: none;
+  background: var(--surface); border-radius: 40px; padding: 11px;
+  border: 1px solid var(--line-2);
+  box-shadow: 0 50px 100px -40px rgba(210,120,70,0.55), 0 4px 14px -6px rgba(40,30,15,0.18);
+}
+.sunbird-landing .phone-screen { background: var(--tint); border-radius: 30px; overflow: hidden; position: relative; }
+.sunbird-landing .phone-notch { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); width: 92px; height: 22px; border-radius: 999px; background: #2a2622; z-index: 6; }
+.sunbird-landing .ph-top { display: flex; align-items: center; justify-content: space-between; padding: 14px 20px 8px; font-size: 12px; font-weight: 700; color: var(--ink-2); }
+.sunbird-landing .ph-head { padding: 6px 20px 14px; display: flex; align-items: flex-end; justify-content: space-between; }
+.sunbird-landing .ph-head .h-t { font-family: var(--display); font-weight: 700; font-size: 21px; letter-spacing: -0.5px; line-height: 1; }
+.sunbird-landing .ph-head .h-s { font-size: 12px; color: var(--ink-3); margin-top: 4px; }
+.sunbird-landing .ph-flame { display: inline-flex; align-items: center; gap: 5px; background: var(--accent); color: #fff; border-radius: 999px; padding: 5px 11px; font-weight: 700; font-size: 13px; box-shadow: 0 8px 18px -8px var(--accent); }
+
+/* ── practice path (hero + feature) ───────────────────── */
+.sunbird-landing .path-wrap { position: relative; }
+.sunbird-landing .path-wrap svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.sunbird-landing .path-base { fill: none; stroke: var(--line-2); stroke-width: 13; stroke-linecap: round; }
+.sunbird-landing .path-done { fill: none; stroke: var(--accent); stroke-width: 13; stroke-linecap: round; }
+.sunbird-landing .path-stop-label { font-family: var(--body); font-weight: 600; fill: var(--ink-2); }
+.sunbird-landing .path-stop-num   { font-family: var(--display); font-weight: 700; }
+
+.sunbird-landing .ph-begin {
+  position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
+  background: var(--accent); color: #fff; font-family: var(--display); font-weight: 700;
+  font-size: 15px; padding: 13px 22px; border-radius: 999px;
+  box-shadow: 0 16px 30px -12px var(--accent);
+}
+.sunbird-landing .ph-pin {
+  position: absolute; top: 14px; left: 16px; max-width: 168px;
+  background: #fff; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+  border-radius: 12px; padding: 9px 12px; box-shadow: 0 14px 30px -16px rgba(180,100,60,0.5);
+}
+.sunbird-landing .ph-pin .pin-from { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent-deep); }
+.sunbird-landing .ph-pin .pin-msg { font-size: 13px; color: var(--ink); margin-top: 2px; line-height: 1.3; }
+
+/* feature-sized path panel */
+.sunbird-landing .path-panel { padding: 20px 18px; }
+.sunbird-landing .path-panel .pp-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+.sunbird-landing .path-panel .pp-head .t { font-family: var(--display); font-weight: 700; font-size: 17px; }
+.sunbird-landing .path-panel .pp-head .s { font-size: 12.5px; color: var(--ink-3); }
+.sunbird-landing .path-figure { height: 360px; position: relative; }
+
+/* stop checklist (under path / in feature) */
+.sunbird-landing .stop-list { display: grid; gap: 9px; }
+.sunbird-landing .stop-item { display: flex; align-items: center; gap: 12px; padding: 11px 13px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.sunbird-landing .stop-item.done { background: var(--tint); }
+.sunbird-landing .stop-item.now { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.sunbird-landing .stop-dot { width: 28px; height: 28px; border-radius: 50%; flex: none; display: grid; place-items: center; font-family: var(--display); font-weight: 700; font-size: 13px; }
+.sunbird-landing .stop-dot.done { background: var(--accent); color: #fff; }
+.sunbird-landing .stop-dot.now { background: #fff; border: 2px solid var(--accent); color: var(--accent-deep); }
+.sunbird-landing .stop-dot.todo { background: var(--surface); border: 2px solid var(--line-2); color: var(--ink-3); }
+.sunbird-landing .stop-item .si-t { font-weight: 700; font-size: 14.5px; }
+.sunbird-landing .stop-item.done .si-t { color: var(--ink-3); text-decoration: line-through; text-decoration-color: var(--line-2); }
+.sunbird-landing .stop-item .si-s { font-size: 12px; color: var(--ink-3); }
+.sunbird-landing .stop-item .si-go { margin-left: auto; font-size: 12px; font-weight: 700; color: var(--accent-deep); }
+
+/* ── progress: ring + streak calendar + bars ──────────── */
+.sunbird-landing .prog-grid { display: grid; gap: 16px; }
+.sunbird-landing .prog-ringcard { display: flex; align-items: center; gap: 20px; padding: 22px; border-radius: 18px; background: linear-gradient(160deg, #fff, var(--tint)); border: 1px solid var(--line); }
+.sunbird-landing .prog-ring { position: relative; width: 104px; height: 104px; flex: none; }
+.sunbird-landing .prog-ring .rv { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+.sunbird-landing .prog-ring .rv b { font-family: var(--display); font-weight: 800; font-size: 28px; letter-spacing: -1px; line-height: 1; }
+.sunbird-landing .prog-ring .rv span { font-size: 11px; color: var(--ink-3); }
+.sunbird-landing .prog-ringcard .rc-t { font-family: var(--display); font-weight: 700; font-size: 19px; }
+.sunbird-landing .prog-ringcard .rc-p { font-size: 14px; color: var(--ink-2); margin-top: 5px; }
+
+/* streak calendar */
+.sunbird-landing .streak-card { padding: 20px 22px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); }
+.sunbird-landing .streak-top { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 14px; }
+.sunbird-landing .streak-top .big { font-family: var(--display); font-weight: 800; font-size: 34px; letter-spacing: -1px; color: var(--accent-deep); display: inline-flex; align-items: center; gap: 8px; }
+.sunbird-landing .streak-top .lbl { font-size: 13px; color: var(--ink-3); }
+.sunbird-landing .streak-cells { display: grid; grid-template-columns: repeat(7, 1fr); gap: 7px; }
+.sunbird-landing .streak-cell { aspect-ratio: 1; border-radius: 8px; display: grid; place-items: center; font-size: 11px; font-weight: 700; }
+.sunbird-landing .streak-cell.full { background: var(--accent); color: #fff; }
+.sunbird-landing .streak-cell.half { background: var(--accent-soft); color: var(--accent-deep); }
+.sunbird-landing .streak-cell.miss { background: var(--line); color: var(--ink-3); }
+.sunbird-landing .streak-cell.today { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sunbird-landing .streak-legend { display: flex; gap: 16px; margin-top: 14px; font-size: 12px; color: var(--ink-3); }
+.sunbird-landing .streak-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sunbird-landing .streak-legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+/* mini bars row */
+.sunbird-landing .prog-bars { display: flex; align-items: flex-end; gap: 8px; height: 70px; padding: 16px 18px 14px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line); }
+.sunbird-landing .prog-bars .bar { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; height: 100%; justify-content: flex-end; }
+.sunbird-landing .prog-bars .bar i { width: 100%; border-radius: 5px 5px 0 0; background: var(--accent); opacity: 0.9; }
+.sunbird-landing .prog-bars .bar i.dim { background: var(--line-2); }
+.sunbird-landing .prog-bars .bar span { font-size: 10.5px; color: var(--ink-3); font-weight: 600; }
+
+/* ── journal / feedback timeline ──────────────────────── */
+.sunbird-landing .tl { position: relative; padding-left: 8px; }
+.sunbird-landing .tl-row { display: grid; grid-template-columns: 30px 1fr; gap: 14px; position: relative; padding-bottom: 16px; }
+.sunbird-landing .tl-row:not(:last-child)::before { content: ""; position: absolute; left: 14px; top: 30px; bottom: -2px; width: 2px; background: var(--line-2); }
+.sunbird-landing .tl-dot { width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; font-size: 14px; z-index: 1; flex: none; }
+.sunbird-landing .tl-dot.coach { background: var(--accent); color: #fff; }
+.sunbird-landing .tl-dot.you { background: var(--ok-soft); color: var(--ok); border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent); }
+.sunbird-landing .tl-dot.auto { background: var(--surface); border: 2px solid var(--line-2); color: var(--ink-3); }
+.sunbird-landing .tl-card { background: var(--surface); border: 1px solid var(--line); border-radius: 13px; padding: 13px 15px; }
+.sunbird-landing .tl-card.note { background: var(--tint); border-color: var(--line-2); }
+.sunbird-landing .tl-head { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+.sunbird-landing .tl-head b { font-size: 14px; }
+.sunbird-landing .tl-head .when { margin-left: auto; font-size: 11.5px; color: var(--ink-3); }
+.sunbird-landing .tl-card p { font-size: 13.5px; color: var(--ink-2); margin: 0; line-height: 1.5; }
+.sunbird-landing .tl-card .hl { background: linear-gradient(transparent 62%, var(--accent-soft) 0); padding: 0 2px; font-weight: 600; color: var(--ink); }
+.sunbird-landing .tl-take { display: flex; align-items: center; gap: 11px; margin-top: 9px; padding: 9px 11px; border-radius: 10px; background: #fff; border: 1px solid var(--line); }
+.sunbird-landing .tl-take .pb { width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-size: 12px; flex: none; }
+.sunbird-landing .tl-wave { display: flex; align-items: center; gap: 2px; height: 26px; flex: 1; }
+.sunbird-landing .tl-wave i { flex: 1; border-radius: 2px; background: var(--accent); opacity: 0.85; }
+.sunbird-landing .tl-wave i.dim { background: var(--line-2); opacity: 1; }
+.sunbird-landing .tl-take .dur { font-size: 11.5px; font-weight: 700; color: var(--ink-2); }
+
+/* ── families band ────────────────────────────────────── */
+.sunbird-landing .fam { display: grid; grid-template-columns: 1.1fr 1fr; gap: 56px; align-items: center; }
+.sunbird-landing .fam-card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 24px; box-shadow: 0 40px 80px -50px rgba(180,100,60,0.4); }
+.sunbird-landing .fam-line { display: flex; align-items: center; gap: 13px; padding: 13px 0; }
+.sunbird-landing .fam-line + .fam-line { border-top: 1px dashed var(--line-2); }
+.sunbird-landing .fam-line .fic { width: 40px; height: 40px; border-radius: 11px; flex: none; display: grid; place-items: center; font-size: 19px; background: var(--accent-soft); }
+.sunbird-landing .fam-line b { font-size: 15px; display: block; }
+.sunbird-landing .fam-line span { font-size: 13px; color: var(--ink-2); }
+
+/* invite-aware closing CTA */
+.sunbird-landing .cta-band .cta-or { display: flex; align-items: center; gap: 14px; max-width: 360px; margin: 22px auto 0; color: rgba(255,255,255,0.7); font-size: 14px; }
+.sunbird-landing .cta-band .cta-or .ln { flex: 1; height: 1px; background: rgba(255,255,255,0.3); }
+.sunbird-landing .cta-band .btn-ghostlight { background: rgba(255,255,255,0.14); color: #fff; border: 1px solid rgba(255,255,255,0.4); }
+.sunbird-landing .cta-band .btn-ghostlight:hover { background: rgba(255,255,255,0.22); }
+
+@media (max-width: 980px) {
+  .sunbird-landing .fam { grid-template-columns: 1fr; gap: 36px; }
+  .sunbird-landing .prog-ringcard { flex-direction: column; text-align: center; }
+}

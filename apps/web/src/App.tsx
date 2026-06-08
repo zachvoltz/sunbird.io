@@ -43,6 +43,7 @@ import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
 import { RolePicker } from "@/pages/Onboarding";
 import { CoachEntry } from "@/pages/CoachLanding";
+import { StudentEntry } from "@/pages/StudentLanding";
 
 export function App() {
   return (
@@ -95,6 +96,10 @@ export function App() {
 
       {/* Post-signup role picker — full-bleed, gated to authed-but-unchosen users. */}
       <Route path="/onboarding/role" element={<AuthGate><RolePicker /></AuthGate>} />
+
+      {/* Public student marketing landing. Signed-in students are redirected
+          to their app home at /today. */}
+      <Route path="/student" element={<StudentEntry />} />
 
       {/* Sketchy student wireframes — same chrome-owns-viewport pattern. */}
       <Route path="/today" element={<AuthGate><TodayPage /></AuthGate>} />
