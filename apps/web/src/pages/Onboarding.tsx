@@ -41,7 +41,7 @@ export function RolePicker() {
       });
       clearIntendedRole();
       await refresh();
-      navigate(role === "COACH" ? "/coach" : "/today", { replace: true });
+      navigate(role === "COACH" ? "/coach/roster" : "/today", { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.body.error : "Something went wrong. Please try again.");
       setSubmitting(null);

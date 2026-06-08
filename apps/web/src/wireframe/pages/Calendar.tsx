@@ -1163,7 +1163,7 @@ function CalendarMobile({ bookings }: { bookings: BookingPublic[] }) {
           <h2 className="wf-title">Calendar</h2>
           <div className="wf-subtitle">{upcoming.length} upcoming</div>
         </div>
-        <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
+        <Link to="/coach/roster" className="btn icon ghost"><Icon name="back" size={14} /></Link>
       </div>
       <div className="wf-body col gap-3 scroll-y" style={{ alignItems: "stretch" }}>
         {upcoming.length === 0 ? (

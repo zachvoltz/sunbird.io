@@ -198,7 +198,7 @@ export function CoachSettings() {
     <div className="py-16 px-6 md:px-10">
       <div className="mx-auto max-w-[800px]">
         <Link
-          to="/coach"
+          to="/coach/roster"
           className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-charcoal transition-colors"
         >
           &larr; Dashboard

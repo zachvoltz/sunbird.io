@@ -69,7 +69,7 @@ function DTTopBar({
       >
         {collapsed ? "☰" : "〈"}
       </button>
-      <Link to="/coach" className="dt-brand">
+      <Link to="/coach/roster" className="dt-brand">
         <span className="bird">♪</span>
         {!collapsed && (
           <>
@@ -118,7 +118,7 @@ function DTSidebar({
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
       {inviteOpen && <InviteStudentModal onClose={() => setInviteOpen(false)} />}
-      <Link to="/coach" className={"item" + (on === "roster" ? " on" : "")} title="Today">
+      <Link to="/coach/roster" className={"item" + (on === "roster" ? " on" : "")} title="Today">
         <span className="nav-ico"><Icon name="home" size={18} /></span>
         {!collapsed && <span>Today</span>}
       </Link>

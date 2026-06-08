@@ -217,7 +217,7 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
             <div className="dt-title">Student not found</div>
             <div className="dt-sub">No record for that id — they may not have a booking with you.</div>
           </div>
-          <Link to="/coach" className="btn small">back to today</Link>
+          <Link to="/coach/roster" className="btn small">back to today</Link>
         </div>
       </DTFrame>
     );
@@ -254,7 +254,7 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
     <DTFrame side="student">
       <div className="dt-main-head">
         <div className="row gap-3">
-          <Link to="/coach" className="btn icon" style={{ border: 0, background: "transparent" }}>
+          <Link to="/coach/roster" className="btn icon" style={{ border: 0, background: "transparent" }}>
             <Icon name="back" size={14} />
           </Link>
           <Avatar name={detail.name} size={48} />
@@ -448,7 +448,7 @@ function StudentMobile({ detail, loading }: { detail: StudentDetailPublic | unde
   return (
     <WFFrame navActive="home">
       <div className="wf-header">
-        <Link to="/coach" className="btn icon" style={{ border: 0, background: "transparent" }}>
+        <Link to="/coach/roster" className="btn icon" style={{ border: 0, background: "transparent" }}>
           <Icon name="back" size={14} />
         </Link>
         <div className="center">

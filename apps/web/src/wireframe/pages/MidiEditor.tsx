@@ -426,7 +426,7 @@ export function MidiEditorPage() {
     <DTFrame side="library">
       <div className="dt-main-head">
         <div className="row gap-3">
-          <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
+          <Link to="/coach/roster" className="btn icon ghost"><Icon name="back" size={14} /></Link>
           <div>
             <h2 className="dt-title" style={{ fontSize: 28 }}>{titles[mode]}</h2>
             <div className="dt-sub">

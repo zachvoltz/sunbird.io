@@ -349,7 +349,7 @@ export function CurriculumEditor() {
       {/* Top bar */}
       <div className="shrink-0 border-b border-charcoal/10 bg-surface px-6 py-3 flex items-center gap-4">
         <Link
-          to="/coach"
+          to="/coach/roster"
           className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary hover:text-charcoal transition-colors"
         >
           &larr;

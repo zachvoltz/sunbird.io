@@ -189,7 +189,7 @@ function InboxEmpty({ what }: { what: string }) {
         land here. Nothing new right now.
       </div>
       <div className="row gap-2 mt-3">
-        <Link to="/coach" className="btn small">back to today</Link>
+        <Link to="/coach/roster" className="btn small">back to today</Link>
         <Link to="/coach/library" className="btn small ghost">open library</Link>
       </div>
     </div>
@@ -475,7 +475,7 @@ function InboxMobile() {
           <h2 className="wf-title">Inbox</h2>
           <div className="wf-subtitle">messages &amp; bookings</div>
         </div>
-        <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
+        <Link to="/coach/roster" className="btn icon ghost"><Icon name="back" size={14} /></Link>
       </div>
       <div className="wf-body col scroll-y" style={{ alignItems: "stretch", padding: 0 }}>
         {loading && !items && (

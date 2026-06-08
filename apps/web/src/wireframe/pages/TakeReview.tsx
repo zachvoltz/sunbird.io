@@ -237,7 +237,7 @@ export function TakeReviewPage() {
     return wrap(
       <div className="dt-main-head">
         <div><h2 className="dt-title">Take not found</h2><div className="dt-sub">{error}</div></div>
-        <Link to="/coach" className="btn small primary">back</Link>
+        <Link to="/coach/roster" className="btn small primary">back</Link>
       </div>
     );
   }
@@ -249,7 +249,7 @@ export function TakeReviewPage() {
     <>
       <div className="dt-main-head">
         <div className="row gap-3" style={{ alignItems: "center" }}>
-          <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
+          <Link to="/coach/roster" className="btn icon ghost"><Icon name="back" size={14} /></Link>
           <Avatar name={name} size={40} />
           <div>
             <h2 className="dt-title" style={{ fontSize: 24 }}>{name} · {take.pieceTitle}</h2>

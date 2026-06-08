@@ -42,6 +42,7 @@ import { ProfilePage } from "@/wireframe/pages/Profile";
 import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
 import { RolePicker } from "@/pages/Onboarding";
+import { CoachEntry } from "@/pages/CoachLanding";
 
 export function App() {
   return (
@@ -72,7 +73,10 @@ export function App() {
 
       {/* Sketchy teacher wireframes — render outside the main Layout so the
           full-bleed desktop chrome (topbar/sidebar) owns the viewport. */}
-      <Route path="/coach" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><RosterPage /></RoleGate></AuthGate>} />
+      {/* Public coach marketing landing. Signed-in coaches/admins are
+          redirected to their roster at /coach/roster. */}
+      <Route path="/coach" element={<CoachEntry />} />
+      <Route path="/coach/roster" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><RosterPage /></RoleGate></AuthGate>} />
       <Route path="/coach/inbox" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><InboxPage /></RoleGate></AuthGate>} />
       <Route path="/coach/calendar" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CalendarPage /></RoleGate></AuthGate>} />
       <Route path="/coach/student/:studentId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><StudentPage /></RoleGate></AuthGate>} />

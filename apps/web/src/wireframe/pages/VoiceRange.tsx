@@ -12,7 +12,7 @@ function VoiceRangeDesktop() {
     <DTFrame side="student">
       <div className="dt-main-head">
         <div className="row gap-3">
-          <Link to="/coach" className="btn icon ghost"><Icon name="back" size={14} /></Link>
+          <Link to="/coach/roster" className="btn icon ghost"><Icon name="back" size={14} /></Link>
           <Avatar name="Ana" size={48} />
           <div>
             <h2 className="dt-title" style={{ fontSize: 30 }}>Ana B. · voice profile</h2>

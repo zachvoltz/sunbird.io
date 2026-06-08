@@ -520,7 +520,7 @@ export function CoachSession() {
               Session not found
             </h1>
             <Link
-              to="/coach"
+              to="/coach/roster"
               className="text-sm text-iris hover:text-iris-hover transition-colors"
             >
               Back to dashboard
@@ -686,7 +686,7 @@ export function CoachSession() {
                 {!nextWeekBooking && !nextSuggested?.alreadyBooked && (
                   <p className="text-[11px] text-text-secondary mt-3 pt-3 border-t border-charcoal/10">
                     You skipped booking at the end of the lesson — this is sitting in your{" "}
-                    <Link to="/coach" className="text-iris hover:text-iris-hover">Needs you</Link> column until booked.
+                    <Link to="/coach/roster" className="text-iris hover:text-iris-hover">Needs you</Link> column until booked.
                   </p>
                 )}
               </div>

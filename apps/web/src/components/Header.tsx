@@ -111,7 +111,7 @@ export function Header() {
             <>
               {(user.role === "COACH" || user.role === "ADMIN") ? (
                 <NavLink
-                  to="/coach"
+                  to="/coach/roster"
                   className={({ isActive }) =>
                     `text-[13px] font-medium tracking-wide transition-colors ${
                       isActive ? "text-iris" : "text-text-secondary hover:text-charcoal"
@@ -211,7 +211,7 @@ export function Header() {
             <>
               {(user.role === "COACH" || user.role === "ADMIN") ? (
                 <NavLink
-                  to="/coach"
+                  to="/coach/roster"
                   onClick={() => setMenuOpen(false)}
                   className={({ isActive }) =>
                     `block text-[15px] font-display ${isActive ? "text-charcoal" : "text-text-secondary"}`

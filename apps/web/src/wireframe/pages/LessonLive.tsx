@@ -273,7 +273,7 @@ export function LessonLivePage() {
           <div className="row gap-2">
             <button className="btn small ghost">🎙 mute</button>
             <button className="btn small ghost">⊟ share</button>
-            <Link to="/coach" className="btn small" style={{
+            <Link to="/coach/roster" className="btn small" style={{
               background: "var(--accent)", color: "white", borderColor: "var(--accent)",
             }}>end lesson</Link>
           </div>

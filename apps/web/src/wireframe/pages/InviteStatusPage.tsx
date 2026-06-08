@@ -53,7 +53,7 @@ export function InviteStatusPage() {
     try {
       await apiFetch(`/api/coaches/invites/${inviteId}`, { method: "DELETE" });
       refreshSidebarStudents();
-      navigate("/coach", { replace: true });
+      navigate("/coach/roster", { replace: true });
     } catch (err) {
       setNotice(err instanceof ApiError ? (err.body?.error ?? "Couldn't revoke") : "Couldn't revoke");
       setBusy(false);
@@ -79,7 +79,7 @@ export function InviteStatusPage() {
             </div>
           )}
         </div>
-        <Link to="/coach" className="btn small">back to today</Link>
+        <Link to="/coach/roster" className="btn small">back to today</Link>
       </div>
 
       {!loading && !notFound && invite && (
