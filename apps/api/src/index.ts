@@ -94,7 +94,7 @@ app.get("/api/health", (c) => {
 app.post("/api/health/email", requireAuth, async (c) => {
   const user = c.get("user")!;
   const to = c.req.query("to") || user.email;
-  const email = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM") || "noreply@sunbird.io");
+  const email = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM") || "noreply@usesunbird.com");
   try {
     const result = await email.sendTest(to);
     const ok = !result.skipped && !result.error;

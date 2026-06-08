@@ -25,8 +25,8 @@ Wireframe references:
   - [x] "Continue with Google" button on Login page
   - [x] Start route guarded when unconfigured — `GET /api/auth/oauth/google` bounces to `/login?oauth=unconfigured` (friendly notice on Login) instead of a broken Google redirect when creds are unset. Test in `auth.test.ts`.
   - [x] Surface "Continue with Google" on the coach signup path — `/login?tab=register&role=coach` opens the Create-Account tab (where the Google button lives) with a "Create your coach account" heading; reachable from the Home "Teach on Birdie" CTA + Header "Sign up".
-  - [ ] **(you)** Configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` in `.dev.vars` and Cloudflare secrets (prod) — code is ready; this is the only thing gating live Google sign-in
-  - [ ] **(you)** Register dev + prod redirect URIs in the Google Cloud Console OAuth client
+  - [ ] **(you)** Configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` in `.dev.vars` and Cloudflare secrets (prod) — code is ready; this is the only thing gating live Google sign-in. **Prod `GOOGLE_REDIRECT_URI` = `https://usesunbird.com/api/auth/oauth/google/cb`** (custom domain). Local dev value lives in `.dev.vars`.
+  - [ ] **(you)** Register the redirect URIs in the Google Cloud Console OAuth client: `https://usesunbird.com/api/auth/oauth/google/cb` (prod) + the local-dev one.
   - [ ] End-to-end test once creds are set: new coach via Google, new student via Google, existing email/password user adding Google as a linked account
 
 ---

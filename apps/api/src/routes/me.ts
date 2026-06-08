@@ -410,7 +410,7 @@ me.post("/takes", requireAuth, async (c) => {
     const coach = await db.user.findUnique({ where: { id: coachId }, select: { email: true, name: true } });
     if (coach?.email) {
       const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
-      const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+      const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
       createEmailService(apiKey, from)
         .sendNewTakeToCoach(coach.email, coach.name, user.name, body.pieceTitle)
         .catch(console.error);

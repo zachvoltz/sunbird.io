@@ -518,7 +518,7 @@ coachRoutes.post("/takes/:takeId/reply", requireAuth, requireRole("COACH", "ADMI
     const student = await db.user.findUnique({ where: { id: take.studentId }, select: { email: true, name: true } });
     if (student?.email) {
       const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
-      const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@sunbird.io";
+      const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
       createEmailService(apiKey, from)
         .sendTakeReply(student.email, student.name, user.name, take.pieceTitle)
         .catch(console.error);

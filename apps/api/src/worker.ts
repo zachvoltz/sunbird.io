@@ -32,7 +32,7 @@ export default {
         initDbD1(env.DB);
 
         try {
-          const email = createEmailService(env.RESEND_API_KEY ?? "", env.EMAIL_FROM ?? "noreply@sunbird.io");
+          const email = createEmailService(env.RESEND_API_KEY ?? "", env.EMAIL_FROM ?? "noreply@usesunbird.com");
           const result = await processLessonReminders(getDb(), email, now);
           console.log(`[cron] lesson reminders sent: ${result.sent1h} (1h), ${result.sent24h} (24h)`);
         } catch (err) {

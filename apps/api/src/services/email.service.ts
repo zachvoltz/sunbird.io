@@ -73,7 +73,7 @@ export function createEmailService(apiKey: string, from: string) {
         html: `
           <h2>Booking cancelled</h2>
           <p>Hi ${name}, your ${lessonType} lesson on ${dateTime} has been cancelled.</p>
-          <p>If this was a mistake, you can always book again at sunbird.io/book.</p>
+          <p>If this was a mistake, you can always book again at usesunbird.com/book.</p>
           <p>— Sunbird</p>
         `.trim(),
       });
