@@ -16,19 +16,9 @@ const COACH = "/coach";
 const STUDENT = "/student";
 const SIGNIN = "/login";
 
-// ── brand mark ────────────────────────────────────────────
+// ── brand mark (the sunbird bird logo) ────────────────────
 const OvMark = () => (
-  <svg className="mark" viewBox="0 0 32 32" fill="none">
-    <circle cx="16" cy="16" r="15" fill="var(--accent-2)" opacity="0.16" />
-    <path
-      d="M7 19c3.5 0.4 6-1.2 7.6-4 0.7 2 0.4 3.8-0.7 5.4 2.8-0.3 4.9-1.9 6.4-4.9 0.9 1.8 0.9 3.6 0.1 5.4 1.7-0.6 3-1.8 3.9-3.7"
-      stroke="var(--accent)"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <circle cx="22.5" cy="10.5" r="1.6" fill="var(--accent)" />
-  </svg>
+  <img className="mark" src="/sunbird-icon.png" alt="sunbird logo" style={{ objectFit: "contain" }} />
 );
 
 // ── nav ───────────────────────────────────────────────────

@@ -16,19 +16,9 @@ import "./coach-landing.css";
 const SIGNUP_COACH = "/login?tab=register&role=coach";
 const SIGNIN = "/login";
 
-// ── brand mark (a small sunbird in flight + sun arc) ──────
-const Mark = ({ c1, c2 }: { c1: string; c2: string }) => (
-  <svg className="mark" viewBox="0 0 32 32" fill="none">
-    <circle cx="16" cy="16" r="15" fill={c2} opacity="0.16" />
-    <path
-      d="M7 19c3.5 0.4 6-1.2 7.6-4 0.7 2 0.4 3.8-0.7 5.4 2.8-0.3 4.9-1.9 6.4-4.9 0.9 1.8 0.9 3.6 0.1 5.4 1.7-0.6 3-1.8 3.9-3.7"
-      stroke={c1}
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    />
-    <circle cx="22.5" cy="10.5" r="1.6" fill={c1} />
-  </svg>
+// ── brand mark (the sunbird bird logo) ────────────────────
+const Mark = () => (
+  <img className="mark" src="/sunbird-icon.png" alt="sunbird logo" style={{ objectFit: "contain" }} />
 );
 
 // ── shared product mock ───────────────────────────────────
@@ -116,7 +106,7 @@ const PageNav = () => {
   return (
     <header className={"nav" + (stuck ? " stuck" : "")}>
       <div className="nav-inner">
-        <Link className="logo" to="/"><Mark c1="var(--accent)" c2="var(--accent-2)" /><span className="name">sunbird</span></Link>
+        <Link className="logo" to="/"><Mark /><span className="name">sunbird</span></Link>
         <nav className="nav-links">
           <a href="#features">Features</a>
           <a href="#how">How it works</a>
@@ -483,7 +473,7 @@ const Footer = () => (
   <footer className="footer">
     <div className="wrap footer-inner">
       <div>
-        <div className="logo"><Mark c1="var(--accent)" c2="var(--accent-2)" /><span className="name">sunbird</span></div>
+        <div className="logo"><Mark /><span className="name">sunbird</span></div>
         <p className="blurb">The calm studio tool for independent music teachers. Scheduling, payments, and practice — gently handled.</p>
       </div>
       <div><h4>Product</h4><ul><li><a href="#features">Features</a></li><li><a href="#pricing">Pricing</a></li><li><a href="#how">How it works</a></li><li><Link to="/">For students</Link></li></ul></div>
