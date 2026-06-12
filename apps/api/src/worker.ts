@@ -9,7 +9,8 @@ import { processSquareTokenRefresh } from "./lib/square-token-refresh";
 
 type Env = {
   DB: D1Database;
-  RESEND_API_KEY?: string;
+  // Cloudflare Email Sending binding (replaces Resend).
+  EMAIL?: SendEmail;
   EMAIL_FROM?: string;
   SQUARE_ENVIRONMENT?: string;
   SQUARE_APPLICATION_ID?: string;
@@ -32,7 +33,7 @@ export default {
         initDbD1(env.DB);
 
         try {
-          const email = createEmailService(env.RESEND_API_KEY ?? "", env.EMAIL_FROM ?? "noreply@usesunbird.com");
+          const email = createEmailService(env.EMAIL, env.EMAIL_FROM ?? "noreply@usesunbird.com");
           const result = await processLessonReminders(getDb(), email, now);
           console.log(`[cron] lesson reminders sent: ${result.sent1h} (1h), ${result.sent24h} (24h)`);
         } catch (err) {

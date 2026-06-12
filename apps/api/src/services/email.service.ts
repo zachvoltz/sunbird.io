@@ -1,38 +1,60 @@
-import { Resend } from "resend";
+// Minimal HTML→text fallback for the plain-text MIME part. Our templates are
+// simple (headings, paragraphs, links), so a tag strip with light spacing
+// cleanup is enough — this is not a general-purpose converter.
+function htmlToText(html: string): string {
+  return html
+    .replace(/<\s*(br|\/p|\/h\d|hr)\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\n{3,}/g, "\n\n")
+    .split("\n")
+    .map((line) => line.trim())
+    .join("\n")
+    .trim();
+}
 
-export function createEmailService(apiKey: string, from: string) {
-  const resend = apiKey ? new Resend(apiKey) : null;
-
-  // Single send path for every templated email. Crucially, it inspects Resend's
-  // returned { error } — the SDK does NOT throw on API-level rejections (e.g.
-  // unverified domain, recipient not allowed on the test sender), it returns
-  // them — so without this check a rejected send looks identical to a delivered
-  // one. We log failures (visible via `wrangler tail` / CF logs) and return a
-  // result the caller can inspect, but do NOT throw on a Resend error so the
-  // many fire-and-forget callers keep their current control flow. Network-level
-  // exceptions still propagate (callers already `.catch` those).
+// `emailBinding` is the Cloudflare Email Sending binding (env.EMAIL) — native to
+// the Workers runtime, no API key. It's absent in local Node dev and tests, in
+// which case sends are skipped (see deliver()).
+export function createEmailService(emailBinding: SendEmail | null | undefined, from: string) {
+  // Single send path for every templated email, backed by env.EMAIL. The binding
+  // is only present in the Workers runtime; in local Node dev and tests it's
+  // undefined, so we skip and log (the same result shape the old no-API-key path
+  // returned). Unlike Resend, the binding THROWS on an API-level rejection
+  // (unverified sender, suppressed recipient, daily-limit, etc.), so we catch and
+  // convert it into a returned { error } — the many fire-and-forget callers rely
+  // on deliver() never throwing. Failures are logged (visible via `wrangler tail`
+  // / CF logs) and returned for callers that inspect the result.
   async function deliver(opts: {
     to: string;
     subject: string;
     html: string;
     logLabel: string;
   }): Promise<{ skipped?: boolean; id?: string; error?: string }> {
-    if (!resend) {
-      console.log(`[email] ${opts.logLabel} — skipped, no API key`);
+    if (!emailBinding) {
+      console.log(`[email] ${opts.logLabel} — skipped, no EMAIL binding`);
       return { skipped: true };
     }
-    const { data, error } = await resend.emails.send({
-      from,
-      to: opts.to,
-      subject: opts.subject,
-      html: opts.html,
-    });
-    if (error) {
-      const reason = (error as any).message ?? JSON.stringify(error);
+    try {
+      const { messageId } = await emailBinding.send({
+        from,
+        to: opts.to,
+        subject: opts.subject,
+        html: opts.html,
+        // A plain-text alternative materially helps spam scoring and renders in
+        // clients that don't display HTML. Derived from the HTML so every
+        // template gets one for free.
+        text: htmlToText(opts.html),
+      });
+      return { id: messageId };
+    } catch (err: any) {
+      const reason = err?.message ?? String(err);
       console.error(`[email] send FAILED → ${opts.to} (${opts.logLabel}) from "${from}": ${reason}`);
       return { error: reason };
     }
-    return { id: data?.id };
   }
 
   return {
@@ -237,7 +259,7 @@ export function createEmailService(apiKey: string, from: string) {
         skipped: !!r.skipped,
         from,
         id: r.id,
-        error: r.skipped ? "RESEND_API_KEY not set" : r.error,
+        error: r.skipped ? "EMAIL binding not configured" : r.error,
       };
     },
   };

@@ -107,7 +107,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 
 ## 6. Notifications (inbox + email)
 
-- [x] Email: booking confirmation, booking cancellation, practice notes, password reset (Resend)
+- [x] Email: booking confirmation, booking cancellation, practice notes, password reset — sent via the **Cloudflare Email Sending binding** (`env.EMAIL`, `[[send_email]]` in `wrangler.toml`). Migrated off Resend (no API key); `email.service.ts` calls `env.EMAIL.send({ from, to, subject, html, text })`, deriving a plain-text part from the HTML for spam scoring. Binding is absent in Node dev/tests, so sends are skipped + logged there. **Pre-launch (you):** run `npx wrangler email sending enable usesunbird.com` once to onboard the `EMAIL_FROM` domain, else live sends fail `E_SENDER_NOT_VERIFIED`.
 - [x] In-app inbox — coach and student inboxes rendered from real data
 - [x] API: list / unread-count for inbox; unread tracked via `lastInboxViewedAt`
 - [x] Inbox badge / unread count in left-nav (coach + student)
@@ -204,7 +204,7 @@ Est. **~1.5–3 weeks marginal** on top of building Stripe's payment flows. Most
 - [~] Mobile responsiveness pass on booking flow, session page, practice path, calendar — **booking**: mode grid + time-slot grid now stack/scale at `sm`/`md` (was fixed 2-/3-col). **session**: live-call chat overlay capped to viewport width (was fixed 320px → overflowed ≤344px). **practice path**: already responsive (right pane `hidden md:block` + mobile overlay). **calendar**: coach Calendar now defaults to the scrollable list view on mobile (the 7-col week grid is desktop-only); student PracticeCalendar is a standard 7-col month grid. Frames (STFrame/DTFrame/WFFrame) already handle the mobile sidebar drawer. **Multi-pane editors now stack on mobile too**: coach `PathEditorPage` (200px·1fr·340px → 1fr), `PathLessonDetailPage` (1fr·320px → 1fr), and `StudentDesktop` (1.3fr·1fr → 1fr) via `useIsMobile` (height auto on mobile so panes flow vertically instead of horizontal-scrolling).
 - [ ] Transactional email templates branded (currently functional, may need design pass) — **needs mockup**
 - [x] Terms of service + privacy policy pages (required for Stripe Connect onboarding) — `/terms` + `/privacy` (`pages/Legal.tsx`), routed inside `<Layout>`, linked from the footer. Starter content tailored to Birdie's stack (Stripe/Connect, coach/student roles, Google OAuth, media uploads, email, video calls). **Needs a legal review + real contact entity before launch** (currently uses `hello@ellisasun.com`); placeholder dates via `LAST_UPDATED`.
-- [ ] Production env: Cloudflare secrets for Resend, Stripe, Calls; D1 prod database; domain + SSL
+- [ ] Production env: Cloudflare secrets for Stripe, Calls; **onboard the email domain** (`npx wrangler email sending enable usesunbird.com` — Email Sending uses a binding, not a secret); D1 prod database; domain + SSL
 - [~] Basic analytics / error reporting (Sentry?) — **error reporting wired** (Sentry-swappable, no SDK/account yet): a React `ErrorBoundary` (friendly fallback, no white screen) + `lib/reportError.ts` (global `window.onerror`/`unhandledrejection` handlers, throttled + deduped) POST to `POST /api/client-errors`, which logs structured reports to the Worker (`wrangler tail` / CF logs). One-file swap to forward to Sentry when a DSN exists. Tests in `client-errors.test.ts`. **Remaining:** product analytics (page/usage events) not started; wire a real Sentry DSN if/when desired.
 
 ---

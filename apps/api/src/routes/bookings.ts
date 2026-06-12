@@ -432,9 +432,8 @@ bookingRoutes.post("/", requireAuth, async (c) => {
 
   // Free lesson — confirm immediately. Send confirmation email (fire and forget).
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    const email = createEmailService(apiKey, from);
+    const email = createEmailService((c.env as any)?.EMAIL, from);
     email.sendBookingConfirmation(user.email, user.name, category.title, formatDateTime(startsAt)).catch(console.error);
   } catch {}
 
@@ -866,9 +865,8 @@ bookingRoutes.patch("/:id/cancel", requireAuth, async (c) => {
   // Email the non-actor: when the student cancels, tell the coach; otherwise
   // tell the student.
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    const email = createEmailService(apiKey, from);
+    const email = createEmailService((c.env as any)?.EMAIL, from);
     const actorIsStudent = booking.userId === user.id;
     const recipient = actorIsStudent ? booking.coach : booking.user;
     if (recipient?.email) {
@@ -964,9 +962,8 @@ bookingRoutes.patch("/:id/reschedule", requireAuth, async (c) => {
 
   // Email both sides (fire and forget) so the change reaches everyone.
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    const email = createEmailService(apiKey, from);
+    const email = createEmailService((c.env as any)?.EMAIL, from);
     const oldLabel = formatDateTime(booking.startsAt);
     const newLabel = formatDateTime(startsAt);
     const recipients = [booking.user, booking.coach].filter((r): r is { email: string; name: string } => !!r?.email);
@@ -1069,9 +1066,8 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
 
   // Send practice notes email
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    const email = createEmailService(apiKey, from);
+    const email = createEmailService((c.env as any)?.EMAIL, from);
     email.sendPracticeNotes(
       booking.user.email,
       booking.user.name,
@@ -1240,9 +1236,8 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
 
   // Send confirmation email
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    const email = createEmailService(apiKey, from);
+    const email = createEmailService((c.env as any)?.EMAIL, from);
     email.sendBookingConfirmation(
       user.email, user.name, category.title,
       `${dates.length} ${frequency.toLowerCase()} sessions starting ${formatDateTime(dates[0])}`,

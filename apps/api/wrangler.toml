@@ -31,3 +31,10 @@ database_id = "0b13755a-6061-4f94-a548-8d212b00ea33"
 [[r2_buckets]]
 binding = "MEDIA_BUCKET"
 bucket_name = "sunbird-media"
+
+# Cloudflare Email Sending binding (replaces Resend). No API key — the `from`
+# domain (usesunbird.com) must be onboarded once with
+# `npx wrangler email sending enable usesunbird.com`. For local `wrangler dev`,
+# add `remote = true` to proxy sends to the real service.
+[[send_email]]
+name = "EMAIL"

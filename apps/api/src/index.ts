@@ -30,7 +30,9 @@ type Bindings = {
   GOOGLE_CLIENT_ID: string;
   GOOGLE_CLIENT_SECRET: string;
   GOOGLE_REDIRECT_URI: string;
-  RESEND_API_KEY: string;
+  // Cloudflare Email Sending binding (replaces Resend). Present only in the
+  // Workers runtime; undefined in local Node dev, where sends are skipped.
+  EMAIL?: SendEmail;
   EMAIL_FROM: string;
   CF_CALLS_APP_ID: string;
   CF_CALLS_APP_TOKEN: string;
@@ -86,7 +88,7 @@ app.get("/api/health", (c) => {
   return c.json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Diagnostic: fire a test email and return the Resend result inline (id on
+// Diagnostic: fire a test email and return the send result inline (id on
 // success, the error reason on failure). Auth-gated so it can't be used to spam;
 // defaults to sending to the caller's own address. Optional ?to= override.
 //   curl -X POST https://…/api/health/email -H "Cookie: session=…"
@@ -94,7 +96,7 @@ app.get("/api/health", (c) => {
 app.post("/api/health/email", requireAuth, async (c) => {
   const user = c.get("user")!;
   const to = c.req.query("to") || user.email;
-  const email = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM") || "noreply@usesunbird.com");
+  const email = createEmailService(c.env?.EMAIL, getEnv(c, "EMAIL_FROM") || "noreply@usesunbird.com");
   try {
     const result = await email.sendTest(to);
     const ok = !result.skipped && !result.error;

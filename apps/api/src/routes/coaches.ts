@@ -215,7 +215,7 @@ coachRoutes.post("/invites", requireAuth, requireRole("COACH", "ADMIN"), async (
   const email = parsed.data.email.toLowerCase();
   const name = parsed.data.name;
   const db = getDb();
-  const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+  const emailService = createEmailService((c.env as any)?.EMAIL, getEnv(c, "EMAIL_FROM"));
 
   const existingInvite = await db.studentInvite.findUnique({
     where: { coachId_email: { coachId: user.id, email } },
@@ -299,7 +299,7 @@ coachRoutes.post("/invites/:id/resend", requireAuth, requireRole("COACH", "ADMIN
   if (invite.status !== "PENDING") {
     return c.json({ error: "This invite has already been accepted" }, 409);
   }
-  const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+  const emailService = createEmailService((c.env as any)?.EMAIL, getEnv(c, "EMAIL_FROM"));
   emailService
     .sendStudentInviteEmail(invite.email, user.name, inviteUrlFor(c, invite.token, invite.email), invite.name ?? undefined)
     .catch((err) => {
@@ -517,9 +517,8 @@ coachRoutes.post("/takes/:takeId/reply", requireAuth, requireRole("COACH", "ADMI
   try {
     const student = await db.user.findUnique({ where: { id: take.studentId }, select: { email: true, name: true } });
     if (student?.email) {
-      const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
       const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-      createEmailService(apiKey, from)
+      createEmailService((c.env as any)?.EMAIL, from)
         .sendTakeReply(student.email, student.name, user.name, take.pieceTitle)
         .catch(console.error);
     }

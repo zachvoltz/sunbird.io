@@ -17,7 +17,7 @@ type AuthEnv = {
     GOOGLE_CLIENT_ID: string;
     GOOGLE_CLIENT_SECRET: string;
     GOOGLE_REDIRECT_URI: string;
-    RESEND_API_KEY: string;
+    EMAIL?: SendEmail;
     EMAIL_FROM: string;
   };
   Variables: {
@@ -58,7 +58,7 @@ auth.post("/register", async (c) => {
   c.header("Set-Cookie", cookie);
 
   // Send welcome email (fire and forget)
-  const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+  const emailService = createEmailService((c.env as any)?.EMAIL, getEnv(c, "EMAIL_FROM"));
   emailService.sendWelcomeEmail(email, name).catch((err) => {
     console.error("Failed to send welcome email:", err);
   });
@@ -142,7 +142,7 @@ auth.post("/forgot-password", async (c) => {
   });
 
   const resetUrl = `${c.req.header("Origin") || "http://localhost:5173"}/reset-password?token=${rawToken}`;
-  const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+  const emailService = createEmailService((c.env as any)?.EMAIL, getEnv(c, "EMAIL_FROM"));
   emailService.sendPasswordResetEmail(email, resetUrl).catch((err) => {
     console.error("Failed to send reset email:", err);
   });
@@ -291,7 +291,7 @@ auth.get("/oauth/google/cb", async (c) => {
       });
 
       // Send welcome email for new users
-      const emailService = createEmailService(getEnv(c, "RESEND_API_KEY"), getEnv(c, "EMAIL_FROM"));
+      const emailService = createEmailService((c.env as any)?.EMAIL, getEnv(c, "EMAIL_FROM"));
       emailService.sendWelcomeEmail(email, user.name).catch((err) => {
         console.error("Failed to send welcome email:", err);
       });

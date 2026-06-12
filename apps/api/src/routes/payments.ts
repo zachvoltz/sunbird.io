@@ -31,9 +31,8 @@ paymentsRoutes.post("/stripe", async (c) => {
   }
 
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    await handleStripeEvent(getDb(), event, { email: createEmailService(apiKey, from) });
+    await handleStripeEvent(getDb(), event, { email: createEmailService((c.env as any)?.EMAIL, from) });
   } catch (err) {
     console.error("Stripe webhook handler error:", err);
     return c.json({ error: "Handler error" }, 500);
@@ -67,9 +66,8 @@ paymentsRoutes.post("/square", async (c) => {
   }
 
   try {
-    const apiKey = (c.env as any)?.RESEND_API_KEY || process.env.RESEND_API_KEY || "";
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
-    await handleSquareEvent(getDb(), event, { email: createEmailService(apiKey, from) });
+    await handleSquareEvent(getDb(), event, { email: createEmailService((c.env as any)?.EMAIL, from) });
   } catch (err) {
     console.error("Square webhook handler error:", err);
     return c.json({ error: "Handler error" }, 500);
