@@ -20,14 +20,14 @@ Wireframe references:
   - [x] Google OAuth signup: callback now redirects first-time Google users to `/onboarding/role` before any dashboard (`auth.ts`); `AuthGate` is the safety net
   - [x] Returning Google users (already have a role / `roleChosen = true`) skip the picker and land on their dashboard as before
   - [x] Surface "Sign up as a student" / "Sign up as a coach" entry points on the marketing/home page — Home hero CTAs ("Sign up as a student" / "Teach on Birdie", logged-out only) + a "Sign up" link in the Header (desktop + mobile). Role-aware links carry `?role=` → stashed in `localStorage` (`signupIntent.ts`) so it survives the Google redirect; the picker pre-selects it (still confirm — one-time).
-- [~] **Google sign-up / sign-in working end-to-end for both coaches and students** (must ship in V1) — **all code shipped**; only the Google Cloud credentials/redirect-URI setup (the two `(you)` items below) and the live e2e pass remain.
+- [x] **Google sign-up / sign-in working end-to-end for both coaches and students** (must ship in V1) — **live in prod (2026-06-16).** Google Cloud OAuth client created, prod secrets set, and verified end-to-end: incognito sign-in created a new account and landed on `/onboarding/role`. Server side confirmed (start endpoint redirects to Google with correct client_id, redirect_uri, PKCE S256, state, `openid email profile` scope).
   - [x] Backend OAuth start + callback wired (`/api/auth/oauth/google`, `/api/auth/oauth/google/cb`), arctic-based; links by email if user exists, otherwise creates user + sends welcome email
   - [x] "Continue with Google" button on Login page
   - [x] Start route guarded when unconfigured — `GET /api/auth/oauth/google` bounces to `/login?oauth=unconfigured` (friendly notice on Login) instead of a broken Google redirect when creds are unset. Test in `auth.test.ts`.
   - [x] Surface "Continue with Google" on the coach signup path — `/login?tab=register&role=coach` opens the Create-Account tab (where the Google button lives) with a "Create your coach account" heading; reachable from the Home "Teach on Birdie" CTA + Header "Sign up".
-  - [ ] **(you)** Configure `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` in `.dev.vars` and Cloudflare secrets (prod) — code is ready; this is the only thing gating live Google sign-in. **Prod `GOOGLE_REDIRECT_URI` = `https://usesunbird.com/api/auth/oauth/google/cb`** (custom domain). Local dev value lives in `.dev.vars`.
-  - [ ] **(you)** Register the redirect URIs in the Google Cloud Console OAuth client: `https://usesunbird.com/api/auth/oauth/google/cb` (prod) + the local-dev one.
-  - [ ] End-to-end test once creds are set: new coach via Google, new student via Google, existing email/password user adding Google as a linked account
+  - [x] **(done)** Configured `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI` as Cloudflare prod secrets. **Prod `GOOGLE_REDIRECT_URI` = `https://usesunbird.com/api/auth/oauth/google/cb`**. (Local `.dev.vars` still blank — set those if testing OAuth locally.)
+  - [x] **(done)** Registered the redirect URI in the Google Cloud Console OAuth client (Web application): `https://usesunbird.com/api/auth/oauth/google/cb`. Consent screen on basic scopes (`openid email profile`), no verification review needed.
+  - [x] End-to-end test (prod, 2026-06-16): new user via Google → account created → role picker. **Still worth a later spot-check:** existing email/password user adding Google as a linked account (links by email in `auth.ts`; not yet manually exercised).
 
 ---
 
