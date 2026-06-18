@@ -22,6 +22,8 @@ import { categoryRoutes } from "./routes/categories";
 import { skillTreeRoutes } from "./routes/skill-trees";
 import { paymentsRoutes } from "./routes/payments";
 import { clientErrorsRoutes } from "./routes/client-errors";
+import { conversationRoutes } from "./routes/conversations";
+import { notificationRoutes } from "./routes/notifications";
 import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
@@ -54,6 +56,14 @@ type Bindings = {
   SQUARE_APPLICATION_ID?: string;
   SQUARE_APPLICATION_SECRET?: string;
   SQUARE_WEBHOOK_SIGNATURE_KEY?: string;
+  // Messaging: Durable Object namespace for live conversation rooms, Web Push
+  // VAPID keys (public is safe to expose; private is a secret), and the public
+  // app origin used to build links in notifications.
+  CONVERSATION_ROOM?: DurableObjectNamespace;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  PUBLIC_APP_URL?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -108,6 +118,8 @@ app.post("/api/health/email", requireAuth, async (c) => {
 
 app.route("/api/auth", authRoutes);
 app.route("/api/me", meRoutes);
+app.route("/api/me", notificationRoutes);
+app.route("/api/conversations", conversationRoutes);
 app.route("/api/availability", availabilityRoutes);
 app.route("/api/bookings", bookingRoutes);
 app.route("/api/coaches", coachRoutes);

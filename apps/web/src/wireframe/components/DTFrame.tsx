@@ -6,8 +6,35 @@ import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
 import { InviteStudentModal } from "./InviteStudentModal";
 import { Icon } from "./Icon";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, conversationsApi } from "@/lib/api";
 import { useIsMobile } from "../hooks/useIsMobile";
+
+// Sum of unread direct messages across all of the caller's conversations,
+// for the sidebar's Messages badge. Refetches on route change and when the
+// thread fires `sunbird:inbox-viewed` after clearing a conversation's unread.
+function useMessagesUnread(): number {
+  const [count, setCount] = useState(0);
+  const params = useParams();
+  useEffect(() => {
+    let cancelled = false;
+    const refetch = () => {
+      conversationsApi
+        .list()
+        .then((items) => {
+          if (!cancelled) setCount(items.reduce((n, c) => n + c.unreadCount, 0));
+        })
+        .catch(() => { /* leave at last known */ });
+    };
+    refetch();
+    window.addEventListener("sunbird:inbox-viewed", refetch);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("sunbird:inbox-viewed", refetch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params)]);
+  return count;
+}
 
 // Unread incoming SessionMessages for the calling coach. Used to
 // render the sidebar's Inbox badge. Refetches:
@@ -114,6 +141,7 @@ function DTSidebar({
 }) {
   const params = useParams<{ studentId?: string; inviteId?: string }>();
   const inboxCount = useInboxCount();
+  const messagesUnread = useMessagesUnread();
   const [inviteOpen, setInviteOpen] = useState(false);
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
@@ -142,6 +170,29 @@ function DTSidebar({
           </>
         )}
         {collapsed && inboxCount > 0 && (
+          <span className="dot" style={{ position: "absolute", top: 6, right: 6, marginLeft: 0 }}/>
+        )}
+      </Link>
+      <Link
+        to="/messages"
+        className={"item" + (on === "messages" ? " on" : "")}
+        title={messagesUnread > 0 ? `Messages (${messagesUnread})` : "Messages"}
+      >
+        <span className="nav-ico"><Icon name="send" size={18} /></span>
+        {!collapsed && (
+          <>
+            <span>Messages</span>
+            {messagesUnread > 0 && (
+              <span
+                className="chip tiny"
+                style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10, color: "var(--ink)" }}
+              >
+                {messagesUnread}
+              </span>
+            )}
+          </>
+        )}
+        {collapsed && messagesUnread > 0 && (
           <span className="dot" style={{ position: "absolute", top: 6, right: 6, marginLeft: 0 }}/>
         )}
       </Link>

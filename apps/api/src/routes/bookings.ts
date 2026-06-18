@@ -8,6 +8,7 @@ import { pushEventMirror, deleteEventMirror } from "./google-calendar";
 import { parseRoutine } from "../lib/routine";
 import { getProvider, readPaymentEnv } from "../lib/payment-provider";
 import { requiresPayment, toCoachConnection, type CoachPayInfo } from "../lib/payments";
+import { postActivityCard } from "../lib/conversations";
 
 // The columns every paid-flow query needs off the coach's User row — the
 // provider discriminator plus both providers' connection fields.
@@ -1076,6 +1077,21 @@ bookingRoutes.patch("/:id/notes", requireAuth, requireRole("COACH", "ADMIN"), as
       practiceNotesText,
     ).catch(console.error);
   } catch {}
+
+  // Surface "notes sent" as an activity card in the thread (live broadcast).
+  // notify:false — the practice-notes email above already covers delivery.
+  if (booking.coachId) {
+    await postActivityCard(c.env as any, db, {
+      coachId: booking.coachId,
+      studentId: booking.userId,
+      actorId: booking.coachId,
+      kind: "NOTES_SENT",
+      content: `📝 Practice notes sent${booking.category?.title ? ` — ${booking.category.title}` : ""}`,
+      refType: "booking",
+      refId: booking.id,
+      notify: false,
+    });
+  }
 
   return c.json({ data: serializeBooking(updated) });
 });

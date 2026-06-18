@@ -377,6 +377,57 @@ export interface SessionResourcePublic {
   createdAt: string;
 }
 
+// ─── Messaging ───
+
+export type MessageKind =
+  | "TEXT"
+  | "TAKE_SUBMITTED"
+  | "TAKE_REPLY"
+  | "NOTES_SENT"
+  | "ASSIGNMENT"
+  | "SYSTEM";
+
+export interface MessageAttachment {
+  r2Key: string;
+  url: string;
+  mime: string;
+  name: string;
+  size: number;
+  durationSec?: number;
+}
+
+export interface ConversationMessagePublic {
+  id: string;
+  conversationId: string;
+  sender: UserPublic;
+  content: string;
+  kind: MessageKind;
+  refType: string | null;
+  refId: string | null;
+  attachments: MessageAttachment[];
+  createdAt: string;
+}
+
+export interface ConversationSummary {
+  id: string;
+  // The other participant from the caller's perspective.
+  counterpart: UserPublic;
+  lastActivityAt: string;
+  lastMessagePreview: string | null;
+  unreadCount: number;
+}
+
+export interface NotificationPreferencePublic {
+  pushEnabled: boolean;
+  smsEnabled: boolean;
+  emailEnabled: boolean;
+  quietHoursStart: number | null;
+  quietHoursEnd: number | null;
+  timezone: string;
+  phone: string | null;
+  phoneVerified: boolean;
+}
+
 // ─── Curriculum ───
 
 export interface CoachResourcePublic {

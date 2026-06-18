@@ -355,6 +355,55 @@ export const createSessionResourceSchema = z.object({
   url: z.string().url("Must be a valid URL"),
 });
 
+// ─── Messaging (coach↔student conversations) ───
+
+export const messageKinds = [
+  "TEXT",
+  "TAKE_SUBMITTED",
+  "TAKE_REPLY",
+  "NOTES_SENT",
+  "ASSIGNMENT",
+  "SYSTEM",
+] as const;
+
+export const messageAttachmentSchema = z.object({
+  r2Key: z.string(),
+  url: z.string(),
+  mime: z.string(),
+  name: z.string().max(200),
+  size: z.number().int().nonnegative(),
+  durationSec: z.number().nonnegative().optional(),
+});
+
+// A composer message: text, attachments, or both. The refine guards against
+// empty sends (no text and no attachment).
+export const sendMessageSchema = z
+  .object({
+    content: z.string().max(5000).optional().default(""),
+    attachments: z.array(messageAttachmentSchema).max(10).optional(),
+  })
+  .refine(
+    (d) => (d.content && d.content.trim().length > 0) || (d.attachments && d.attachments.length > 0),
+    { message: "Message must have text or an attachment" },
+  );
+
+export const updateNotificationPreferenceSchema = z.object({
+  pushEnabled: z.boolean().optional(),
+  smsEnabled: z.boolean().optional(),
+  emailEnabled: z.boolean().optional(),
+  // Minutes from midnight [0,1439]; null clears that bound (both null = off).
+  quietHoursStart: z.number().int().min(0).max(1439).nullable().optional(),
+  quietHoursEnd: z.number().int().min(0).max(1439).nullable().optional(),
+  timezone: z.string().min(1).max(64).optional(),
+  phone: z.string().max(32).nullable().optional(),
+});
+
+// Browser PushSubscription.toJSON() shape, posted on subscribe.
+export const pushSubscriptionSchema = z.object({
+  endpoint: z.string().url(),
+  keys: z.object({ p256dh: z.string(), auth: z.string() }),
+});
+
 // ─── Events ───
 
 export const eventRsvpSchema = z.object({

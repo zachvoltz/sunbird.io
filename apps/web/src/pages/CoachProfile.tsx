@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
-import { apiFetch } from "@/lib/api";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { apiFetch, conversationsApi } from "@/lib/api";
+import { useAuth } from "@/context/AuthContext";
 import type { CoachProfilePublic, SubscriptionPlanPublic } from "@sunbird/shared";
 
 // Monthly lesson packages a coach sells (Model B). Coexists with per-session
@@ -69,9 +70,12 @@ function PackagesSection({ coachId, coachName }: { coachId: string; coachName: s
 
 export function CoachProfile() {
   const { slug } = useParams<{ slug: string }>();
+  const { isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [coach, setCoach] = useState<CoachProfilePublic | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [messaging, setMessaging] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -222,13 +226,33 @@ export function CoachProfile() {
           )}
 
           {/* Main CTA */}
-          <div className="text-center py-10 border-t border-charcoal/10">
+          <div className="text-center py-10 border-t border-charcoal/10 flex flex-wrap gap-3 justify-center">
             <Link
               to={`/book?coachId=${coach.id}`}
               className="inline-block text-[14px] font-medium text-charcoal border border-charcoal px-8 py-3 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide"
             >
               Book a lesson with {coach.name}
             </Link>
+            {/* Direct message — only for signed-in users (the endpoint is
+                cookie-auth). Opens or creates the thread, then navigates. */}
+            {isAuthenticated && (
+              <button
+                disabled={messaging}
+                onClick={async () => {
+                  setMessaging(true);
+                  try {
+                    const id = await conversationsApi.with(coach.id);
+                    navigate(`/messages/${id}`);
+                  } catch (err: any) {
+                    window.alert(err?.body?.error ?? "Couldn't open the conversation");
+                    setMessaging(false);
+                  }
+                }}
+                className="inline-block text-[14px] font-medium text-charcoal border border-charcoal px-8 py-3 hover:bg-charcoal hover:text-cream transition-all duration-300 tracking-wide disabled:opacity-50"
+              >
+                {messaging ? "Opening…" : `Message ${coach.name}`}
+              </button>
+            )}
           </div>
         </div>
       </div>

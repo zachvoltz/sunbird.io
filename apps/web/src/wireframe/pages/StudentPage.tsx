@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams } from "react-router-dom";
 import type { AssignmentPublic, NoteSections, RoutinePublic, StudentDetailPublic, TakePublic } from "@sunbird/shared";
 import { DTFrame } from "../components/DTFrame";
 import { WFFrame } from "../components/WFFrame";
@@ -13,6 +13,31 @@ import { MockTag } from "../components/MockTag";
 import { useIsMobile } from "../hooks/useIsMobile";
 import { useStudentDetail } from "../hooks/useCoachData";
 import { CurrentRoutine } from "@/components/coach/CurrentRoutine";
+import { conversationsApi } from "@/lib/api";
+
+// Open (or create) the conversation with `userId` and navigate to it.
+function MessageButton({ userId, className }: { userId: string; className?: string }) {
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      className={className ?? "btn small ghost"}
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        try {
+          const id = await conversationsApi.with(userId);
+          navigate(`/messages/${id}`);
+        } catch (err: any) {
+          window.alert(err?.body?.error ?? "Couldn't open the conversation");
+          setBusy(false);
+        }
+      }}
+    >
+      {busy ? "opening…" : "message"}
+    </button>
+  );
+}
 
 function ymd(d: Date) {
   return d.toISOString().slice(0, 10);
@@ -271,7 +296,7 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
           </div>
         </div>
         <div className="row gap-2">
-          <button className="btn small ghost">message</button>
+          <MessageButton userId={detail.id} />
           <button className="btn small">history</button>
         </div>
       </div>

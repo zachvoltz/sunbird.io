@@ -7,6 +7,11 @@ import { createEmailService } from "./services/email.service";
 import { processLessonReminders } from "./lib/reminders";
 import { processSquareTokenRefresh } from "./lib/square-token-refresh";
 
+// Durable Object class backing live conversation rooms. Must be exported from
+// the Worker entry module so the runtime can instantiate it (binding in
+// wrangler.toml → CONVERSATION_ROOM).
+export { ConversationRoom } from "./durable/conversation-room";
+
 type Env = {
   DB: D1Database;
   // Cloudflare Email Sending binding (replaces Resend).

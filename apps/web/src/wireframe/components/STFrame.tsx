@@ -1,20 +1,21 @@
 import { useEffect, useState } from "react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, conversationsApi } from "@/lib/api";
 import { TopSearch } from "./TopSearch";
 import { UiSettings } from "./UiSettings";
 import { Icon } from "./Icon";
 import { useIsMobile } from "../hooks/useIsMobile";
 
-type NavId = "home" | "practice" | "calendar" | "lessons" | "inbox" | "notes" | "goals" | "takes" | "curriculum" | "profile";
-type NavIcon = "home" | "note" | "cal" | "cap" | "inbox" | "journal" | "star" | "mic" | "map" | "user";
+type NavId = "home" | "practice" | "calendar" | "lessons" | "inbox" | "messages" | "notes" | "goals" | "takes" | "curriculum" | "profile";
+type NavIcon = "home" | "note" | "cal" | "cap" | "inbox" | "send" | "journal" | "star" | "mic" | "map" | "user";
 
 const NAV: Array<{ id: NavId; label: string; icon: NavIcon; to: string }> = [
   { id: "home", label: "Today", icon: "home", to: "/today" },
   { id: "practice", label: "Practice", icon: "note", to: "/practice" },
   { id: "lessons", label: "Lessons", icon: "cap", to: "/my-bookings" },
   { id: "takes", label: "My takes", icon: "mic", to: "/my-takes" },
+  { id: "messages", label: "Messages", icon: "send", to: "/messages" },
   // Calendar, Inbox, Journal, Goals, Curriculum, and Profile are intentionally
   // hidden from the student dashboard nav. Their routes still exist (reachable
   // by direct URL / contextual links); re-add entries here to surface them.
@@ -31,6 +32,32 @@ function useInboxCount(): number {
     const refetch = () => {
       apiFetch<{ data: { count: number } }>("/api/me/inbox-count")
         .then((r) => { if (!cancelled) setCount(r.data.count); })
+        .catch(() => { /* leave at last known */ });
+    };
+    refetch();
+    window.addEventListener("sunbird:inbox-viewed", refetch);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("sunbird:inbox-viewed", refetch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(params)]);
+  return count;
+}
+
+// Sum of unread direct messages across the student's conversations — drives
+// the Messages nav badge. Mirrors useInboxCount's refetch triggers.
+function useMessagesUnread(): number {
+  const [count, setCount] = useState(0);
+  const params = useParams();
+  useEffect(() => {
+    let cancelled = false;
+    const refetch = () => {
+      conversationsApi
+        .list()
+        .then((items) => {
+          if (!cancelled) setCount(items.reduce((n, c) => n + c.unreadCount, 0));
+        })
         .catch(() => { /* leave at last known */ });
     };
     refetch();
@@ -85,17 +112,19 @@ function STTopBar({ collapsed, onToggleSide }: { collapsed: boolean; onToggleSid
 
 function STSidebar({ on, collapsed }: { on: NavId; collapsed: boolean }) {
   const inboxCount = useInboxCount();
+  const messagesUnread = useMessagesUnread();
   return (
     <div className={"dt-side" + (collapsed ? " collapsed" : "")}>
       {NAV.map((n) => {
-        const isInbox = n.id === "inbox";
-        const showBadge = isInbox && inboxCount > 0;
+        const badgeCount =
+          n.id === "inbox" ? inboxCount : n.id === "messages" ? messagesUnread : 0;
+        const showBadge = badgeCount > 0;
         return (
           <Link
             key={n.id}
             to={n.to}
             className={"item" + (n.id === on ? " on" : "")}
-            title={showBadge ? `${n.label} (${inboxCount})` : n.label}
+            title={showBadge ? `${n.label} (${badgeCount})` : n.label}
           >
             <span className="nav-ico"><Icon name={n.icon} size={18} /></span>
             {!collapsed && (
@@ -106,7 +135,7 @@ function STSidebar({ on, collapsed }: { on: NavId; collapsed: boolean }) {
                     className="chip tiny"
                     style={{ marginLeft: "auto", padding: "0 6px", fontSize: 10, color: "var(--ink)" }}
                   >
-                    {inboxCount}
+                    {badgeCount}
                   </span>
                 )}
               </>
@@ -150,6 +179,8 @@ export function STFrame({
       ? "practice"
       : loc.pathname.startsWith("/my-calendar")
       ? "calendar"
+      : loc.pathname.startsWith("/messages")
+      ? "messages"
       : loc.pathname.startsWith("/my-inbox")
       ? "inbox"
       : loc.pathname.startsWith("/my-notes")

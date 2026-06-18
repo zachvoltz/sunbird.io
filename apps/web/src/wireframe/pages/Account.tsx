@@ -4,6 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { DTFrame } from "../components/DTFrame";
 import { Squiggle } from "../components/Squiggle";
 import { Tag } from "../components/Tag";
+import { NotificationSettings } from "../components/NotificationSettings";
 
 const inputStyle: React.CSSProperties = {
   fontFamily: "var(--hand)",
@@ -267,6 +268,9 @@ export function AccountPage() {
                 <button className="btn small ghost">view invoices</button>
               </div>
             </div>
+
+            {/* Notification preferences */}
+            <NotificationSettings />
 
             {/* Danger zone */}
             <div className="box" style={{ borderColor: "var(--accent)" }}>

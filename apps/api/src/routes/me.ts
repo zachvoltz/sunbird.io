@@ -6,6 +6,7 @@ import { computeStreak, fullyCompleteDays } from "../lib/streak";
 import { serializeGoal } from "../lib/goals";
 import { createGoalSchema, updateGoalSchema, setRoleSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
+import { postActivityCard } from "../lib/conversations";
 
 type MeEnv = {
   Variables: {
@@ -406,6 +407,19 @@ me.post("/takes", requireAuth, async (c) => {
       .create({ data: { bookingId: recentBooking.id, senderId: user.id, content: `🎤 New take: ${body.pieceTitle}` } })
       .catch((err: unknown) => console.error("Failed to write take notification:", err));
   }
+  // Also surface the take as an activity card in the coach↔student thread (live
+  // broadcast). notify:false — the bespoke "new take" email below covers it.
+  await postActivityCard(c.env as any, db, {
+    coachId,
+    studentId: user.id,
+    actorId: user.id,
+    actorName: user.name,
+    kind: "TAKE_SUBMITTED",
+    content: `🎤 New take: ${body.pieceTitle}`,
+    refType: "take",
+    refId: take.id,
+    notify: false,
+  });
   try {
     const coach = await db.user.findUnique({ where: { id: coachId }, select: { email: true, name: true } });
     if (coach?.email) {
@@ -737,7 +751,7 @@ me.post("/inbox/:messageId/read", requireAuth, async (c) => {
     where: { id: messageId },
     include: { booking: { select: { userId: true } } },
   });
-  if (!msg) return c.json({ error: "Not found" }, 404);
+  if (!msg || !msg.booking) return c.json({ error: "Not found" }, 404);
   if (msg.booking.userId !== user.id) {
     return c.json({ error: "Forbidden" }, 403);
   }

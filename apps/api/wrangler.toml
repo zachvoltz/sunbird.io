@@ -21,6 +21,24 @@ ENVIRONMENT = "development"
 # Square environment selector (non-secret). The Square app id/secret + webhook
 # signature key are secrets — set them with `wrangler secret put SQUARE_*`.
 SQUARE_ENVIRONMENT = "sandbox"
+# Messaging notifications. The public app origin (used to build notification
+# links) and the VAPID subject + PUBLIC key are non-secret. The VAPID PRIVATE
+# key is a secret: `wrangler secret put VAPID_PRIVATE_KEY`. Generate a pair once
+# with `npx web-push generate-vapid-keys` and paste the public key here.
+PUBLIC_APP_URL = "http://localhost:5173"
+VAPID_SUBJECT = "mailto:noreply@usesunbird.com"
+VAPID_PUBLIC_KEY = ""
+
+# Durable Object: one ConversationRoom per coach↔student thread (live WebSocket
+# fan-out + presence + the away-notification alarm).
+[[durable_objects.bindings]]
+name = "CONVERSATION_ROOM"
+class_name = "ConversationRoom"
+
+# SQLite-backed DO storage (required on the Workers free plan; fine on paid).
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ConversationRoom"]
 
 [[d1_databases]]
 binding = "DB"

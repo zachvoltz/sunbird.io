@@ -38,6 +38,8 @@ import { RecordTakePage } from "@/wireframe/pages/RecordTake";
 import { TodayPage } from "@/wireframe/pages/TodayPage";
 import { AccountPage } from "@/wireframe/pages/Account";
 import { ProfilePage } from "@/wireframe/pages/Profile";
+import { MessagesListPage, MessageThreadPage } from "@/wireframe/pages/Messages";
+import { NotificationSettingsPage } from "@/wireframe/pages/NotificationSettingsPage";
 import { PathEditorPage, PathLessonDetailPage } from "@/wireframe/pages/Paths";
 import { PaymentsPage } from "@/wireframe/pages/Payments";
 import { RolePicker } from "@/pages/Onboarding";
@@ -96,6 +98,13 @@ export function App() {
       <Route path="/coach/profile" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><ProfilePage /></RoleGate></AuthGate>} />
       <Route path="/coach/payments" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><PaymentsPage /></RoleGate></AuthGate>} />
       <Route path="/coach/session/:bookingId" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><CoachSession /></RoleGate></AuthGate>} />
+
+      {/* Direct messaging — one page tree for both roles; the Messages page
+          picks coach (DTFrame) vs student (STFrame) chrome from the signed-in
+          user's role. Notification email links point at /messages/:id. */}
+      <Route path="/messages" element={<AuthGate><MessagesListPage /></AuthGate>} />
+      <Route path="/messages/:id" element={<AuthGate><MessageThreadPage /></AuthGate>} />
+      <Route path="/settings/notifications" element={<AuthGate><NotificationSettingsPage /></AuthGate>} />
 
       {/* Post-signup role picker — full-bleed, gated to authed-but-unchosen users. */}
       <Route path="/onboarding/role" element={<AuthGate><RolePicker /></AuthGate>} />

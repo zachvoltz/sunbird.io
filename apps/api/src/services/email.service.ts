@@ -163,6 +163,24 @@ export function createEmailService(emailBinding: SendEmail | null | undefined, f
       });
     },
 
+    // A new chat message/activity arrived while the recipient was away. Sent
+    // by the notification dispatcher only after the away+unread debounce.
+    async sendNewMessage(to: string, name: string, senderName: string, preview: string, link: string) {
+      const safePreview = preview.length > 280 ? `${preview.slice(0, 277)}…` : preview;
+      return deliver({
+        to,
+        subject: `New message from ${senderName}`,
+        logLabel: `New message to ${to} from ${senderName}`,
+        html: `
+          <h2>${senderName} sent you a message</h2>
+          <p>Hi ${name},</p>
+          <blockquote style="margin:0;padding:8px 12px;border-left:3px solid #ddd;color:#444">${safePreview}</blockquote>
+          <p><a href="${link}">Open the conversation</a></p>
+          <p>— Sunbird</p>
+        `.trim(),
+      });
+    },
+
     async sendLessonReminder(to: string, name: string, lessonType: string, dateTime: string, whenLabel: string) {
       return deliver({
         to,

@@ -7,6 +7,7 @@ import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
 import { createTakeReplySchema, createTakeAnnotationSchema, createStudentInviteSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { getEnv } from "../lib/env";
+import { postActivityCard } from "../lib/conversations";
 
 export const coachRoutes = new Hono();
 
@@ -354,7 +355,7 @@ coachRoutes.post("/inbox/:messageId/read", requireAuth, requireRole("COACH", "AD
     where: { id: messageId },
     include: { booking: { select: { coachId: true } } },
   });
-  if (!msg) return c.json({ error: "Not found" }, 404);
+  if (!msg || !msg.booking) return c.json({ error: "Not found" }, 404);
   if (user.role === "COACH" && msg.booking.coachId !== user.id) {
     return c.json({ error: "Forbidden" }, 403);
   }
@@ -513,6 +514,21 @@ coachRoutes.post("/takes/:takeId/reply", requireAuth, requireRole("COACH", "ADMI
     await db.sessionMessage
       .create({ data: { bookingId: booking.id, senderId: user.id, content: `💬 ${user.name} replied on your "${take.pieceTitle}" take` } })
       .catch((err: unknown) => console.error("Failed to write take-reply notification:", err));
+  }
+  // Activity card in the coach↔student thread (live broadcast). notify:false —
+  // the take-reply email below covers delivery.
+  if (take.coachId) {
+    await postActivityCard(c.env as any, db, {
+      coachId: take.coachId,
+      studentId: take.studentId,
+      actorId: user.id,
+      actorName: user.name,
+      kind: "TAKE_REPLY",
+      content: `💬 ${user.name} replied on your "${take.pieceTitle}" take`,
+      refType: "take",
+      refId: take.id,
+      notify: false,
+    });
   }
   try {
     const student = await db.user.findUnique({ where: { id: take.studentId }, select: { email: true, name: true } });

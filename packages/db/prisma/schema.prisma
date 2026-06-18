@@ -126,6 +126,12 @@ model User {
   coachGoals            Goal[]              @relation("coachGoals")
   sentStudentInvites     StudentInvite[]    @relation("coachInvites")
   receivedStudentInvites StudentInvite[]    @relation("invitedStudent")
+
+  // Messaging
+  coachConversations     Conversation[]          @relation("coachConversations")
+  studentConversations   Conversation[]          @relation("studentConversations")
+  notificationPreference NotificationPreference?
+  pushSubscriptions      PushSubscription[]
 }
 
 // A coach's invitation of a student by email. This is the first explicit
@@ -686,16 +692,97 @@ model RecurringSchedule {
   bookings  Booking[]
 }
 
+// A message OR activity card in a thread. Historically booking-scoped (one
+// thread per lesson); now also the unit of the persistent coach↔student
+// Conversation, where plain messages and auto-posted activity cards (takes,
+// practice notes, assignments) live side by side. bookingId is nullable so a
+// general-thread message need not belong to a lesson; in-lesson messages set
+// both. New rows set conversationId.
 model SessionMessage {
+  id             String   @id @default(cuid())
+  conversationId String?
+  bookingId      String?
+  senderId       String
+  content        String
+  // TEXT | TAKE_SUBMITTED | TAKE_REPLY | NOTES_SENT | ASSIGNMENT | SYSTEM.
+  // Drives which card the client renders. Plain chat messages are TEXT.
+  kind           String   @default("TEXT")
+  // Soft link to the source entity for activity cards (refType="take",
+  // refId=<take id>, etc.). No FK — the card is a pointer; the source entity
+  // owns the data and may be deleted independently of the timeline.
+  refType        String?
+  refId          String?
+  // JSON-stringified array of { r2Key, url, mime, name, size, durationSec? }.
+  attachments    String?
+  createdAt      DateTime @default(now())
+
+  conversation Conversation?        @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  booking      Booking?             @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender       User                 @relation(fields: [senderId], references: [id])
+  reads        SessionMessageRead[]
+
+  @@index([conversationId, createdAt])
+  @@index([bookingId])
+}
+
+// A persistent 1:1 thread between a coach and a student — one per pair. The
+// chat doubles as a unified activity timeline: plain messages and auto-posted
+// activity cards are all SessionMessage rows pointing here. Backed at runtime
+// by a ConversationRoom Durable Object (DO id derived from this id) for live
+// WebSocket delivery and presence.
+model Conversation {
+  id             String   @id @default(cuid())
+  coachId        String
+  studentId      String
+  // Bumped on every new message/card so thread lists sort by recency cheaply.
+  lastActivityAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  coach    User             @relation("coachConversations", fields: [coachId], references: [id], onDelete: Cascade)
+  student  User             @relation("studentConversations", fields: [studentId], references: [id], onDelete: Cascade)
+  messages SessionMessage[]
+
+  @@unique([coachId, studentId])
+  @@index([coachId, lastActivityAt])
+  @@index([studentId, lastActivityAt])
+}
+
+// Per-user notification settings for messaging. One row per user, created
+// lazily with defaults. Channels are independent on/off switches; quiet hours
+// suppress push/email during a daily window (interpreted in `timezone`).
+model NotificationPreference {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  pushEnabled     Boolean  @default(true)
+  smsEnabled      Boolean  @default(false)
+  emailEnabled    Boolean  @default(true)
+  // Minutes-from-midnight [0,1440) bounds of the daily do-not-disturb window.
+  // Both null = no quiet hours. A window may wrap past midnight (start > end).
+  quietHoursStart Int?
+  quietHoursEnd   Int?
+  timezone        String   @default("America/Chicago")
+  // E.164 phone for SMS (captured now; SMS delivery is a fast-follow).
+  phone           String?
+  phoneVerified   Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A Web Push subscription (one per browser/device). Used to deliver push
+// notifications for new chat activity when the recipient is away.
+model PushSubscription {
   id        String   @id @default(cuid())
-  bookingId String
-  senderId  String
-  content   String
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
   createdAt DateTime @default(now())
 
-  booking Booking              @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  sender  User                 @relation(fields: [senderId], references: [id])
-  reads   SessionMessageRead[]
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Per-user read receipts on a SessionMessage. Combined with the
