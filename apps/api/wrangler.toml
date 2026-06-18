@@ -27,7 +27,7 @@ SQUARE_ENVIRONMENT = "sandbox"
 # with `npx web-push generate-vapid-keys` and paste the public key here.
 PUBLIC_APP_URL = "http://localhost:5173"
 VAPID_SUBJECT = "mailto:noreply@usesunbird.com"
-VAPID_PUBLIC_KEY = ""
+VAPID_PUBLIC_KEY = "BBzf6nncioHc9n59dNzXjTp0-GLpeGz6_w9XM4Sfydyz2neFwgdIswjp4keAG2adNWsK1hM-Yw5QPTYN3-IbRfc"
 
 # Durable Object: one ConversationRoom per coach↔student thread (live WebSocket
 # fan-out + presence + the away-notification alarm).
