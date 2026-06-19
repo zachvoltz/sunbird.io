@@ -6,8 +6,6 @@ import type { CoachAvailabilitySlot } from "@sunbird/shared";
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const HOURS = Array.from({ length: 24 }, (_, i) => `${String(i).padStart(2, "0")}:00`);
 
-type CategoryOption = { id: string; title: string };
-
 type CoachSettingsData = {
   slug: string | null;
   headline: string | null;
@@ -18,12 +16,9 @@ type CoachSettingsData = {
   isPublished: boolean;
   sessionAddress: string | null;
   availability: CoachAvailabilitySlot[];
-  categoryIds: string[];
-  allCategories: CategoryOption[];
 };
 
 export function CoachSettings() {
-  const [settings, setSettings] = useState<CoachSettingsData | null>(null);
   const [address, setAddress] = useState("");
 
   // Profile state
@@ -34,7 +29,6 @@ export function CoachSettings() {
   const [credentials, setCredentials] = useState("");
   const [socialLinks, setSocialLinks] = useState("");
   const [isPublished, setIsPublished] = useState(false);
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
   const [availabilityByDay, setAvailabilityByDay] = useState<Record<number, Set<string>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [savedSection, setSavedSection] = useState<string | null>(null);
@@ -69,7 +63,6 @@ export function CoachSettings() {
   useEffect(() => {
     apiFetch<{ data: CoachSettingsData }>("/api/coach-settings")
       .then((res) => {
-        setSettings(res.data);
         setAddress(res.data.sessionAddress ?? "");
         setSlug(res.data.slug ?? "");
         setHeadline(res.data.headline ?? "");
@@ -78,7 +71,6 @@ export function CoachSettings() {
         setCredentials(res.data.credentials ?? "");
         setSocialLinks(res.data.socialLinks ?? "");
         setIsPublished(res.data.isPublished ?? false);
-        setSelectedCategoryIds(res.data.categoryIds);
 
         // Build availability map: dayOfWeek -> Set of startTime strings
         const byDay: Record<number, Set<string>> = {};
@@ -105,23 +97,6 @@ export function CoachSettings() {
         body: JSON.stringify({ sessionAddress: address || undefined }),
       });
       showSaved("address");
-    } catch {} finally { setSaving(null); }
-  };
-
-  const toggleCategory = (id: string) => {
-    setSelectedCategoryIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    );
-  };
-
-  const saveCategories = async () => {
-    setSaving("categories");
-    try {
-      await apiFetch("/api/coach-settings/categories", {
-        method: "PUT",
-        body: JSON.stringify({ categoryIds: selectedCategoryIds }),
-      });
-      showSaved("categories");
     } catch {} finally { setSaving(null); }
   };
 
@@ -337,43 +312,6 @@ export function CoachSettings() {
             </div>
           </div>
         </section>
-
-        {/* Categories */}
-        {settings?.allCategories && settings.allCategories.length > 0 && (
-          <section className="mb-12">
-            <h2 className="text-[11px] font-medium uppercase tracking-[0.15em] text-text-secondary mb-4">
-              Categories I Teach
-            </h2>
-            <div className="bg-surface rounded-card shadow-card p-6">
-              <p className="text-sm text-text-secondary mb-4">
-                Select the categories you offer. These replace lesson types for the new booking flow.
-              </p>
-              <div className="space-y-2 mb-4">
-                {settings.allCategories.map((cat) => (
-                  <label key={cat.id} className="flex items-center gap-3 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={selectedCategoryIds.includes(cat.id)}
-                      onChange={() => toggleCategory(cat.id)}
-                      className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
-                    />
-                    <span className="text-sm font-medium">{cat.title}</span>
-                  </label>
-                ))}
-              </div>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={saveCategories}
-                  disabled={saving === "categories"}
-                  className="text-[13px] font-medium text-cream bg-iris px-5 py-2 rounded-card hover:bg-iris-hover transition-colors disabled:opacity-50"
-                >
-                  {saving === "categories" ? "Saving..." : "Save"}
-                </button>
-                {savedSection === "categories" && <span className="text-[12px] text-sage">Saved</span>}
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Weekly Availability */}
         <section className="mb-12">

@@ -32,6 +32,8 @@ type ProfileState = {
   isPublished: boolean;
 };
 
+type CategoryOption = { id: string; title: string };
+
 const EMPTY_PROFILE: ProfileState = {
   slug: "",
   headline: "",
@@ -121,6 +123,14 @@ export function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
+  // Categories the coach teaches — required before publishing. Selected set is
+  // saved separately from the profile fields (PUT /api/coach-settings/categories).
+  const [allCategories, setAllCategories] = useState<CategoryOption[]>([]);
+  const [selectedCategoryIds, setSelectedCategoryIds] = useState<string[]>([]);
+  const [savedCategoryIds, setSavedCategoryIds] = useState<string[]>([]);
+  const [savingCats, setSavingCats] = useState(false);
+  const [catsSavedAt, setCatsSavedAt] = useState<string | null>(null);
+
   useEffect(() => {
     apiFetch<{
       data: {
@@ -131,6 +141,8 @@ export function ProfilePage() {
         coverImageUrl: string | null;
         socialLinks: string | null;
         isPublished: boolean;
+        categoryIds?: string[];
+        allCategories?: CategoryOption[];
       };
     }>("/api/coach-settings")
       .then((res) => {
@@ -145,6 +157,9 @@ export function ProfilePage() {
         };
         setProfile(next);
         setSaved(next);
+        setAllCategories(res.data.allCategories ?? []);
+        setSelectedCategoryIds(res.data.categoryIds ?? []);
+        setSavedCategoryIds(res.data.categoryIds ?? []);
       })
       .catch(() => { /* leave at defaults */ })
       .finally(() => setLoaded(true));
@@ -156,12 +171,42 @@ export function ProfilePage() {
     );
   }, [profile, saved]);
 
+  const catsDirty = useMemo(() => {
+    if (selectedCategoryIds.length !== savedCategoryIds.length) return true;
+    const a = [...selectedCategoryIds].sort();
+    const b = [...savedCategoryIds].sort();
+    return a.some((id, i) => id !== b[i]);
+  }, [selectedCategoryIds, savedCategoryIds]);
+
   const publicUrl = profile.slug
     ? `${window.location.origin}/coaches/${profile.slug}`
     : null;
 
   const update = <K extends keyof ProfileState>(k: K, v: ProfileState[K]) =>
     setProfile((p) => ({ ...p, [k]: v }));
+
+  const toggleCategory = (id: string) =>
+    setSelectedCategoryIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+
+  const saveCategories = async () => {
+    if (savingCats) return;
+    setSavingCats(true);
+    setError(null);
+    try {
+      await apiFetch("/api/coach-settings/categories", {
+        method: "PUT",
+        body: JSON.stringify({ categoryIds: selectedCategoryIds }),
+      });
+      setSavedCategoryIds([...selectedCategoryIds]);
+      setCatsSavedAt(new Date().toISOString());
+    } catch (err: any) {
+      setError(err?.body?.error ?? "Couldn't save categories.");
+    } finally {
+      setSavingCats(false);
+    }
+  };
 
   const saveProfile = async () => {
     if (saving) return;
@@ -377,6 +422,63 @@ export function ProfilePage() {
                 className="btn small primary"
               >
                 {saving ? "saving…" : dirty ? "save profile" : "saved"}
+              </button>
+            </div>
+          </div>
+
+          {/* Categories — required before publishing; also power the booking flow. */}
+          <div className="box">
+            <div className="row between">
+              <div className="small muted">CATEGORIES I TEACH</div>
+              <Tag color={selectedCategoryIds.length === 0 ? "coral" : undefined}>
+                {selectedCategoryIds.length === 0
+                  ? "required to publish"
+                  : `${selectedCategoryIds.length} selected`}
+              </Tag>
+            </div>
+            <Squiggle w={60} color="var(--ink-faint)" />
+            <div className="small muted mt-2">
+              Pick what you teach. You need at least one to publish your page, and
+              these power the booking flow.
+            </div>
+
+            {allCategories.length === 0 ? (
+              <div className="small muted mt-2" style={{ fontStyle: "italic" }}>
+                No categories are available yet — contact support to add one.
+              </div>
+            ) : (
+              <div className="col gap-1 mt-2" style={{ opacity: loaded ? 1 : 0.5 }}>
+                {allCategories.map((cat) => (
+                  <label
+                    key={cat.id}
+                    className="row gap-2"
+                    style={{ alignItems: "center", cursor: "pointer" }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={selectedCategoryIds.includes(cat.id)}
+                      onChange={() => toggleCategory(cat.id)}
+                    />
+                    <span className="small">{cat.title}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+
+            <div className="row between mt-3" style={{ alignItems: "center" }}>
+              <div className="small">
+                {catsSavedAt && !catsDirty && (
+                  <span className="muted">
+                    saved · {new Date(catsSavedAt).toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={saveCategories}
+                disabled={savingCats || !catsDirty || allCategories.length === 0}
+                className="btn small primary"
+              >
+                {savingCats ? "saving…" : catsDirty ? "save categories" : "saved"}
               </button>
             </div>
           </div>
