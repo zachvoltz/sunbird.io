@@ -12,7 +12,7 @@ export function StepCoach({ state, update }: Props) {
   );
 
   const select = (coachId: string) => {
-    update({ selectedCoachId: coachId, step: 5 });
+    update({ selectedCoachId: coachId, step: 4 });
   };
 
   return (

@@ -11,6 +11,7 @@ export function StepCategory({ state, update }: Props) {
     update({
       selectedCategory: cat,
       notSureCategory: false,
+      notSureSkillTree: true,
       step: 2,
     });
   };
@@ -20,7 +21,7 @@ export function StepCategory({ state, update }: Props) {
       selectedCategory: null,
       notSureCategory: true,
       notSureSkillTree: true,
-      step: 3,
+      step: 2,
     });
   };
 

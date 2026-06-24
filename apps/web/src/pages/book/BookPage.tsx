@@ -3,7 +3,6 @@ import { useSearchParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
 import type { CategoryPublic, AvailableSlot, CoachPublic } from "@sunbird/shared";
 import { StepCategory } from "./StepCategory";
-import { StepSkillTree } from "./StepSkillTree";
 import { StepCoach } from "./StepCoach";
 import { StepDateTime } from "./StepDateTime";
 import { StepConfirm } from "./StepConfirm";
@@ -18,7 +17,7 @@ export type SkillTreeOption = {
 };
 
 export type BookingState = {
-  step: 1 | 2 | 3 | 4 | 5 | "success";
+  step: 1 | 2 | 3 | 4 | "success";
   categories: CategoryPublic[];
   coaches: CoachPublic[];
   selectedCategory: CategoryPublic | null;
@@ -61,8 +60,8 @@ const initialState: BookingState = {
   skillTrees: [],
 };
 
-// Flow: 1=Category, 2=SkillTree, 3=DateTime, 4=Coach, 5=Confirm
-const TOTAL_STEPS = 5;
+// Flow: 1=Category, 2=DateTime, 3=Coach, 4=Confirm
+const TOTAL_STEPS = 4;
 
 export function BookPage() {
   const [state, setState] = useState<BookingState>(initialState);
@@ -87,6 +86,7 @@ export function BookPage() {
           const cat = catRes.data.find((c) => c.id === qCategoryId);
           if (cat) {
             updates.selectedCategory = cat;
+            updates.notSureSkillTree = true;
             updates.step = 2;
           }
         }
@@ -106,25 +106,21 @@ export function BookPage() {
       const next = { ...s, ...partial };
 
       // Auto-select coach if only one available after DateTime selection
-      if (partial.availableCoachIds && partial.availableCoachIds.length === 1 && partial.step === 4) {
+      if (partial.availableCoachIds && partial.availableCoachIds.length === 1 && partial.step === 3) {
         next.selectedCoachId = partial.availableCoachIds[0];
-        next.step = 5;
+        next.step = 4;
       }
 
       return next;
     });
 
   const goBack = () => {
-    // 1=Category, 2=SkillTree, 3=DateTime, 4=Coach, 5=Confirm
+    // 1=Category, 2=DateTime, 3=Coach, 4=Confirm
     if (state.step === 2) update({ step: 1 });
-    else if (state.step === 3) {
-      if (state.notSureCategory) update({ step: 1 });
+    else if (state.step === 3) update({ step: 2 });
+    else if (state.step === 4) {
+      if (state.availableCoachIds.length > 1) update({ step: 3, selectedCoachId: null });
       else update({ step: 2 });
-    }
-    else if (state.step === 4) update({ step: 3 });
-    else if (state.step === 5) {
-      if (state.availableCoachIds.length > 1) update({ step: 4, selectedCoachId: null });
-      else update({ step: 3 });
     }
   };
 
@@ -161,15 +157,12 @@ export function BookPage() {
           <StepCategory state={state} update={update} />
         )}
         {state.step === 2 && (
-          <StepSkillTree state={state} update={update} />
+          <StepDateTime state={state} update={update} nextStep={3} />
         )}
         {state.step === 3 && (
-          <StepDateTime state={state} update={update} nextStep={4} />
-        )}
-        {state.step === 4 && (
           <StepCoach state={state} update={update} />
         )}
-        {state.step === 5 && (
+        {state.step === 4 && (
           <StepConfirm state={state} update={update} />
         )}
         {state.step === "success" && (

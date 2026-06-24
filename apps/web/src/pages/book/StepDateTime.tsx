@@ -76,17 +76,11 @@ export function StepDateTime({ state, update, nextStep }: Props) {
   };
 
   const typeName = state.selectedCategory?.title ?? "Open";
-  const categoryName =
-    state.notSureSkillTree
-      ? "Open"
-      : state.skillTrees?.find(
-          (st: any) => st.id === state.selectedSkillTreeId,
-        )?.title ?? "Open";
 
   return (
     <>
       <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-iris mb-4">
-        {typeName} {categoryName !== "Open" ? `/ ${categoryName}` : ""}
+        {typeName}
       </p>
       <h2 className="font-display text-3xl md:text-4xl font-bold mb-3">
         Pick a date and time

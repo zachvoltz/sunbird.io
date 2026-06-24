@@ -45,9 +45,6 @@ export function StepConfirm({ state, update }: Props) {
   }, [state.selectedCoachId]);
 
   const typeName = state.selectedCategory?.title ?? "Open";
-  const skillTreeName = state.notSureSkillTree
-    ? "Open"
-    : state.skillTrees?.find((st: any) => st.id === state.selectedSkillTreeId)?.title ?? "Open";
   const selectedCoach = state.coaches.find((c) => c.id === state.selectedCoachId);
   const coachName = selectedCoach?.name;
   const coachAddress = selectedCoach?.sessionAddress;
@@ -235,13 +232,6 @@ export function StepConfirm({ state, update }: Props) {
               Category
             </span>
             <span className="font-display font-semibold">{typeName}</span>
-          </div>
-          <hr className="editorial-rule" />
-          <div className="flex justify-between items-baseline">
-            <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary">
-              Skill Tree
-            </span>
-            <span className="font-medium">{skillTreeName}</span>
           </div>
           {coachName && (
             <>
