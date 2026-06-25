@@ -69,3 +69,21 @@ describe("GET /api/availability?coachId= (pinned coach)", () => {
     for (const s of slots) expect(s.coachIds).toEqual([coach2Id]);
   });
 });
+
+describe("GET /api/availability/upcoming", () => {
+  it("returns the soonest slots, time-sorted, without a date pick", async () => {
+    const res = await jsonRequest(app, `/api/availability/upcoming`);
+    expect(res.status).toBe(200);
+    const slots = ((await res.json()) as any).data as { startsAt: string; coachIds: string[] }[];
+    expect(slots.length).toBeGreaterThan(0);
+    const times = slots.map((s) => s.startsAt);
+    expect(times).toEqual([...times].sort());
+  });
+
+  it("restricts the upcoming scan to a pinned coach", async () => {
+    const res = await jsonRequest(app, `/api/availability/upcoming?coachId=${coachId}`);
+    const slots = ((await res.json()) as any).data as { coachIds: string[] }[];
+    expect(slots.length).toBeGreaterThan(0);
+    for (const s of slots) expect(s.coachIds).toEqual([coachId]);
+  });
+});
