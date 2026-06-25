@@ -28,6 +28,15 @@ type AuthEnv = {
 
 const auth = new Hono<AuthEnv>();
 
+// Only allow same-origin relative paths as an OAuth return target, so the
+// ?redirect param can't be used as an open redirect. Returns "" if unsafe.
+function sanitizeReturnPath(raw: string | undefined): string {
+  if (!raw) return "";
+  if (!raw.startsWith("/") || raw.startsWith("//")) return "";
+  if (raw.includes("://") || raw.includes("\\")) return "";
+  return raw;
+}
+
 // ─── Register ───
 
 auth.post("/register", async (c) => {
@@ -211,10 +220,24 @@ auth.get("/oauth/google", async (c) => {
   const scopes = ["openid", "email", "profile"];
   const url = google.createAuthorizationURL(state, codeVerifier, scopes);
 
+  // Optional return-to path (e.g. the booking flow) and role to assign to a
+  // brand-new account. Both are carried through the redirect via cookies and
+  // honored in the callback. The redirect is sanitized to a same-origin path to
+  // avoid an open redirect.
+  const redirectTo = sanitizeReturnPath(c.req.query("redirect"));
+  const role = c.req.query("role");
+  const intendedRole = role === "STUDENT" || role === "COACH" ? role : "";
+
   // Store state and verifier in cookies
   const cookieOpts = "HttpOnly; SameSite=Lax; Path=/; Max-Age=600";
   c.header("Set-Cookie", `google_oauth_state=${state}; ${cookieOpts}`);
   c.header("Set-Cookie", `google_oauth_verifier=${codeVerifier}; ${cookieOpts}`, { append: true });
+  if (redirectTo) {
+    c.header("Set-Cookie", `google_oauth_redirect=${encodeURIComponent(redirectTo)}; ${cookieOpts}`, { append: true });
+  }
+  if (intendedRole) {
+    c.header("Set-Cookie", `google_oauth_role=${intendedRole}; ${cookieOpts}`, { append: true });
+  }
 
   return c.redirect(url.toString());
 });
@@ -228,6 +251,11 @@ auth.get("/oauth/google/cb", async (c) => {
 
   const storedState = cookieHeader.match(/google_oauth_state=([^;]+)/)?.[1];
   const storedVerifier = cookieHeader.match(/google_oauth_verifier=([^;]+)/)?.[1];
+  const returnTo = sanitizeReturnPath(
+    decodeURIComponent(cookieHeader.match(/google_oauth_redirect=([^;]+)/)?.[1] ?? ""),
+  );
+  const storedRole = cookieHeader.match(/google_oauth_role=([^;]+)/)?.[1];
+  const intendedRole = storedRole === "STUDENT" || storedRole === "COACH" ? storedRole : null;
 
   if (!code || !state || !storedState || !storedVerifier || state !== storedState) {
     return c.json({ error: "Invalid OAuth state" }, 400);
@@ -276,14 +304,17 @@ auth.get("/oauth/google/cb", async (c) => {
       });
       user = existingUser;
     } else {
-      // Create new user + OAuth account. roleChosen defaults to false, so the
-      // redirect below sends them to the role picker.
+      // Create new user + OAuth account. When the sign-in carried an intended
+      // role (e.g. a student starting from the booking flow), lock it in so they
+      // skip the role picker; otherwise roleChosen stays false and the redirect
+      // below sends them to the picker.
       isNewUser = true;
       user = await db.user.create({
         data: {
           email,
           name: name || email.split("@")[0],
           avatarUrl: picture || null,
+          ...(intendedRole ? { role: intendedRole, roleChosen: true } : {}),
           oauthAccounts: {
             create: { provider: "google", providerId },
           },
@@ -309,11 +340,19 @@ auth.get("/oauth/google/cb", async (c) => {
   c.header("Set-Cookie", cookie);
   c.header("Set-Cookie", `google_oauth_state=; ${clearOpts}`, { append: true });
   c.header("Set-Cookie", `google_oauth_verifier=; ${clearOpts}`, { append: true });
+  c.header("Set-Cookie", `google_oauth_redirect=; ${clearOpts}`, { append: true });
+  c.header("Set-Cookie", `google_oauth_role=; ${clearOpts}`, { append: true });
 
-  // Redirect to frontend. First-time Google users haven't picked a role yet,
-  // so send them straight to the onboarding picker (AuthGate is the safety net
-  // for everyone else).
-  return c.redirect(isNewUser ? "/onboarding/role" : "/");
+  // Redirect to frontend. A first-time Google user who still hasn't picked a
+  // role goes to the onboarding picker (carrying any return path so they land
+  // where they started afterward). Everyone else — including new users whose
+  // role was set from the sign-in (e.g. students from the booking flow) — goes
+  // straight to the return path, or home.
+  if (isNewUser && !user.roleChosen) {
+    const dest = returnTo ? `/onboarding/role?redirect=${encodeURIComponent(returnTo)}` : "/onboarding/role";
+    return c.redirect(dest);
+  }
+  return c.redirect(returnTo || "/");
 });
 
 export { auth as authRoutes };

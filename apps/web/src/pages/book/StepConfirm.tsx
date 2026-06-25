@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { apiFetch, ApiError } from "@/lib/api";
 import type { BookingPublic, SubscriptionPublic } from "@sunbird/shared";
+import { useAuth } from "@/context/AuthContext";
 import type { BookingState } from "./BookPage";
+import { BookingAuthPanel } from "./BookingAuthPanel";
 
 type Props = {
   state: BookingState;
@@ -25,6 +27,7 @@ function formatTime(isoStr: string): string {
 }
 
 export function StepConfirm({ state, update }: Props) {
+  const { isAuthenticated } = useAuth();
   const [note, setNote] = useState(state.studentNote);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -307,13 +310,21 @@ export function StepConfirm({ state, update }: Props) {
         <p className="text-coral text-sm mb-4">{error}</p>
       )}
 
-      <button
-        onClick={handleSubmit}
-        disabled={submitting}
-        className="w-full text-[14px] font-medium text-cream bg-iris py-3 rounded-card hover:bg-iris-hover transition-all duration-300 disabled:opacity-50"
-      >
-        {submitting ? "Booking..." : "Confirm booking"}
-      </button>
+      {isAuthenticated ? (
+        <button
+          onClick={handleSubmit}
+          disabled={submitting}
+          className="w-full text-[14px] font-medium text-cream bg-iris py-3 rounded-card hover:bg-iris-hover transition-all duration-300 disabled:opacity-50"
+        >
+          {submitting ? "Booking..." : "Confirm booking"}
+        </button>
+      ) : (
+        // Defer sign-in to the very end: the student picks everything first,
+        // then authenticates here and the booking submits immediately. Fold the
+        // locally-typed note into the state we hand off so it survives the
+        // Google sign-in round-trip.
+        <BookingAuthPanel state={{ ...state, studentNote: note }} onAuthed={handleSubmit} />
+      )}
     </>
   );
 }

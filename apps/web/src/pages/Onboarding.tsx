@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch, ApiError } from "@/lib/api";
 import { getIntendedRole, clearIntendedRole } from "@/lib/signupIntent";
@@ -25,6 +25,10 @@ const OPTIONS: { role: Choice; title: string; blurb: string }[] = [
 export function RolePicker() {
   const { refresh } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  // A return path threaded through sign-in (e.g. the booking flow) — only honored
+  // for students, since a coach's natural landing is their roster.
+  const redirectTo = searchParams.get("redirect");
   const [submitting, setSubmitting] = useState<Choice | null>(null);
   const [error, setError] = useState("");
   // Role the visitor signaled at a "Sign up as a …" entry point. We pre-emphasize
@@ -41,7 +45,9 @@ export function RolePicker() {
       });
       clearIntendedRole();
       await refresh();
-      navigate(role === "COACH" ? "/coach/roster" : "/today", { replace: true });
+      const dest =
+        role === "COACH" ? "/coach/roster" : redirectTo || "/today";
+      navigate(dest, { replace: true });
     } catch (err) {
       setError(err instanceof ApiError ? err.body.error : "Something went wrong. Please try again.");
       setSubmitting(null);

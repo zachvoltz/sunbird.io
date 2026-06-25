@@ -15,7 +15,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname)}`} replace />;
+    // Preserve the query string too, so params like ?coachId=…&categoryId=…
+    // survive the round-trip back from /login.
+    return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   }
 
   // Fresh signups haven't picked student/coach yet — funnel them to the

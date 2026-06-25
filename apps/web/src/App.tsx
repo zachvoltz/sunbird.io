@@ -65,7 +65,8 @@ export function App() {
         <Route path="workshops" element={<Workshops />} />
         <Route path="coaches" element={<Coaches />} />
         <Route path="coaches/:slug" element={<CoachProfile />} />
-        <Route path="book" element={<AuthGate><BookPage /></AuthGate>} />
+        {/* Browsable while logged out — sign-in is deferred to the Confirm step. */}
+        <Route path="book" element={<BookPage />} />
         <Route path="my-bookings-legacy" element={<AuthGate><MyBookings /></AuthGate>} />
         <Route path="my-curriculum/:slug" element={<Navigate to="/today" replace />} />
         <Route path="coach/dashboard-legacy" element={<AuthGate><RoleGate roles={["COACH", "ADMIN"]}><TeacherDashboard /></RoleGate></AuthGate>} />

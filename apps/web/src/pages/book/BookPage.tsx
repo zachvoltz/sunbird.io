@@ -7,6 +7,7 @@ import { StepCoach } from "./StepCoach";
 import { StepDateTime } from "./StepDateTime";
 import { StepConfirm } from "./StepConfirm";
 import { BookingSuccess } from "./BookingSuccess";
+import { consumeBookingResume } from "./bookingResume";
 
 export type SkillTreeOption = {
   id: string;
@@ -82,17 +83,24 @@ export function BookPage() {
           coaches: coachesRes.data,
         };
 
-        if (qCategoryId) {
-          const cat = catRes.data.find((c) => c.id === qCategoryId);
-          if (cat) {
-            updates.selectedCategory = cat;
-            updates.notSureSkillTree = true;
-            updates.step = 2;
+        // Returning from the Google sign-in hop: restore the booking the student
+        // had in progress and drop them back on the step they left (Confirm).
+        const resumed = consumeBookingResume();
+        if (resumed) {
+          Object.assign(updates, resumed);
+        } else {
+          if (qCategoryId) {
+            const cat = catRes.data.find((c) => c.id === qCategoryId);
+            if (cat) {
+              updates.selectedCategory = cat;
+              updates.notSureSkillTree = true;
+              updates.step = 2;
+            }
           }
-        }
 
-        if (qCoachId) {
-          updates.selectedCoachId = qCoachId;
+          if (qCoachId) {
+            updates.selectedCoachId = qCoachId;
+          }
         }
 
         setState((s) => ({ ...s, ...updates }));
