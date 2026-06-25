@@ -51,7 +51,11 @@ export function StepConfirm({ state, update }: Props) {
   const selectedCoach = state.coaches.find((c) => c.id === state.selectedCoachId);
   const coachName = selectedCoach?.name;
   const coachAddress = selectedCoach?.sessionAddress;
-  const mode = state.mode ?? "IN_PERSON";
+  // A coach with no session address only teaches online, so there's no format
+  // choice to make — default to ONLINE and hide the picker. Coaches with an
+  // address offer in person (and may also do online), so they keep both.
+  const offersInPerson = !!coachAddress;
+  const mode = offersInPerson ? (state.mode ?? "IN_PERSON") : "ONLINE";
   const slot = state.selectedSlot!;
 
   const recurring = state.recurring;
@@ -144,50 +148,63 @@ export function StepConfirm({ state, update }: Props) {
         Review the details below and book when you're ready.
       </p>
 
-      {/* Mode selection */}
-      <div className="mb-8">
-        <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-3">
-          Lesson format
-        </p>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <button
-            onClick={() => update({ mode: "ONLINE" })}
-            className={`p-4 rounded-card border text-left transition-all duration-200 ${
-              mode === "ONLINE"
-                ? "border-iris bg-iris/5 shadow-card"
-                : "border-charcoal/10 hover:border-charcoal/25"
-            }`}
-          >
-            <span className="font-display text-sm font-semibold block mb-0.5">Online</span>
-            <span className="text-[12px] text-text-secondary">Video call</span>
-          </button>
-          <button
-            onClick={() => update({ mode: "IN_PERSON" })}
-            className={`p-4 rounded-card border text-left transition-all duration-200 ${
-              mode === "IN_PERSON"
-                ? "border-iris bg-iris/5 shadow-card"
-                : "border-charcoal/10 hover:border-charcoal/25"
-            }`}
-          >
-            <span className="font-display text-sm font-semibold block mb-0.5">In Person</span>
-            <span className="text-[12px] text-text-secondary">
-              {coachAddress ? coachAddress : "At the studio"}
-            </span>
-          </button>
+      {/* Lesson format — a picker only when the coach offers in person too;
+          online-only coaches have nothing to choose, so we just state it. */}
+      {offersInPerson ? (
+        <div className="mb-8">
+          <p className="text-[11px] uppercase tracking-[0.1em] text-text-secondary mb-3">
+            Lesson format
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <button
+              onClick={() => update({ mode: "ONLINE" })}
+              className={`p-4 rounded-card border text-left transition-all duration-200 ${
+                mode === "ONLINE"
+                  ? "border-iris bg-iris/5 shadow-card"
+                  : "border-charcoal/10 hover:border-charcoal/25"
+              }`}
+            >
+              <span className="font-display text-sm font-semibold block mb-0.5">Online</span>
+              <span className="text-[12px] text-text-secondary">Video call</span>
+            </button>
+            <button
+              onClick={() => update({ mode: "IN_PERSON" })}
+              className={`p-4 rounded-card border text-left transition-all duration-200 ${
+                mode === "IN_PERSON"
+                  ? "border-iris bg-iris/5 shadow-card"
+                  : "border-charcoal/10 hover:border-charcoal/25"
+              }`}
+            >
+              <span className="font-display text-sm font-semibold block mb-0.5">In Person</span>
+              <span className="text-[12px] text-text-secondary">
+                {coachAddress ? coachAddress : "At the studio"}
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
 
-      {/* Recurring toggle */}
+      {/* Recurring — tucked behind a collapsed disclosure so the common
+          single-lesson booking stays uncluttered. Expanding opts in; collapsing
+          resets it. The schedule itself is unchanged. */}
       <div className="mb-8">
-        <label className="flex items-center gap-3 cursor-pointer">
-          <input
-            type="checkbox"
-            checked={recurring}
-            onChange={(e) => { if (e.target.checked) setUseCredit(false); update({ recurring: e.target.checked, frequency: e.target.checked ? "WEEKLY" : null, recurringEndDate: null }); }}
-            className="w-4 h-4 rounded border-warm-gray text-iris focus:ring-iris/20"
-          />
-          <span className="text-sm font-medium">Make this recurring</span>
-        </label>
+        <button
+          type="button"
+          onClick={() => {
+            const next = !recurring;
+            if (next) setUseCredit(false);
+            update({ recurring: next, frequency: next ? "WEEKLY" : null, recurringEndDate: null });
+          }}
+          className="flex items-center gap-2 text-sm font-medium text-charcoal hover:text-iris transition-colors"
+        >
+          <svg
+            className={`w-3.5 h-3.5 transition-transform ${recurring ? "rotate-90" : ""}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+          </svg>
+          Repeat this lesson?
+        </button>
 
         {recurring && (
           <div className="mt-4 space-y-3 pl-7">
@@ -262,6 +279,13 @@ export function StepConfirm({ state, update }: Props) {
             <span className="font-medium">
               {formatTime(slot.startsAt)} – {formatTime(slot.endsAt)}
             </span>
+          </div>
+          <hr className="editorial-rule" />
+          <div className="flex justify-between items-baseline">
+            <span className="text-[11px] uppercase tracking-[0.1em] text-text-secondary">
+              Format
+            </span>
+            <span className="font-medium">{mode === "ONLINE" ? "Online" : "In person"}</span>
           </div>
         </div>
       </div>
