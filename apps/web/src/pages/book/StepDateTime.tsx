@@ -49,7 +49,9 @@ export function StepDateTime({ state, update, nextStep }: Props) {
     setLoadingSlots(true);
     setError(null);
     const catParam = state.selectedCategory?.id ? `&categoryId=${state.selectedCategory.id}` : "";
-    apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}${catParam}`)
+    // Pinned to a coach (booking from their page) → only show their times.
+    const coachParam = state.pinnedCoachId ? `&coachId=${state.pinnedCoachId}` : "";
+    apiFetch<{ data: AvailableSlot[] }>(`/api/availability?date=${selectedDate}${catParam}${coachParam}`)
       .then((res) => {
             // Sort by local hour (12AM first, 11PM last)
             const sorted = res.data.sort((a, b) => {
@@ -64,7 +66,7 @@ export function StepDateTime({ state, update, nextStep }: Props) {
         else setError("Failed to load availability");
       })
       .finally(() => setLoadingSlots(false));
-  }, [selectedDate]);
+  }, [selectedDate, state.pinnedCoachId, state.selectedCategory?.id]);
 
   const selectSlot = (slot: AvailableSlot) => {
     update({
@@ -76,11 +78,14 @@ export function StepDateTime({ state, update, nextStep }: Props) {
   };
 
   const typeName = state.selectedCategory?.title ?? "Open";
+  const pinnedCoachName = state.pinnedCoachId
+    ? state.coaches.find((c) => c.id === state.pinnedCoachId)?.name
+    : null;
 
   return (
     <>
       <p className="text-[11px] font-medium uppercase tracking-[0.15em] text-iris mb-4">
-        {typeName}
+        {typeName}{pinnedCoachName ? ` · with ${pinnedCoachName}` : ""}
       </p>
       <h2 className="font-display text-3xl md:text-4xl font-bold mb-3">
         Pick a date and time

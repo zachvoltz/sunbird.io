@@ -42,3 +42,30 @@ describe("GET /api/availability (UTC consistency)", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("GET /api/availability?coachId= (pinned coach)", () => {
+  let coach2Id: string;
+
+  beforeAll(async () => {
+    const db = getDb();
+    // A second coach available at the same 15:00 slot as the first.
+    coach2Id = (await db.user.create({ data: { name: "Coach Two", email: "c2@example.com", role: "COACH", roleChosen: true } })).id;
+    await db.coachAvailability.create({
+      data: { coachId: coach2Id, dayOfWeek: UTC_DOW, startTime: "15:00", endTime: "16:00", isActive: true },
+    });
+  });
+
+  it("without a coachId, the shared slot lists both coaches", async () => {
+    const res = await jsonRequest(app, `/api/availability?date=${DATE_STR}`);
+    const slots = ((await res.json()) as any).data as { startsAt: string; coachIds: string[] }[];
+    const slot = slots.find((s) => s.startsAt === `${DATE_STR}T15:00:00.000Z`);
+    expect(slot!.coachIds).toEqual(expect.arrayContaining([coachId, coach2Id]));
+  });
+
+  it("with a coachId, slots are restricted to that coach", async () => {
+    const res = await jsonRequest(app, `/api/availability?date=${DATE_STR}&coachId=${coach2Id}`);
+    const slots = ((await res.json()) as any).data as { startsAt: string; coachIds: string[] }[];
+    expect(slots.length).toBeGreaterThan(0);
+    for (const s of slots) expect(s.coachIds).toEqual([coach2Id]);
+  });
+});

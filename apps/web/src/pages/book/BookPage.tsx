@@ -25,6 +25,10 @@ export type BookingState = {
   selectedSkillTreeId: string | null;
   selectedNodeId: string | null;
   selectedCoachId: string | null;
+  // When booking was started from a specific coach's page, the flow is pinned to
+  // that coach: availability is filtered to them and the coach-selection step is
+  // skipped. Null means the open flow where the student picks among coaches.
+  pinnedCoachId: string | null;
   availableCoachIds: string[];
   mode: "ONLINE" | "IN_PERSON" | null;
   recurring: boolean;
@@ -47,6 +51,7 @@ const initialState: BookingState = {
   selectedSkillTreeId: null,
   selectedNodeId: null,
   selectedCoachId: null,
+  pinnedCoachId: null,
   availableCoachIds: [],
   mode: null,
   recurring: false,
@@ -99,6 +104,8 @@ export function BookPage() {
           }
 
           if (qCoachId) {
+            // Started from this coach's page: pin to them.
+            updates.pinnedCoachId = qCoachId;
             updates.selectedCoachId = qCoachId;
           }
         }

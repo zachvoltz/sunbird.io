@@ -39,6 +39,9 @@ availabilityRoutes.get("/", async (c) => {
 
   const dayOfWeek = date.getUTCDay();
   const categoryId = c.req.query("categoryId");
+  // When booking from a specific coach's page the flow is pinned to them, so
+  // only that coach's slots should come back.
+  const coachIdFilter = c.req.query("coachId");
   const db = getDb();
 
   // Get per-coach availability for this day
@@ -100,6 +103,9 @@ availabilityRoutes.get("/", async (c) => {
 
   for (const slot of coachSlots) {
     const coachId = (slot as any).coachId as string;
+
+    // Pinned-coach booking: ignore every other coach's slots.
+    if (coachIdFilter && coachId !== coachIdFilter) continue;
 
     // Skip if coach doesn't teach this lesson type
     if (qualifiedCoachIds && !qualifiedCoachIds.has(coachId)) continue;
