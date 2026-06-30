@@ -1,6 +1,32 @@
 @import "tailwindcss";
 @import "./wireframe/styles.css";
 
+/* Self-hosted fonts (latin subset) — replaces the render-blocking
+   fonts.googleapis.com stylesheet + fonts.gstatic.com requests. Vite rewrites
+   these url()s to hashed /assets/ paths, so they inherit the 1-year immutable
+   cache. Caveat is a variable font: one file covers weights 500–700. */
+@font-face {
+  font-family: "Caveat";
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url("./assets/fonts/caveat.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Patrick Hand";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/patrick-hand-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Cutive Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("./assets/fonts/cutive-mono-400.woff2") format("woff2");
+}
+
 @theme {
   /* Colors — aligned to the sketchy wireframe palette so the marketing
      site and the logged-in coach views read as one product. The token

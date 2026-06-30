@@ -3,7 +3,23 @@
    .sunbird-landing so the page's generic class names (.hero, .nav, .card,
    .btn, .wrap, .footer…) don't collide with the rest of the app. */
 
-@import url("https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap");
+/* Self-hosted (latin subset) — replaces the render-blocking Google Fonts
+   @import. Both are variable fonts: one file covers each weight range. Vite
+   hashes these url()s into /assets/ for the 1-year immutable cache. */
+@font-face {
+  font-family: "Schibsted Grotesk";
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url("../assets/fonts/schibsted-grotesk.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("../assets/fonts/hanken-grotesk.woff2") format("woff2");
+}
 
 .sunbird-landing {
   --bg: #fdf8f4;
