@@ -14,6 +14,17 @@
 /sw.js
   Cache-Control: public, max-age=0, must-revalidate
 
+# Favicons: not content-hashed, but they change rarely — cache 30 days. This
+# also stops the bare /favicon.ico browser request from falling through to the
+# uncached SPA shell (text/html, max-age=0), which it did before this file
+# existed at that path.
+/favicon.ico
+  Cache-Control: public, max-age=2592000
+/favicon-32.png
+  Cache-Control: public, max-age=2592000
+/favicon-180.png
+  Cache-Control: public, max-age=2592000
+
 # Unhashed static media: cache a day, but allow a refresh on the next visit.
 /sunbird-icon.png
   Cache-Control: public, max-age=86400
