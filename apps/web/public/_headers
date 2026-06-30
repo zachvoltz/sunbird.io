@@ -1,0 +1,22 @@
+# Cache-Control rules for Workers Static Assets.
+# These override Cloudflare's default ("public, max-age=0, must-revalidate"),
+# which forces a revalidation of every component on each page view and is what
+# Pingdom flags as the missing "Expires headers".
+#
+# Vite stamps a content hash into every file under /assets/ (e.g.
+# index-CIjapJ_-.js), so a given URL's bytes never change — it is safe to cache
+# forever. A new build produces new filenames, so stale caches can't be served.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The service worker registration must NOT be cached long, or clients get stuck
+# on an old SW after a deploy. Keep it revalidating (browsers also cap SW age).
+/sw.js
+  Cache-Control: public, max-age=0, must-revalidate
+
+# Unhashed static media: cache a day, but allow a refresh on the next visit.
+/sunbird-icon.png
+  Cache-Control: public, max-age=86400
+
+# Note: index.html intentionally has no rule here, so it keeps the default
+# revalidating behavior — that's what lets a new deploy take effect immediately.
