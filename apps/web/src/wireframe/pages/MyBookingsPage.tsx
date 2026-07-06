@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { BookingPublic } from "@sunbird/shared";
 import { apiFetch, ApiError } from "@/lib/api";
+import { rebookHref } from "@/lib/rebook";
 import { useAuth } from "@/context/AuthContext";
 import { STFrame } from "../components/STFrame";
 import { Avatar } from "../components/Avatar";
@@ -68,6 +69,29 @@ export function MyBookingsPage() {
   };
   useEffect(load, []);
 
+  // Payment-return feedback. Stripe/Square send the student back here with
+  // ?payment=success|canceled (single lesson) or ?package=success|canceled
+  // (package purchase). Show a toast, then strip the param so a refresh or a
+  // shared link doesn't replay it.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
+  useEffect(() => {
+    const pay = searchParams.get("payment");
+    const pkg = searchParams.get("package");
+    if (pay === "success") setNotice({ kind: "ok", text: "Payment received — your lesson is confirmed." });
+    else if (pay === "canceled") setNotice({ kind: "err", text: "Payment canceled — this lesson isn't booked yet." });
+    else if (pkg === "success") setNotice({ kind: "ok", text: "Payment received — your package is active." });
+    else if (pkg === "canceled") setNotice({ kind: "err", text: "Payment canceled — your package wasn't purchased." });
+    if (pay || pkg) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("payment");
+      next.delete("package");
+      setSearchParams(next, { replace: true });
+    }
+    // Mount-only: the param is consumed and cleared immediately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const now = useNow();
   const todayStr = ymd(now);
 
@@ -111,6 +135,36 @@ export function MyBookingsPage() {
 
   return (
     <STFrame side="home">
+      {notice && (
+        <div
+          role="status"
+          style={{
+            position: "fixed",
+            top: 16,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 2000,
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "10px 14px",
+            borderRadius: 8,
+            border: `1.5px solid ${notice.kind === "ok" ? "#3f7d54" : "var(--accent)"}`,
+            background: "var(--paper, #fff)",
+            boxShadow: "0 6px 24px rgba(0,0,0,0.12)",
+            maxWidth: "90vw",
+          }}
+        >
+          <span style={{ color: notice.kind === "ok" ? "#3f7d54" : "var(--accent)", fontWeight: 700 }}>
+            {notice.kind === "ok" ? "✓" : "!"}
+          </span>
+          <span className="small">{notice.text}</span>
+          {notice.kind === "err" && (
+            <Link to="/book" className="btn small ghost">try again</Link>
+          )}
+          <button onClick={() => setNotice(null)} className="btn small ghost">dismiss</button>
+        </div>
+      )}
       <div className="dt-main-head">
         <div>
           <h2 className="dt-title">{dateLabel}</h2>
@@ -349,6 +403,11 @@ function PracticeNoteCard({ booking }: { booking: BookingPublic }) {
       </div>
       <div className="row gap-2 mt-2">
         <Link to={`/my-bookings/${booking.id}`} className="btn small ghost">open session →</Link>
+        {booking.coach && (
+          <Link to={rebookHref(booking)} className="btn small primary">
+            book again with {coachName.split(" ")[0]}
+          </Link>
+        )}
       </div>
     </div>
   );
@@ -520,12 +579,19 @@ function PastLessonRow({ booking }: { booking: BookingPublic }) {
             <span className="bold">{formatDate(booking.startsAt)}</span> · with {coachName.split(" ")[0]}
           </span>
         </Link>
-        <span
-          className="tiny muted"
-          style={{ color: status === "CANCELLED" ? "var(--accent)" : undefined }}
-        >
-          {status.toLowerCase()}
-        </span>
+        <div className="row gap-2" style={{ alignItems: "center" }}>
+          {booking.coach && (
+            <Link to={rebookHref(booking)} className="btn small ghost" style={{ fontSize: 11 }}>
+              book again
+            </Link>
+          )}
+          <span
+            className="tiny muted"
+            style={{ color: status === "CANCELLED" ? "var(--accent)" : undefined }}
+          >
+            {status.toLowerCase()}
+          </span>
+        </div>
       </div>
     </div>
   );

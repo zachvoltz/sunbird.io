@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { apiFetch } from "@/lib/api";
+import { rebookHref } from "@/lib/rebook";
 import { useAuth } from "@/context/AuthContext";
 import { VideoCall } from "@/components/session/VideoCall";
 import { STFrame } from "@/wireframe/components/STFrame";
@@ -454,10 +455,10 @@ export function StudentSession() {
                       </p>
                     )}
                     <Link
-                      to="/book"
+                      to={rebookHref(booking)}
                       className="block mt-3 text-[13px] font-medium text-cream bg-iris px-5 py-2.5 rounded-card hover:bg-iris-hover transition-colors"
                     >
-                      Book your next lesson →
+                      Book your next lesson{coach?.name ? ` with ${coach.name.split(" ")[0]}` : ""} →
                     </Link>
                   </div>
                 )}
