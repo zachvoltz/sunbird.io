@@ -6,6 +6,7 @@ import { createEmailService } from "../services/email.service";
 import { createCallsService } from "../services/calls.service";
 import { pushEventMirror, deleteEventMirror } from "./google-calendar";
 import { parseRoutine } from "../lib/routine";
+import { googleCalendarUrl } from "../lib/calendar";
 import { getProvider, readPaymentEnv } from "../lib/payment-provider";
 import { requiresPayment, toCoachConnection, type CoachPayInfo } from "../lib/payments";
 import { postActivityCard } from "../lib/conversations";
@@ -431,11 +432,33 @@ bookingRoutes.post("/", requireAuth, async (c) => {
     }
   }
 
-  // Free lesson — confirm immediately. Send confirmation email (fire and forget).
+  // Free lesson — confirm immediately. Send confirmation email (fire and forget)
+  // enriched with the same add-to-calendar + session link the success screen shows.
   try {
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
     const email = createEmailService((c.env as any)?.EMAIL, from);
-    email.sendBookingConfirmation(user.email, user.name, category.title, formatDateTime(startsAt)).catch(console.error);
+    const origin = new URL(c.req.url).origin;
+    const isOnline = booking.mode === "ONLINE";
+    const location = isOnline ? "Online" : booking.coach?.sessionAddress || "At the studio";
+    const manageUrl = `${origin}/my-bookings/${booking.id}`;
+    const withCoach = booking.coach ? ` with ${booking.coach.name}` : "";
+    const googleCalUrl = googleCalendarUrl({
+      title: `${category.title} lesson${withCoach}`,
+      start: startsAt,
+      end: endsAt,
+      details: `Your ${category.title} lesson${withCoach}.` + (isOnline ? `\n\nJoin: ${manageUrl}` : ""),
+      location,
+    });
+    email
+      .sendBookingConfirmation(user.email, user.name, category.title, formatDateTime(startsAt), {
+        coachName: booking.coach?.name,
+        format: isOnline ? "Online" : "In person",
+        location,
+        manageUrl,
+        googleCalUrl,
+        isOnline,
+      })
+      .catch(console.error);
   } catch {}
 
   return c.json({ data: serializeBooking(booking) }, 201);
@@ -1250,13 +1273,20 @@ bookingRoutes.post("/recurring", requireAuth, async (c) => {
     });
   }
 
-  // Send confirmation email
+  // Send confirmation email. A whole series isn't a single calendar event, so we
+  // skip the add-to-calendar link here and just point at the bookings list.
   try {
     const from = (c.env as any)?.EMAIL_FROM || process.env.EMAIL_FROM || "noreply@usesunbird.com";
     const email = createEmailService((c.env as any)?.EMAIL, from);
+    const origin = new URL(c.req.url).origin;
     email.sendBookingConfirmation(
       user.email, user.name, category.title,
       `${dates.length} ${frequency.toLowerCase()} sessions starting ${formatDateTime(dates[0])}`,
+      {
+        format: mode === "ONLINE" ? "Online" : "In person",
+        manageUrl: `${origin}/my-bookings`,
+        isOnline: mode === "ONLINE",
+      },
     ).catch(console.error);
   } catch {}
 

@@ -72,7 +72,38 @@ export function createEmailService(emailBinding: SendEmail | null | undefined, f
       });
     },
 
-    async sendBookingConfirmation(to: string, name: string, lessonType: string, dateTime: string) {
+    async sendBookingConfirmation(
+      to: string,
+      name: string,
+      lessonType: string,
+      dateTime: string,
+      // Optional enrichment so the email matches the on-screen success page:
+      // who/where, a one-click add-to-calendar, and a link to the session.
+      extra?: {
+        coachName?: string | null;
+        format?: string; // "Online" | "In person"
+        location?: string | null; // address for in-person
+        manageUrl?: string; // {origin}/my-bookings/{id}
+        googleCalUrl?: string;
+        isOnline?: boolean;
+      },
+    ) {
+      const e = extra ?? {};
+      const detail = [
+        e.coachName ? `<p>With <strong>${e.coachName}</strong></p>` : "",
+        e.format
+          ? `<p>${e.format}${e.location && !e.isOnline ? ` · ${e.location}` : ""}</p>`
+          : "",
+      ].join("");
+      const actions = [
+        e.googleCalUrl ? `<p><a href="${e.googleCalUrl}">Add to Google Calendar</a></p>` : "",
+        e.manageUrl
+          ? `<p><a href="${e.manageUrl}">${e.isOnline ? "Join or manage your lesson" : "View or manage your lesson"}</a></p>`
+          : "",
+        e.isOnline && e.manageUrl
+          ? `<p style="color:#666;font-size:13px">Your online lesson opens 15 minutes before the start time.</p>`
+          : "",
+      ].join("");
       return deliver({
         to,
         subject: `Booking confirmed — ${lessonType}`,
@@ -81,6 +112,8 @@ export function createEmailService(emailBinding: SendEmail | null | undefined, f
           <h2>You're booked, ${name}!</h2>
           <p><strong>${lessonType}</strong></p>
           <p>${dateTime}</p>
+          ${detail}
+          ${actions}
           <p>Come ready to work. Come ready to play. We'll figure out the rest together.</p>
           <p>— Sunbird</p>
         `.trim(),
