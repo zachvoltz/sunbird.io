@@ -124,8 +124,16 @@ export function StepConfirm({ state, update }: Props) {
         return;
       }
 
+      // Single (non-recurring) bookings return the created BookingPublic — keep
+      // its id and the confirmed mode so the success screen can link to the
+      // session and build an accurate calendar invite.
+      const single = !(recurring && recurringEndDate);
+      const booking = single ? (res.data as BookingPublic) : null;
+
       update({
         studentNote: note,
+        bookingId: booking?.id ?? null,
+        mode: booking?.mode ?? mode,
         step: "success",
       });
     } catch (err) {
