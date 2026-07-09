@@ -151,13 +151,25 @@ function labelOf(cat, baseFret) {
   return `Movable, ${ordinal(baseFret)} fret`;
 }
 
-// Generate a movable E-shape power chord for a root (chords-db has no "5").
-function powerVoicing(rootPc) {
-  const f = ((rootPc - 4 + 12) % 12); // fret of the root on the low-E string
-  if (f === 0) {
-    return { id: "open", label: "Power chord (open)", frets: [0, 2, 2, -1, -1, -1], fingers: [0, 1, 2, 0, 0, 0], baseFret: 1, barres: [], category: "power", cagedShape: "E", inversionBass: null, difficultyTier: 1, recommendedForTier: true };
-  }
-  return { id: `power-${f}fr`, label: "Power chord (E-shape)", frets: [1, 3, 3, -1, -1, -1], fingers: [1, 3, 4, 0, 0, 0], baseFret: f, barres: [], category: "power", cagedShape: "E", inversionBass: null, difficultyTier: 1, recommendedForTier: true };
+// Generate movable power chords for a root (chords-db has no "5"): a
+// 6th-string-root (E-shape) and a 5th-string-root (A-shape) voicing. The lower
+// on the neck is recommended. Both are root-5th-octave shapes.
+function powerVoicings(rootPc) {
+  const mk = (id, label, frets, fingers, baseFret, caged) => ({
+    id, label, frets, fingers, baseFret, barres: [], category: "power",
+    cagedShape: caged, inversionBass: null, difficultyTier: 1, recommendedForTier: false,
+  });
+  const fE = (rootPc - 4 + 12) % 12; // root fret on the low-E (6th) string
+  const fA = (rootPc - 9 + 12) % 12; // root fret on the A (5th) string
+  const eShape = fE === 0
+    ? mk("power-e-open", "Power chord (open, 6th-string root)", [0, 2, 2, -1, -1, -1], [0, 1, 2, 0, 0, 0], 1, "E")
+    : mk(`power-e-${fE}fr`, "Power chord (6th-string root)", [1, 3, 3, -1, -1, -1], [1, 3, 4, 0, 0, 0], fE, "E");
+  const aShape = fA === 0
+    ? mk("power-a-open", "Power chord (open, 5th-string root)", [-1, 0, 2, 2, -1, -1], [0, 0, 1, 2, 0, 0], 1, "A")
+    : mk(`power-a-${fA}fr`, "Power chord (5th-string root)", [-1, 1, 3, 3, -1, -1], [0, 1, 3, 4, 0, 0], fA, "A");
+  const arr = [eShape, aShape].sort((a, b) => a.baseFret - b.baseFret);
+  arr[0].recommendedForTier = true;
+  return arr;
 }
 
 const MAX_VOICINGS = 4;
@@ -173,10 +185,9 @@ for (const key of guitar.keys) {
   // Power chords (generated, all 12 roots).
   {
     const { pc } = parseNote(key);
-    const v = powerVoicing(pc);
     chords.push({
       id: `${rid}-5`, canonicalName: `${key}5`, displayAliases: [], root: key, quality: "5",
-      formula: ["1", "5"], spelling: spellChord(key, ["1", "5"]), difficultyTier: 1, voicings: [v],
+      formula: ["1", "5"], spelling: spellChord(key, ["1", "5"]), difficultyTier: 1, voicings: powerVoicings(pc),
     });
   }
 
@@ -248,7 +259,20 @@ for (const key of guitar.keys) {
     const bass = e.suffix.split("/")[1];
     const base = isMinor ? Q_BY_SUFFIX.get("minor") : Q_BY_SUFFIX.get("major");
     if (!e.positions || e.positions.length === 0) continue;
-    const pos = e.positions[0];
+    const voicings = e.positions.slice(0, MAX_VOICINGS).map((pos, i) => ({
+      id: `inversion-${i}`,
+      label: i === 0 ? `${bass} in bass` : `${bass} in bass, ${ordinal(pos.baseFret)} fret`,
+      frets: pos.frets,
+      fingers: pos.fingers,
+      baseFret: pos.baseFret,
+      barres: barreObjs(pos),
+      category: "inversion",
+      cagedShape: null,
+      inversionBass: bass,
+      difficultyTier: 7,
+      recommendedForTier: i === 0,
+      ...(Array.isArray(pos.midi) ? { midi: pos.midi } : {}),
+    }));
     chords.push({
       id: `${rid}-slash-${rootId(bass)}${isMinor ? "-m" : ""}`,
       canonicalName: `${key}${base.symbol}/${bass}`,
@@ -259,22 +283,7 @@ for (const key of guitar.keys) {
       spelling: spellChord(key, base.formula),
       difficultyTier: 7,
       tags: ["slash", "inversion"],
-      voicings: [
-        {
-          id: "inversion",
-          label: `Slash chord, ${bass} in bass`,
-          frets: pos.frets,
-          fingers: pos.fingers,
-          baseFret: pos.baseFret,
-          barres: barreObjs(pos),
-          category: "inversion",
-          cagedShape: null,
-          inversionBass: bass,
-          difficultyTier: 7,
-          recommendedForTier: true,
-          ...(Array.isArray(pos.midi) ? { midi: pos.midi } : {}),
-        },
-      ],
+      voicings,
     });
   }
 }
