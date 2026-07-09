@@ -151,25 +151,89 @@ function labelOf(cat, baseFret) {
   return `Movable, ${ordinal(baseFret)} fret`;
 }
 
-// Generate movable power chords for a root (chords-db has no "5"): a
-// 6th-string-root (E-shape) and a 5th-string-root (A-shape) voicing. The lower
-// on the neck is recommended. Both are root-5th-octave shapes.
+// Generate every movable power chord for a root across the neck (chords-db has
+// no "5"). A power chord is root + 5th (+ octave), so it's pure theory: place
+// the root on each bass string, add the 5th on the next string up and the
+// octave two strings up, at every playable position. 6-string standard tuning;
+// the semitone gap to the next string is 5 except G→B which is 4.
+const PC_OPEN = [4, 9, 2, 7, 11, 4]; // pitch class of each open string, low E → high E
+const MIDI_OPEN = [40, 45, 50, 55, 59, 64]; // sounding MIDI of each open string
+const STR_GAP = [5, 5, 5, 4, 5]; // semitones from string i up to string i+1
+const STR_LABEL = ["6th", "5th", "4th", "3rd", "2nd", "1st"];
+const POWER_MAX_FRET = 14;
+
+function powerShape(bassString, notes, rootFret) {
+  const frets = [-1, -1, -1, -1, -1, -1];
+  const fingers = [0, 0, 0, 0, 0, 0];
+  const hasOpen = notes.some((n) => n.fret === 0);
+  const fretted = notes.map((n) => n.fret).filter((f) => f > 0);
+  const baseFret = hasOpen || fretted.length === 0 ? 1 : Math.min(...fretted);
+  for (const n of notes) {
+    frets[n.idx] = n.fret === 0 ? 0 : n.fret - baseFret + 1;
+    fingers[n.idx] = n.fret === 0 ? 0 : n.finger;
+  }
+  const two = notes.length === 2;
+  const pos = rootFret === 0 ? " (open)" : `, ${ordinal(rootFret)} fret`;
+  return {
+    id: `power-s${bassString}-${rootFret}${two ? "-2" : ""}`,
+    label: `${STR_LABEL[bassString]}-string root${two ? " · root+5th" : ""}${pos}`,
+    frets,
+    fingers,
+    baseFret,
+    barres: [],
+    category: "power",
+    cagedShape: null,
+    inversionBass: null,
+    difficultyTier: 1,
+    recommendedForTier: false,
+    _notes: notes.length,
+    _rootMidi: MIDI_OPEN[bassString] + rootFret,
+  };
+}
+
 function powerVoicings(rootPc) {
-  const mk = (id, label, frets, fingers, baseFret, caged) => ({
-    id, label, frets, fingers, baseFret, barres: [], category: "power",
-    cagedShape: caged, inversionBass: null, difficultyTier: 1, recommendedForTier: false,
+  const raw = [];
+  for (let s = 0; s <= 4; s++) {
+    const low = (rootPc - PC_OPEN[s] + 12) % 12;
+    for (const rootFret of [low, low + 12]) {
+      if (rootFret > POWER_MAX_FRET) continue;
+      const fifthFret = rootFret + 7 - STR_GAP[s]; // 5th on the next string up
+      if (fifthFret > POWER_MAX_FRET) continue;
+      // Three-string (root + 5th + octave) when a string two above exists.
+      if (s + 2 <= 5) {
+        const octFret = rootFret + 12 - STR_GAP[s] - STR_GAP[s + 1];
+        if (octFret <= POWER_MAX_FRET) {
+          raw.push(powerShape(s, [
+            { idx: s, fret: rootFret, finger: 1 },
+            { idx: s + 1, fret: fifthFret, finger: 3 },
+            { idx: s + 2, fret: octFret, finger: 4 },
+          ], rootFret));
+        }
+      }
+      // Two-string root + 5th.
+      raw.push(powerShape(s, [
+        { idx: s, fret: rootFret, finger: 1 },
+        { idx: s + 1, fret: fifthFret, finger: 3 },
+      ], rootFret));
+    }
+  }
+  // Dedupe identical grips, order by neck position (fuller shapes first on ties).
+  const seen = new Set();
+  const uniq = raw.filter((v) => {
+    const k = `${v.baseFret}:${v.frets.join(",")}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
   });
-  const fE = (rootPc - 4 + 12) % 12; // root fret on the low-E (6th) string
-  const fA = (rootPc - 9 + 12) % 12; // root fret on the A (5th) string
-  const eShape = fE === 0
-    ? mk("power-e-open", "Power chord (open, 6th-string root)", [0, 2, 2, -1, -1, -1], [0, 1, 2, 0, 0, 0], 1, "E")
-    : mk(`power-e-${fE}fr`, "Power chord (6th-string root)", [1, 3, 3, -1, -1, -1], [1, 3, 4, 0, 0, 0], fE, "E");
-  const aShape = fA === 0
-    ? mk("power-a-open", "Power chord (open, 5th-string root)", [-1, 0, 2, 2, -1, -1], [0, 0, 1, 2, 0, 0], 1, "A")
-    : mk(`power-a-${fA}fr`, "Power chord (5th-string root)", [-1, 1, 3, 3, -1, -1], [0, 1, 3, 4, 0, 0], fA, "A");
-  const arr = [eShape, aShape].sort((a, b) => a.baseFret - b.baseFret);
-  arr[0].recommendedForTier = true;
-  return arr;
+  // Order by the root's sounding pitch (deep, canonical shapes first), then by
+  // comfort (lower fret) and fullness (3-string before 2-string).
+  uniq.sort((a, b) => a._rootMidi - b._rootMidi || a.baseFret - b.baseFret || b._notes - a._notes);
+  uniq.forEach((v, i) => {
+    v.recommendedForTier = i === 0;
+    delete v._notes;
+    delete v._rootMidi;
+  });
+  return uniq;
 }
 
 const MAX_VOICINGS = 4;
