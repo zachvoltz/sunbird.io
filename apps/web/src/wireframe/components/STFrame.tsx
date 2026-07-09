@@ -7,13 +7,12 @@ import { UiSettings } from "./UiSettings";
 import { Icon } from "./Icon";
 import { useIsMobile } from "../hooks/useIsMobile";
 
-type NavId = "home" | "practice" | "library" | "calendar" | "lessons" | "inbox" | "messages" | "notes" | "goals" | "takes" | "curriculum" | "profile";
-type NavIcon = "home" | "note" | "lib" | "cal" | "cap" | "inbox" | "send" | "journal" | "star" | "mic" | "map" | "user";
+type NavId = "home" | "practice" | "calendar" | "lessons" | "inbox" | "messages" | "notes" | "goals" | "takes" | "curriculum" | "profile";
+type NavIcon = "home" | "note" | "cal" | "cap" | "inbox" | "send" | "journal" | "star" | "mic" | "map" | "user";
 
 const NAV: Array<{ id: NavId; label: string; icon: NavIcon; to: string }> = [
   { id: "home", label: "Today", icon: "home", to: "/today" },
   { id: "practice", label: "Practice", icon: "note", to: "/practice" },
-  { id: "library", label: "Library", icon: "lib", to: "/library" },
   { id: "lessons", label: "Lessons", icon: "cap", to: "/my-bookings" },
   { id: "takes", label: "My takes", icon: "mic", to: "/my-takes" },
   { id: "messages", label: "Messages", icon: "send", to: "/messages" },

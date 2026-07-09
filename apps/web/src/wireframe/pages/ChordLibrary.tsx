@@ -6,7 +6,6 @@ import type {
   ChordLibraryVoicingPublic,
 } from "@sunbird/shared";
 import { chordsApi } from "@/lib/api";
-import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { ChordChart } from "../components/ChordChart";
 import { HearItButton } from "../components/HearItButton";
@@ -48,38 +47,36 @@ type View =
   | { name: "detail"; chordId: string }
   | { name: "voicing"; chordId: string; voicingId: string };
 
-export function ChordLibraryPage() {
+// Embeddable library flow (browse → detail → variation). Rendered inside the
+// Chord Flash Cards page; `onExit` returns to the flashcards deck picker.
+export function ChordLibraryView({ onExit }: { onExit: () => void }) {
   const [view, setView] = useState<View>({ name: "browse" });
 
   return (
-    <STFrame side="library">
-      <div className="dt-main-body" style={{ height: "100%", padding: 0, minHeight: 0 }}>
-        <div className="wf" style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}>
-          {view.name === "browse" && (
-            <Browse onOpen={(chordId) => setView({ name: "detail", chordId })} />
-          )}
-          {view.name === "detail" && (
-            <ChordDetail
-              chordId={view.chordId}
-              onBack={() => setView({ name: "browse" })}
-              onOpenVoicing={(voicingId) => setView({ name: "voicing", chordId: view.chordId, voicingId })}
-            />
-          )}
-          {view.name === "voicing" && (
-            <VoicingDetail
-              chordId={view.chordId}
-              voicingId={view.voicingId}
-              onBack={() => setView({ name: "detail", chordId: view.chordId })}
-            />
-          )}
-        </div>
-      </div>
-    </STFrame>
+    <>
+      {view.name === "browse" && (
+        <Browse onOpen={(chordId) => setView({ name: "detail", chordId })} onExit={onExit} />
+      )}
+      {view.name === "detail" && (
+        <ChordDetail
+          chordId={view.chordId}
+          onBack={() => setView({ name: "browse" })}
+          onOpenVoicing={(voicingId) => setView({ name: "voicing", chordId: view.chordId, voicingId })}
+        />
+      )}
+      {view.name === "voicing" && (
+        <VoicingDetail
+          chordId={view.chordId}
+          voicingId={view.voicingId}
+          onBack={() => setView({ name: "detail", chordId: view.chordId })}
+        />
+      )}
+    </>
   );
 }
 
 // ── screen 1 · browse + search ───────────────────────────
-function Browse({ onOpen }: { onOpen: (chordId: string) => void }) {
+function Browse({ onOpen, onExit }: { onOpen: (chordId: string) => void; onExit: () => void }) {
   const [q, setQ] = useState("");
   const [root, setRoot] = useState("C");
   const [type, setType] = useState("All");
@@ -115,7 +112,9 @@ function Browse({ onOpen }: { onOpen: (chordId: string) => void }) {
   return (
     <>
       <div className="wf-header">
-        <h2 className="wf-title" style={{ fontSize: 26 }}>Chord Library</h2>
+        <button className="btn icon" aria-label="Back to flashcards" onClick={onExit}>‹</button>
+        <h2 className="wf-title" style={{ fontSize: 24, flex: 1 }}>Chord Library</h2>
+        <span style={{ width: 38 }} />
       </div>
 
       {/* search */}

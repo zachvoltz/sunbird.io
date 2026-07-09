@@ -13,6 +13,7 @@ import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { ChordChart, MasteryRing } from "../components/ChordChart";
 import { HearItButton } from "../components/HearItButton";
+import { ChordLibraryView } from "./ChordLibrary";
 import { useChordDetector } from "../hooks/useChordDetector";
 
 // Parse a note name to its pitch class (0–11). Handles any number of sharps
@@ -62,7 +63,8 @@ type View =
   | { name: "decks" }
   | { name: "level"; levelId: number }
   | { name: "session"; source: "due" | number }
-  | { name: "settings" };
+  | { name: "settings" }
+  | { name: "library" };
 
 export function ChordFlashCardsPage() {
   const [view, setView] = useState<View>({ name: "decks" });
@@ -96,7 +98,11 @@ export function ChordFlashCardsPage() {
               onStartDue={() => setView({ name: "session", source: "due" })}
               onStartLevel={(levelId) => setView({ name: "session", source: levelId })}
               onOpenSettings={() => setView({ name: "settings" })}
+              onOpenLibrary={() => setView({ name: "library" })}
             />
+          )}
+          {view.name === "library" && (
+            <ChordLibraryView onExit={() => setView({ name: "decks" })} />
           )}
           {view.name === "level" && (
             <LevelDetail
@@ -131,11 +137,13 @@ function DeckPicker({
   onStartDue,
   onStartLevel,
   onOpenSettings,
+  onOpenLibrary,
 }: {
   onOpenLevel: (levelId: number) => void;
   onStartDue: () => void;
   onStartLevel: (levelId: number) => void;
   onOpenSettings: () => void;
+  onOpenLibrary: () => void;
 }) {
   const [data, setData] = useState<ChordDeckOverviewPublic | null>(null);
   const [loading, setLoading] = useState(true);
@@ -159,7 +167,10 @@ function DeckPicker({
   return (
     <>
       <div className="wf-header">
-        <h2 className="wf-title" style={{ fontSize: 22 }}>Chord Flash Cards</h2>
+        <h2 className="wf-title" style={{ fontSize: 22, flex: 1 }}>Chord Flash Cards</h2>
+        <button className="btn icon" aria-label="Chord library" onClick={onOpenLibrary}>
+          <Icon name="lib" size={16} />
+        </button>
         <button className="btn icon" aria-label="Settings" onClick={onOpenSettings}>
           ⚙
         </button>
