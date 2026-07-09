@@ -238,6 +238,68 @@ function powerVoicings(rootPc) {
 
 const MAX_VOICINGS = 4;
 
+// ── movable-shape templates (to guarantee 6th- + 5th-string coverage) ──
+// For each quality, the best verified root-position movable grip whose bass
+// note is on the 6th (index 0) or 5th (index 1) string. Keyed "qualityId:bass".
+function buildTemplates() {
+  const best = new Map(); // key → { score, template }
+  for (const key of guitar.keys) {
+    const kpc = parseNote(key).pc;
+    const entries = guitar.chords[key.replace("#", "sharp")] || [];
+    for (const q of Q) {
+      if (q.suffix === "__power__") continue;
+      const e = entries.find((x) => x.suffix === q.suffix);
+      if (!e) continue;
+      for (const p of e.positions) {
+        if (p.frets.some((f) => f === 0)) continue; // must be movable (no open strings)
+        const b = p.frets.findIndex((f) => f !== -1);
+        if (b !== 0 && b !== 1) continue; // bass on 6th or 5th string
+        const rootAbs = p.baseFret + p.frets[b] - 1;
+        if ((PC_OPEN[b] + rootAbs) % 12 !== kpc) continue; // root in the bass (root position)
+        const played = p.frets.filter((f) => f !== -1).length;
+        // Prefer the root at/near the barre (small root window-fret) so the shape
+        // transposes to a low position for every root; then fuller, then lower.
+        const score = -p.frets[b] * 1000 + played * 100 - p.baseFret;
+        const mk = `${q.id}:${b}`;
+        const cur = best.get(mk);
+        if (!cur || score > cur.score) {
+          best.set(mk, {
+            score,
+            template: { frets: p.frets.slice(), fingers: p.fingers.slice(), barres: barreObjs(p), bassStr: b, rootWindowFret: p.frets[b] },
+          });
+        }
+      }
+    }
+  }
+  const map = new Map();
+  for (const [k, v] of best) map.set(k, v.template);
+  return map;
+}
+
+// Slide a template to a target root by choosing the base fret that puts the
+// root under the bass string. The window-relative frets/fingers/barres are
+// unchanged — that's exactly how a barre chord moves along the neck.
+function transposeTemplate(t, targetPc) {
+  const rootAbs = ((targetPc - PC_OPEN[t.bassStr]) % 12 + 12) % 12;
+  let baseFret = rootAbs - (t.rootWindowFret - 1);
+  while (baseFret < 1) baseFret += 12;
+  return {
+    id: `${t.bassStr === 0 ? "eshape" : "ashape"}-${baseFret}fr`,
+    label: `${t.bassStr === 0 ? "6th" : "5th"}-string root · barre, ${ordinal(baseFret)} fret`,
+    frets: t.frets.slice(),
+    fingers: t.fingers.slice(),
+    baseFret,
+    barres: t.barres.map((b) => ({ ...b })),
+    category: "barre",
+    cagedShape: t.bassStr === 0 ? "E" : "A",
+    inversionBass: null,
+    difficultyTier: 3,
+    recommendedForTier: false,
+  };
+}
+
+const TEMPLATES = buildTemplates();
+
 // ── build ────────────────────────────────────────────────────────────────
 const chords = [];
 const flagged = [];
@@ -301,6 +363,20 @@ for (const key of guitar.keys) {
       if (pos.capo) voicing.capo = true;
       if (Array.isArray(pos.midi)) voicing.midi = pos.midi;
       voicings.push(voicing);
+    }
+
+    // Guarantee both a 6th-string-root and a 5th-string-root fingering. Where
+    // the dataset lacks one, slide a verified movable template of this quality
+    // to the target root (a barre chord is the same grip moved along the neck).
+    const present = new Set(voicings.map((v) => v.frets.findIndex((f) => f !== -1)));
+    const kpc = parseNote(key).pc;
+    for (const bs of [0, 1]) {
+      if (present.has(bs)) continue;
+      const t = TEMPLATES.get(`${q.id}:${bs}`);
+      if (!t) continue;
+      const v = transposeTemplate(t, kpc);
+      v.difficultyTier = Math.max(chordTier, 3);
+      voicings.push(v);
     }
 
     chords.push({
