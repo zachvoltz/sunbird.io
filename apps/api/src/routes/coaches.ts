@@ -896,7 +896,7 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
 
   const coachFilter = user.role === "COACH" ? { coachId: user.id } : {};
 
-  const [student, bookings, streak, assignments, takes, latestSentNote, goals] = await Promise.all([
+  const [student, bookings, streak, assignments, takes, latestSentNote, goals, chordSettings] = await Promise.all([
     db.user.findUnique({
       where: { id: studentId },
       select: {
@@ -950,6 +950,9 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
       where: { studentId, status: { not: "ARCHIVED" }, ...(user.role === "COACH" ? { coachId: user.id } : {}) },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }).catch(() => []),
+    db.chordSettings
+      .findUnique({ where: { userId: studentId }, select: { inDailyRoutine: true } })
+      .catch(() => null),
   ]);
 
   if (!student) {
@@ -1049,7 +1052,10 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
         createdAt: v.createdAt.toISOString(),
         addedBy: v.addedBy,
       })) ?? [],
+    // Coach-managed routine stays exactly as authored; the student-added chord
+    // practice is surfaced read-only via chordFlashcardsInRoutine below.
     routine: parseRoutine((student as any).currentRoutine),
+    chordFlashcardsInRoutine: chordSettings?.inDailyRoutine === true,
     goals: goals.map(serializeGoal),
   };
 

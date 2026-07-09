@@ -685,6 +685,10 @@ export interface StudentDetailPublic {
   latestLessonSummary: LessonSummaryPublic | null;
   latestNoteVoiceMemos: NoteVoiceMemoPublic[];
   routine: RoutinePublic;
+  // True when the student has self-added a Chord Flash Cards stop to their
+  // daily practice (shown read-only on the coach's view; it isn't part of the
+  // coach-managed routine). Optional for back-compat.
+  chordFlashcardsInRoutine?: boolean;
   // Practice goals the student set, shared with this coach. New (un-discussed)
   // goals are surfaced on the coach's session-prep agenda.
   goals: GoalPublic[];

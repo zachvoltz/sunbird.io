@@ -150,3 +150,24 @@ describe("take notifications", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("coach sees student's self-added chord practice", () => {
+  it("surfaces chordFlashcardsInRoutine when the student enabled it", async () => {
+    await seedBooking(); // coach must coach the student
+
+    // Coach detail: off by default.
+    const before = await jsonRequest(app, `/api/coaches/students/${studentId}`, { cookie: coachCookie });
+    expect(before.status).toBe(200);
+    expect(((await before.json()) as any).data.chordFlashcardsInRoutine).toBe(false);
+
+    // Student enables it.
+    await jsonRequest(app, "/api/me/chords/settings", {
+      method: "PUT",
+      cookie: studentCookie,
+      body: { inDailyRoutine: true },
+    });
+
+    const after = await jsonRequest(app, `/api/coaches/students/${studentId}`, { cookie: coachCookie });
+    expect(((await after.json()) as any).data.chordFlashcardsInRoutine).toBe(true);
+  });
+});

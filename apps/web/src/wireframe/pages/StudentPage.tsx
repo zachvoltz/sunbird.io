@@ -364,6 +364,24 @@ function StudentDesktop({ detail, loading }: { detail: StudentDetailPublic | und
                 />
               </div>
 
+              {/* Student-added self-practice — read-only (not part of the
+                  coach-managed routine above). */}
+              {detail.chordFlashcardsInRoutine && (
+                <div
+                  className="box mt-2"
+                  style={{ display: "flex", alignItems: "center", gap: 12, background: "var(--paper-2)" }}
+                >
+                  <span style={{ fontSize: 20, lineHeight: 1 }}>🗓️</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ fontSize: 14.5 }}>Chord Flash Cards</b>
+                    <div className="tiny muted">
+                      {firstName} added chord practice to their daily routine
+                    </div>
+                  </div>
+                  <span className="chip">self-added</span>
+                </div>
+              )}
+
               {/* Assignments — REAL */}
               <div className="row between mt-3 mb-2">
                 <div className="small muted">
