@@ -589,7 +589,7 @@ function CardFront({
 
   const caption =
     status === "listening"
-      ? "Play the chord — each tone lights up as it's detected"
+      ? "Play the notes one at a time — each lights up as it's detected"
       : status === "denied"
         ? "Allow mic access to auto-detect, or tap a tone to reveal"
         : status === "requesting"
