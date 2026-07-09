@@ -84,6 +84,39 @@ function playChord(notes: string[]) {
   setTimeout(() => ctx.close().catch(() => {}), 2200);
 }
 
+// Bright ascending C-major arpeggio + a final octave — a "level-up" chime for
+// the all-tones-hit celebration.
+function playSuccessChime() {
+  try {
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 · E5 · G5 · C6
+    notes.forEach((freq, i) => {
+      const t = now + i * 0.075;
+      const last = i === notes.length - 1;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "triangle";
+      osc.frequency.value = freq;
+      const peak = last ? 0.22 : 0.16;
+      const tail = last ? 0.6 : 0.4;
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(peak, t + 0.012);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + tail);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(t);
+      osc.stop(t + tail + 0.05);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 1100);
+  } catch {
+    /* audio unavailable — the visual burst still plays */
+  }
+}
+
 // ── view state ──
 type View =
   | { name: "decks" }
@@ -584,6 +617,7 @@ function CardFront({
     if (!allHit || firedRef.current) return;
     firedRef.current = true;
     setCelebrating(true);
+    playSuccessChime();
     const t = setTimeout(() => revealRef.current(), 1250);
     return () => clearTimeout(t);
   }, [allHit]);
