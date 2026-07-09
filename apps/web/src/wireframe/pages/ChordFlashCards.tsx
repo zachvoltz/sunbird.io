@@ -11,42 +11,8 @@ import type {
 import { chordsApi } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
-import { MobileStatusBar } from "../components/MobileStatusBar";
 import { ChordChart, MasteryRing } from "../components/ChordChart";
 import { useChordDetector } from "../hooks/useChordDetector";
-
-// ── phone-frame card, matching the practice section's other mobile pages ──
-function MobileCard({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      className="dt-main-body"
-      style={{
-        height: "100%",
-        display: "flex",
-        alignItems: "stretch",
-        justifyContent: "center",
-        padding: 24,
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 390,
-          minHeight: 0,
-          border: "1.5px solid var(--ink)",
-          borderRadius: 22,
-          background: "var(--paper)",
-          boxShadow: "3px 4px 0 rgba(0,0,0,0.08)",
-          overflow: "hidden",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
 
 // Parse a note name to its pitch class (0–11). Handles any number of sharps
 // or flats, including the double accidentals the library uses (e.g. "Bbb").
@@ -234,9 +200,13 @@ export function ChordFlashCardsPage() {
 
   return (
     <STFrame side="practice">
-      <MobileCard>
-        <div className="wf" style={{ height: "100%", display: "flex", flexDirection: "column", minHeight: 0 }}>
-          <MobileStatusBar />
+      {/* Full-bleed: fills the width of the practice content area on desktop and
+          shrinks to the viewport on mobile (no phone frame). */}
+      <div className="dt-main-body" style={{ height: "100%", padding: 0, minHeight: 0 }}>
+        <div
+          className="wf"
+          style={{ height: "100%", width: "100%", display: "flex", flexDirection: "column", minHeight: 0, overflow: "hidden" }}
+        >
           {view.name === "decks" && (
             <DeckPicker
               onOpenLevel={(levelId) => setView({ name: "level", levelId })}
@@ -267,7 +237,7 @@ export function ChordFlashCardsPage() {
             />
           )}
         </div>
-      </MobileCard>
+      </div>
     </STFrame>
   );
 }
