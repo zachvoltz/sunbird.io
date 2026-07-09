@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   ChordCardPublic,
   ChordCardStatus,
@@ -13,6 +13,7 @@ import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { MobileStatusBar } from "../components/MobileStatusBar";
 import { ChordChart, MasteryRing } from "../components/ChordChart";
+import { useChordDetector } from "../hooks/useChordDetector";
 
 // ── phone-frame card, matching the practice section's other mobile pages ──
 function MobileCard({ children }: { children: React.ReactNode }) {
@@ -539,7 +540,7 @@ function SessionShell({
   );
 }
 
-// ── card FRONT · chord name + simulated note detector ──
+// ── card FRONT · chord name + live mic note detector ──
 function CardFront({
   card,
   micOn,
@@ -549,25 +550,51 @@ function CardFront({
   micOn: boolean;
   onReveal: () => void;
 }) {
-  // Simulated live detector: tones light up one-by-one, mirroring the
-  // wireframe's "each tone reveals as it's detected" behaviour. This is a
-  // formative aid (a design preview of on-device pitch detection), never a
-  // grade — the student self-grades on the back.
-  const [detected, setDetected] = useState(0);
   const [hintTier, setHintTier] = useState(0);
   const total = card.tones.length;
 
-  useEffect(() => {
-    if (!micOn) return;
-    setDetected(0);
-    let n = 0;
-    const id = setInterval(() => {
-      n += 1;
-      setDetected(n);
-      if (n >= total) clearInterval(id);
-    }, 1000);
-    return () => clearInterval(id);
-  }, [card.id, micOn, total]);
+  // Target pitch classes for this card (stable per card).
+  const targets = useMemo(
+    () => card.tones.map((t) => PITCH_CLASS[t.note] ?? 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [card.id],
+  );
+
+  // Real detection off the microphone. It only lights a tone once that note is
+  // actually sounding — nothing reveals on its own. This is a formative aid,
+  // never a grade (the student self-grades on the back).
+  const { status, level, detected } = useChordDetector(targets, micOn, card.id);
+
+  // When the mic isn't available, let the student tap a tone to reveal it.
+  const [manual, setManual] = useState<Set<number>>(new Set());
+  const micActive = status === "listening" || status === "requesting";
+  const reveal = card.tones.map((_, i) => detected[i] || manual.has(i));
+  const onCount = reveal.filter(Boolean).length;
+  const tappable = !micActive; // don't let taps give the answer away while listening
+
+  const statusLabel =
+    status === "requesting"
+      ? "Enabling mic…"
+      : status === "listening"
+        ? onCount >= total
+          ? "All tones detected"
+          : "Listening…"
+        : status === "denied"
+          ? "Mic blocked"
+          : status === "unsupported"
+            ? "Mic not supported"
+            : status === "error"
+              ? "Mic unavailable"
+              : "Ready";
+
+  const caption =
+    status === "listening"
+      ? "Play the chord — each tone lights up as it's detected"
+      : status === "denied"
+        ? "Allow mic access to auto-detect, or tap a tone to reveal"
+        : status === "requesting"
+          ? "Waiting for microphone permission…"
+          : "Tap a tone to reveal it, then check the back";
 
   const hints = [
     `Root note is ${card.tones[0]?.note ?? "?"}`,
@@ -586,17 +613,19 @@ function CardFront({
       {micOn ? (
         <div className="box filled" style={{ width: "100%", marginTop: "auto", padding: "12px 12px 13px" }}>
           <div className="row between" style={{ marginBottom: 11 }}>
-            <span className="row" style={{ gap: 7, fontWeight: 700, fontSize: 12.5, color: "var(--accent)" }}>
-              <EqBars /> {detected >= total ? "Detected" : "Listening…"}
+            <span className="row" style={{ gap: 7, fontWeight: 700, fontSize: 12.5, color: micActive ? "var(--accent)" : "var(--ink-faint)" }}>
+              <EqBars level={level} active={status === "listening"} /> {statusLabel}
             </span>
-            <span className="tiny muted" style={{ fontWeight: 700 }}>{Math.min(detected, total)} / {total} tones</span>
+            <span className="tiny muted" style={{ fontWeight: 700 }}>{onCount} / {total} tones</span>
           </div>
           <div className="row" style={{ gap: 8, alignItems: "stretch" }}>
             {card.tones.map((t, i) => {
-              const on = i < detected;
+              const on = reveal[i];
               return (
-                <div
+                <button
                   key={i}
+                  onClick={tappable ? () => setManual((m) => new Set(m).add(i)) : undefined}
+                  disabled={!tappable || on}
                   style={{
                     position: "relative",
                     flex: 1,
@@ -614,6 +643,8 @@ function CardFront({
                     justifyContent: "center",
                     opacity: on ? 1 : 0.75,
                     transition: "all .3s ease",
+                    cursor: tappable && !on ? "pointer" : "default",
+                    font: "inherit",
                   }}
                 >
                   {on && (
@@ -641,12 +672,12 @@ function CardFront({
                   <span className="tiny" style={{ fontWeight: 700, color: on ? "rgba(255,255,255,0.9)" : "var(--ink-faint)", whiteSpace: "nowrap" }}>
                     {t.degree}
                   </span>
-                </div>
+                </button>
               );
             })}
           </div>
           <div className="tiny muted" style={{ textAlign: "center", marginTop: 10 }}>
-            Play the chord — each tone reveals its name as it's detected
+            {caption}
           </div>
         </div>
       ) : (
@@ -686,23 +717,26 @@ function CardFront({
   );
 }
 
-function EqBars() {
+// Equalizer meter. When `active`, bar heights track the live mic `level` so it
+// visibly reacts to playing; otherwise it sits idle and dim.
+function EqBars({ level = 0, active = true }: { level?: number; active?: boolean }) {
+  const base = [0.55, 1, 0.72, 1.1];
   return (
     <span style={{ display: "inline-flex", alignItems: "flex-end", gap: 2, height: 16 }}>
-      {[6, 13, 9, 15].map((h, i) => (
+      {base.map((b, i) => (
         <i
           key={i}
           style={{
             width: 3,
-            height: h,
+            height: active ? Math.min(16, Math.max(3, 16 * (0.22 + level * b * 1.3))) : 4,
             background: "var(--accent)",
             borderRadius: 2,
             display: "inline-block",
-            animation: `cfc-eq 0.9s ease-in-out ${i * 0.12}s infinite alternate`,
+            transition: "height .08s ease",
+            opacity: active ? 1 : 0.4,
           }}
         />
       ))}
-      <style>{`@keyframes cfc-eq { from { transform: scaleY(0.5); } to { transform: scaleY(1); } }`}</style>
     </span>
   );
 }
