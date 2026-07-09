@@ -1,10 +1,17 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
-import { parseRoutine, chordRoutineItem } from "../lib/routine";
+import { parseRoutine, serializeRoutine, chordRoutineItem } from "../lib/routine";
 import { computeStreak, streakDays } from "../lib/streak";
 import { serializeGoal } from "../lib/goals";
-import { CHORD_ROUTINE_ITEM_ID, createGoalSchema, updateGoalSchema, setRoleSchema } from "@sunbird/shared";
+import {
+  CHORD_ROUTINE_ITEM_ID,
+  createGoalSchema,
+  updateGoalSchema,
+  setRoleSchema,
+  updateCustomRoutineSchema,
+} from "@sunbird/shared";
+import type { RoutineItem } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { postActivityCard } from "../lib/conversations";
 
@@ -94,7 +101,7 @@ me.get("/student-data", requireAuth, async (c) => {
       where: { id: user.id },
       select: {
         id: true, name: true, email: true, avatarUrl: true, bio: true,
-        age: true, instrument: true, currentRoutine: true,
+        age: true, instrument: true, currentRoutine: true, studentRoutine: true,
       },
     }),
     db.booking.findMany({
@@ -225,6 +232,18 @@ me.get("/student-data", requireAuth, async (c) => {
       completedToday: doneIds.has(it.id),
     };
   });
+  // The student's own self-added exercises, after the coach's items.
+  const customRoutine = parseRoutine((student as any).studentRoutine);
+  for (const it of customRoutine.items) {
+    enrichedItems.push({
+      ...it,
+      audioUrl: null,
+      midiUrl: null,
+      pdfUrl: null,
+      hasMidi: false,
+      completedToday: doneIds.has(it.id),
+    });
+  }
   // Student-added Chord Flash Cards stop (links to the trainer; rendered
   // specially by its id on the practice path).
   if (chordEnabled) {
@@ -811,18 +830,22 @@ me.post("/routine/complete", requireAuth, async (c) => {
     return c.json({ error: "routineItemId required" }, 400);
   }
 
-  // Guard: the id must belong to the student's own current routine (coach
-  // items, or the student-added Chord Flash Cards stop when enabled).
+  // Guard: the id must belong to the student's routine — coach items, their
+  // own self-added exercises, or the Chord Flash Cards stop when enabled.
   const [student, chordSettings] = await Promise.all([
-    db.user.findUnique({ where: { id: user.id }, select: { currentRoutine: true } }),
+    db.user.findUnique({ where: { id: user.id }, select: { currentRoutine: true, studentRoutine: true } }),
     db.chordSettings
       .findUnique({ where: { userId: user.id }, select: { inDailyRoutine: true, dailyRoutineSince: true } })
       .catch(() => null),
   ]);
   const routine = parseRoutine(student?.currentRoutine ?? null);
+  const customRoutine = parseRoutine(student?.studentRoutine ?? null);
   const chordEnabled = chordSettings?.inDailyRoutine === true;
   const isChordItem = chordEnabled && routineItemId === CHORD_ROUTINE_ITEM_ID;
-  if (!isChordItem && !routine.items.some((it) => it.id === routineItemId)) {
+  const validId =
+    routine.items.some((it) => it.id === routineItemId) ||
+    customRoutine.items.some((it) => it.id === routineItemId);
+  if (!isChordItem && !validId) {
     return c.json({ error: "Routine item not found" }, 404);
   }
 
@@ -879,6 +902,34 @@ me.post("/routine/complete", requireAuth, async (c) => {
       },
     },
   });
+});
+
+// PUT /api/me/routine/custom — the student's own self-added exercises. The
+// full ordered list is sent on every change (add / reorder / remove). Stored
+// separately from the coach-managed routine so neither clobbers the other.
+me.put("/routine/custom", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const parsed = updateCustomRoutineSchema.safeParse(await c.req.json().catch(() => ({})));
+  if (!parsed.success) {
+    return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid routine" }, 400);
+  }
+  const db = getDb();
+  // Keep existing ids (so completion history survives reorders); mint one for
+  // new items. The "custom-" prefix keeps them distinct from coach item ids.
+  const items: RoutineItem[] = parsed.data.items.map((it) => ({
+    id: it.id && it.id.startsWith("custom-") ? it.id : `custom-${crypto.randomUUID()}`,
+    libraryItemId: null,
+    kind: "exercise",
+    title: it.title,
+    bars: null,
+    bpmStart: it.bpmStart ?? null,
+    bpmEnd: it.bpmEnd ?? null,
+    durationMin: it.durationMin ?? null,
+    note: it.note ?? null,
+  }));
+  const stored = serializeRoutine(items);
+  await db.user.update({ where: { id: user.id }, data: { studentRoutine: stored } });
+  return c.json({ data: parseRoutine(stored) });
 });
 
 // POST /api/me/practice-note — a quick note the student jots after

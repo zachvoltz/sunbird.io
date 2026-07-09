@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { CHORD_ROUTINE_ITEM_ID } from "@sunbird/shared";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
-import { apiFetch } from "@/lib/api";
+import { apiFetch, routineApi } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { AudioPlayer, MidiPlayer } from "../components/WaveformPlayer";
@@ -506,6 +506,24 @@ export function PracticePathPage() {
   // the two-pane layout kicks in.
   const isMobile = useIsMobile(768);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
+
+  // The student's own exercises (kept distinct from coach items + the chord
+  // stop by their id prefix).
+  const customItems = items.filter((it) => it.id.startsWith("custom-"));
+
+  // Merge a freshly-saved custom list back into the path: coach items, then the
+  // student's custom items, then the Chord Flash Cards stop — preserving each
+  // item's completedToday.
+  function applyCustom(saved: RoutineItem[]) {
+    setItems((cur) => {
+      const doneById = new Map(cur.map((i) => [i.id, i.completedToday]));
+      const coach = cur.filter((i) => !i.id.startsWith("custom-") && i.id !== CHORD_ROUTINE_ITEM_ID);
+      const chord = cur.filter((i) => i.id === CHORD_ROUTINE_ITEM_ID);
+      const custom = saved.map((it) => ({ ...it, completedToday: doneById.get(it.id) ?? false }));
+      return [...coach, ...custom, ...chord];
+    });
+  }
 
   // Tapping a stop selects it; on mobile that floats its detail over the path.
   function selectStop(id: string) {
@@ -644,16 +662,28 @@ export function PracticePathPage() {
               </div>
             )}
 
-            <div style={{ padding: "8px 8px 24px" }}>
+            <div style={{ padding: "8px 8px 12px" }}>
               {loading && items.length === 0 ? (
                 <div className="small muted" style={{ padding: 18 }}>Loading…</div>
               ) : items.length === 0 ? (
                 <div className="box dashed small muted" style={{ margin: 12 }}>
-                  No routine set yet — your coach builds this after your next lesson.
+                  No routine yet — your coach builds this after your next lesson, or add your own below.
                 </div>
               ) : (
                 <PathSvg items={items} selectedId={selectedItem?.id ?? null} onSelect={selectStop} />
               )}
+            </div>
+
+            {/* Student-managed exercises */}
+            <div style={{ padding: "0 12px 24px" }}>
+              <button
+                className="btn ghost small"
+                style={{ width: "100%" }}
+                onClick={() => setEditorOpen(true)}
+              >
+                <Icon name="plus" size={14} />{" "}
+                {customItems.length > 0 ? "Add / edit your exercises" : "Add your own exercise"}
+              </button>
             </div>
           </div>
 
@@ -743,7 +773,162 @@ export function PracticePathPage() {
           onClose={() => setCelebrate(null)}
         />
       )}
+
+      {editorOpen && (
+        <CustomRoutineEditor
+          initial={customItems}
+          onClose={() => setEditorOpen(false)}
+          onSaved={(saved) => {
+            applyCustom(saved);
+            setEditorOpen(false);
+          }}
+        />
+      )}
     </STFrame>
+  );
+}
+
+// ── student's own exercises: add / reorder / remove ──────
+type DraftRow = { id?: string; title: string; durationMin: number | null };
+
+function CustomRoutineEditor({
+  initial,
+  onClose,
+  onSaved,
+}: {
+  initial: RoutineItem[];
+  onClose: () => void;
+  onSaved: (items: RoutineItem[]) => void;
+}) {
+  const [rows, setRows] = useState<DraftRow[]>(() =>
+    initial.length
+      ? initial.map((it) => ({ id: it.id, title: it.title, durationMin: it.durationMin ?? null }))
+      : [{ title: "", durationMin: null }],
+  );
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  function update(i: number, patch: Partial<DraftRow>) {
+    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  }
+  function move(i: number, dir: -1 | 1) {
+    setRows((r) => {
+      const j = i + dir;
+      if (j < 0 || j >= r.length) return r;
+      const next = [...r];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+  function removeRow(i: number) {
+    setRows((r) => r.filter((_, idx) => idx !== i));
+  }
+  function addRow() {
+    setRows((r) => [...r, { title: "", durationMin: null }]);
+  }
+
+  async function save() {
+    const items = rows
+      .map((r) => ({ ...r, title: r.title.trim() }))
+      .filter((r) => r.title.length > 0)
+      .map((r) => ({ id: r.id, title: r.title, durationMin: r.durationMin || null }));
+    setSaving(true);
+    setError(null);
+    try {
+      const routine = await routineApi.updateCustom(items);
+      onSaved(routine.items);
+    } catch (e: any) {
+      setError(e?.body?.error ?? "Couldn't save your exercises.");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        background: "rgba(0,0,0,0.35)",
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="box thick"
+        style={{ width: "100%", maxWidth: 460, maxHeight: "84vh", overflowY: "auto", background: "var(--paper)", padding: 18, boxShadow: "4px 5px 0 var(--ink)" }}
+      >
+        <div className="row between" style={{ marginBottom: 4 }}>
+          <h2 className="wf-title" style={{ fontSize: 22 }}>Your exercises</h2>
+          <button className="btn icon" aria-label="Close" onClick={onClose}>✕</button>
+        </div>
+        <div className="small muted" style={{ marginBottom: 12 }}>
+          Add your own practice items and drag the arrows to reorder. These sit
+          alongside your coach's routine.
+        </div>
+
+        <div className="col" style={{ gap: 8 }}>
+          {rows.map((row, i) => (
+            <div key={i} className="box" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
+              <div className="col" style={{ gap: 2 }}>
+                <button
+                  className="btn icon small"
+                  aria-label="Move up"
+                  onClick={() => move(i, -1)}
+                  disabled={i === 0}
+                  style={{ width: 26, height: 22, opacity: i === 0 ? 0.3 : 1 }}
+                >
+                  ↑
+                </button>
+                <button
+                  className="btn icon small"
+                  aria-label="Move down"
+                  onClick={() => move(i, 1)}
+                  disabled={i === rows.length - 1}
+                  style={{ width: 26, height: 22, opacity: i === rows.length - 1 ? 0.3 : 1 }}
+                >
+                  ↓
+                </button>
+              </div>
+              <input
+                value={row.title}
+                onChange={(e) => update(i, { title: e.target.value })}
+                placeholder="Exercise name"
+                maxLength={120}
+                style={{ flex: 1, minWidth: 0, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 16, color: "var(--ink)", padding: "4px 2px" }}
+              />
+              <input
+                type="number"
+                value={row.durationMin ?? ""}
+                onChange={(e) => update(i, { durationMin: e.target.value ? Math.max(1, Math.min(240, Number(e.target.value))) : null })}
+                placeholder="min"
+                min={1}
+                max={240}
+                style={{ width: 56, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 15, color: "var(--ink)", textAlign: "center", padding: "4px 2px" }}
+              />
+              <button className="btn icon small" aria-label="Remove" onClick={() => removeRow(i)} style={{ width: 30, height: 30 }}>✕</button>
+            </div>
+          ))}
+        </div>
+
+        <button className="btn ghost small" style={{ width: "100%", marginTop: 10 }} onClick={addRow}>
+          <Icon name="plus" size={14} /> Add another
+        </button>
+
+        {error && <div className="tiny" style={{ color: "var(--accent)", marginTop: 8 }}>{error}</div>}
+
+        <div className="row" style={{ gap: 10, marginTop: 16 }}>
+          <button className="btn grow" onClick={onClose} disabled={saving}>Cancel</button>
+          <button className="btn accent grow" onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save exercises"}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

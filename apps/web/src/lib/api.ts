@@ -11,8 +11,23 @@ import type {
   ConversationSummary,
   MessageAttachment,
   NotificationPreferencePublic,
+  RoutineItem,
+  RoutinePublic,
   UserPublic,
 } from "@sunbird/shared";
+
+// The student's own routine exercises (add / reorder / remove).
+export type CustomRoutineInput = Pick<RoutineItem, "title"> &
+  Partial<Pick<RoutineItem, "id" | "durationMin" | "bpmStart" | "bpmEnd" | "note">>;
+
+export const routineApi = {
+  updateCustom(items: CustomRoutineInput[]) {
+    return apiFetch<{ data: RoutinePublic }>("/api/me/routine/custom", {
+      method: "PUT",
+      body: JSON.stringify({ items }),
+    }).then((r) => r.data);
+  },
+};
 
 export class ApiError extends Error {
   constructor(

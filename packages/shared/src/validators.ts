@@ -446,6 +446,23 @@ export const gradeChordSchema = z.object({
   grade: z.enum(["again", "hard", "good", "easy"]),
 });
 
+// The student's own routine exercises (add / reorder / remove). The full list
+// is sent on every change (like the coach routine editor).
+export const updateCustomRoutineSchema = z.object({
+  items: z
+    .array(
+      z.object({
+        id: z.string().max(80).optional(),
+        title: z.string().min(1, "Give the exercise a name").max(120),
+        durationMin: z.number().int().min(1).max(240).nullable().optional(),
+        bpmStart: z.number().int().min(20).max(400).nullable().optional(),
+        bpmEnd: z.number().int().min(20).max(400).nullable().optional(),
+        note: z.string().max(500).nullable().optional(),
+      }),
+    )
+    .max(30),
+});
+
 export const updateChordSettingsSchema = z
   .object({
     handedness: z.enum(["right", "left"]).optional(),

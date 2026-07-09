@@ -43,6 +43,10 @@ model User {
   // Coach-managed; rendered on the student's Practice path and the
   // coach's Plan/Next tabs. Stored as JSON to avoid a separate table.
   currentRoutine String?
+  // The student's own self-added exercises — JSON-stringified RoutineItem[].
+  // Kept separate from the coach-managed currentRoutine so neither overwrites
+  // the other; merged onto the practice path at read time.
+  studentRoutine String?
 
   // Stripe Connect (Express) — set once the coach starts the
   // onboarding flow. Flags mirror Stripe's account.{charges,payouts,

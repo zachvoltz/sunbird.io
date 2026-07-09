@@ -245,4 +245,54 @@ describe("Chord Flash Cards API", () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it("adds, reorders, and completes the student's own exercises", async () => {
+    const add = await jsonRequest(app, "/api/me/routine/custom", {
+      method: "PUT",
+      cookie,
+      body: { items: [{ title: "Warm up" }, { title: "Scales", durationMin: 10 }] },
+    });
+    expect(add.status).toBe(200);
+    const r1 = ((await add.json()) as any).data.items as Array<{ id: string; title: string }>;
+    expect(r1).toHaveLength(2);
+    expect(r1.every((i) => i.id.startsWith("custom-"))).toBe(true);
+    expect(r1[0].title).toBe("Warm up");
+
+    // They appear on the practice path.
+    const sd = await jsonRequest(app, "/api/me/student-data", { cookie });
+    const titles = ((await sd.json()) as any).data.routine.items.map((i: any) => i.title);
+    expect(titles).toEqual(expect.arrayContaining(["Warm up", "Scales"]));
+
+    // Completing one is accepted (custom ids are valid).
+    const done = await jsonRequest(app, "/api/me/routine/complete", {
+      method: "POST",
+      cookie,
+      body: { routineItemId: r1[0].id, completed: true },
+    });
+    expect(done.status).toBe(200);
+
+    // Reorder keeps ids stable so completion history survives.
+    const reorder = await jsonRequest(app, "/api/me/routine/custom", {
+      method: "PUT",
+      cookie,
+      body: {
+        items: [
+          { id: r1[1].id, title: "Scales", durationMin: 10 },
+          { id: r1[0].id, title: "Warm up" },
+        ],
+      },
+    });
+    const r2 = ((await reorder.json()) as any).data.items as Array<{ id: string }>;
+    expect(r2[0].id).toBe(r1[1].id);
+    expect(r2[1].id).toBe(r1[0].id);
+  });
+
+  it("rejects completing an item that isn't in the routine", async () => {
+    const res = await jsonRequest(app, "/api/me/routine/complete", {
+      method: "POST",
+      cookie,
+      body: { routineItemId: "custom-does-not-exist", completed: true },
+    });
+    expect(res.status).toBe(404);
+  });
 });
