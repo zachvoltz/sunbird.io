@@ -5,6 +5,8 @@ import { resetDb } from "../../lib/db";
 import type {
   ChordDeckOverviewPublic,
   ChordLevelDetailPublic,
+  ChordLibraryDetailPublic,
+  ChordLibraryListPublic,
   ChordSessionPublic,
   ChordSettingsPublic,
 } from "@sunbird/shared";
@@ -147,5 +149,54 @@ describe("Chord Flash Cards API", () => {
     // Window-relative library frets project to absolute positions across 6 strings.
     expect(bb7!.voicings[0].shape.fingering).toHaveLength(6);
     expect(bb7!.voicings.some((v) => v.recommended)).toBe(true);
+  });
+
+  it("browses the library grouped by root", async () => {
+    const res = await jsonRequest(app, "/api/me/chords/library?root=C", { cookie });
+    expect(res.status).toBe(200);
+    const { data } = (await res.json()) as { data: ChordLibraryListPublic };
+    expect(data.groups).toHaveLength(1);
+    expect(data.groups[0].root).toBe("C");
+    const names = data.groups[0].items.map((i) => i.name);
+    expect(names).toContain("Cmaj7");
+    const cmaj7 = data.groups[0].items.find((i) => i.name === "Cmaj7")!;
+    expect(cmaj7.shapeCount).toBeGreaterThan(1);
+    expect(cmaj7.shape.fingering).toHaveLength(6);
+  });
+
+  it("fuzzy-searches (Cm surfaces Cmaj via alias)", async () => {
+    const res = await jsonRequest(app, "/api/me/chords/library?q=Cm&root=C", { cookie });
+    const { data } = (await res.json()) as { data: ChordLibraryListPublic };
+    const names = data.groups.flatMap((g) => g.items).map((i) => i.name);
+    expect(names).toContain("Cm7");
+    expect(names).toContain("Cmaj7"); // fuzzy: "Cm" ⊂ alias "Cmaj7"
+  });
+
+  it("serves chord detail with per-voicing metadata", async () => {
+    const res = await jsonRequest(app, "/api/me/chords/library/c-maj7", { cookie });
+    expect(res.status).toBe(200);
+    const { data } = (await res.json()) as { data: ChordLibraryDetailPublic };
+    expect(data.name).toBe("Cmaj7");
+    expect(data.notes).toEqual(["C", "E", "G", "B"]);
+    expect(data.voicings.length).toBeGreaterThan(1);
+    const v = data.voicings[0];
+    expect(v.position).toBeTruthy();
+    expect(v.fingersLabel).toBeTruthy();
+    expect(v.rootString).toMatch(/string/);
+    expect(["beginner", "intermediate", "advanced"]).toContain(v.difficulty);
+  });
+
+  it("adds a library chord to practice (schedules it due)", async () => {
+    const add = await jsonRequest(app, "/api/me/chords/library/g-major/add", { method: "POST", cookie });
+    expect(add.status).toBe(200);
+    expect(((await add.json()) as { data: { added: boolean } }).data.added).toBe(true);
+    const due = await jsonRequest(app, "/api/me/chords/session?deck=due", { cookie });
+    const { data } = (await due.json()) as { data: ChordSessionPublic };
+    expect(data.cards.some((c) => c.id === "g-major")).toBe(true);
+  });
+
+  it("404s an unknown library chord", async () => {
+    const res = await jsonRequest(app, "/api/me/chords/library/not-a-chord", { cookie });
+    expect(res.status).toBe(404);
   });
 });

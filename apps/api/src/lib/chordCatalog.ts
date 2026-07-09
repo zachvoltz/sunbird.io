@@ -11,6 +11,11 @@
 import type {
   ChordCardPublic,
   ChordCardStatus,
+  ChordDifficulty,
+  ChordLibraryDetailPublic,
+  ChordLibraryItemPublic,
+  ChordLibraryListPublic,
+  ChordLibraryVoicingPublic,
   ChordShape,
   ChordTone,
   ChordVoicingPublic,
@@ -31,11 +36,14 @@ interface LibVoicing {
   baseFret: number;
   barres?: LibBarre[];
   category: string;
+  cagedShape?: string | null;
+  difficultyTier?: number;
   recommendedForTier?: boolean;
 }
 interface LibChord {
   id: string;
   canonicalName: string;
+  displayAliases?: string[];
   root: string;
   quality: string;
   formula: string[];
@@ -48,8 +56,15 @@ interface LibTier {
   name: string;
   description?: string;
 }
+interface LibQuality {
+  id: string;
+  symbol: string;
+  fullName: string;
+  family: string;
+}
 interface Library {
   tiers: LibTier[];
+  qualities: LibQuality[];
   chords: LibChord[];
 }
 
@@ -140,5 +155,127 @@ export function toCard(
     tones: toTones(chord),
     voicings: toVoicings(chord),
     status,
+  };
+}
+
+// ── chord library (browse / search reference) ────────────
+const QUALITY_BY_ID = new Map<string, LibQuality>();
+for (const q of (LIB.qualities ?? [])) QUALITY_BY_ID.set(q.id, q);
+
+const ROOT_ORDER = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"];
+const STRING_NAMES = ["6th", "5th", "4th", "3rd", "2nd", "1st"];
+
+function ordinal(n: number): string {
+  const s = ["th", "st", "nd", "rd"];
+  const v = n % 100;
+  return `${n}${s[(v - 20) % 10] || s[v] || s[0]}`;
+}
+function norm(s: string): string {
+  return s.toLowerCase().replace(/♯/g, "#").replace(/♭/g, "b").replace(/\s+/g, "");
+}
+function qualityLabel(chord: LibChord): string {
+  return QUALITY_BY_ID.get(chord.quality)?.fullName ?? chord.quality;
+}
+function recommendedVoicing(chord: LibChord): LibVoicing {
+  return chord.voicings.find((v) => v.recommendedForTier) ?? chord.voicings[0];
+}
+function difficultyOf(v: LibVoicing, chord: LibChord): ChordDifficulty {
+  const tier = v.difficultyTier ?? chord.difficultyTier;
+  return tier <= 2 ? "beginner" : tier <= 4 ? "intermediate" : "advanced";
+}
+function fingersLabel(v: LibVoicing): string {
+  const hasBarre = (v.barres?.length ?? 0) > 0;
+  const used = [...new Set(v.fingers.filter((f) => f > 0))].sort((a, b) => a - b);
+  const parts = used.map((f) => (hasBarre && f === 1 ? "1 barre" : String(f)));
+  return parts.length ? parts.join(" · ") : "open strings";
+}
+function rootStringLabel(v: LibVoicing): string {
+  const idx = v.frets.findIndex((f) => f !== -1);
+  const name = STRING_NAMES[idx] ?? "6th";
+  const shape = v.cagedShape ? ` (${v.cagedShape}-shape)` : "";
+  return `${name} string${shape}`;
+}
+function positionLabel(v: LibVoicing): string {
+  const hasBarre = (v.barres?.length ?? 0) > 0;
+  const isOpen = v.baseFret === 1 && !hasBarre && v.frets.some((f) => f === 0);
+  if (isOpen) return "Open position";
+  return `${ordinal(v.baseFret)} fret${hasBarre ? " (barre)" : ""}`;
+}
+
+function toLibraryVoicing(v: LibVoicing, chord: LibChord): ChordLibraryVoicingPublic {
+  return {
+    id: v.id,
+    label: v.label ?? "",
+    shape: toShape(v),
+    recommended: v.recommendedForTier === true,
+    position: positionLabel(v),
+    fingersLabel: fingersLabel(v),
+    rootString: rootStringLabel(v),
+    difficulty: difficultyOf(v, chord),
+    notes: chord.spelling,
+  };
+}
+
+function toLibraryItem(chord: LibChord): ChordLibraryItemPublic {
+  return {
+    id: chord.id,
+    name: chord.canonicalName,
+    qualityLabel: qualityLabel(chord),
+    shapeCount: chord.voicings.length,
+    root: chord.root,
+    shape: toShape(recommendedVoicing(chord)),
+  };
+}
+
+// The chord-type quick filters (matches the wireframe's chip row).
+const TYPE_MATCH: Record<string, (chord: LibChord) => boolean> = {
+  maj: (c) => c.quality === "major",
+  min: (c) => c.quality === "minor",
+  "7": (c) => c.quality === "7",
+  maj7: (c) => c.quality === "maj7",
+  m7: (c) => c.quality === "m7",
+  sus: (c) => QUALITY_BY_ID.get(c.quality)?.family === "suspended",
+  dim: (c) => ["dim", "dim7", "m7b5"].includes(c.quality),
+};
+
+export function libraryList(opts: { q?: string; root?: string; type?: string }): ChordLibraryListPublic {
+  const nq = opts.q ? norm(opts.q) : "";
+  const typeFn = opts.type && opts.type !== "All" ? TYPE_MATCH[opts.type] : undefined;
+  const wantRoot = opts.root && opts.root !== "All" ? opts.root : undefined;
+
+  const matched = LIB.chords.filter((c) => {
+    if (wantRoot && c.root !== wantRoot) return false;
+    if (typeFn && !typeFn(c)) return false;
+    if (nq) {
+      const hay = [c.canonicalName, ...(c.displayAliases ?? [])].map(norm);
+      if (!hay.some((h) => h.includes(nq))) return false;
+    }
+    return true;
+  });
+
+  const byRoot = new Map<string, ChordLibraryItemPublic[]>();
+  for (const c of matched) {
+    if (!byRoot.has(c.root)) byRoot.set(c.root, []);
+    byRoot.get(c.root)!.push(toLibraryItem(c));
+  }
+  const groups = [...byRoot.entries()]
+    .sort((a, b) => ROOT_ORDER.indexOf(a[0]) - ROOT_ORDER.indexOf(b[0]))
+    .map(([root, items]) => ({
+      root,
+      items: items.sort((a, b) => a.name.length - b.name.length || a.name.localeCompare(b.name)),
+    }));
+  return { groups, total: matched.length };
+}
+
+export function libraryDetail(chordId: string): ChordLibraryDetailPublic | undefined {
+  const found = BY_ID.get(chordId);
+  if (!found) return undefined;
+  const chord = found.chord;
+  return {
+    id: chord.id,
+    name: chord.canonicalName,
+    fullName: `${chord.root} ${qualityLabel(chord).toLowerCase()}`,
+    notes: chord.spelling,
+    voicings: chord.voicings.map((v) => toLibraryVoicing(v, chord)),
   };
 }

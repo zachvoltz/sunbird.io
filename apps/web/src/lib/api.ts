@@ -3,6 +3,8 @@ import type {
   ChordGrade,
   ChordGradeResultPublic,
   ChordLevelDetailPublic,
+  ChordLibraryDetailPublic,
+  ChordLibraryListPublic,
   ChordSessionPublic,
   ChordSettingsPublic,
   ConversationMessagePublic,
@@ -223,5 +225,30 @@ export const chordsApi = {
       method: "PUT",
       body: JSON.stringify(patch),
     }).then((r) => r.data);
+  },
+
+  // ── Chord Library (browse / search) ──
+  library(opts: { q?: string; root?: string; type?: string } = {}) {
+    const p = new URLSearchParams();
+    if (opts.q) p.set("q", opts.q);
+    if (opts.root && opts.root !== "All") p.set("root", opts.root);
+    if (opts.type && opts.type !== "All") p.set("type", opts.type);
+    const qs = p.toString();
+    return apiFetch<{ data: ChordLibraryListPublic }>(
+      `/api/me/chords/library${qs ? `?${qs}` : ""}`,
+    ).then((r) => r.data);
+  },
+
+  libraryChord(chordId: string) {
+    return apiFetch<{ data: ChordLibraryDetailPublic }>(
+      `/api/me/chords/library/${encodeURIComponent(chordId)}`,
+    ).then((r) => r.data);
+  },
+
+  addToPractice(chordId: string) {
+    return apiFetch<{ data: { added: boolean } }>(
+      `/api/me/chords/library/${encodeURIComponent(chordId)}/add`,
+      { method: "POST" },
+    ).then((r) => r.data);
   },
 };

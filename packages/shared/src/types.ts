@@ -863,3 +863,49 @@ export interface ChordSettingsPublic {
   micCheck: boolean;
 }
 
+// ─── Chord Library (browse / search reference) ───
+export type ChordDifficulty = "beginner" | "intermediate" | "advanced";
+
+// A row in the browse/search list.
+export interface ChordLibraryItemPublic {
+  id: string;
+  name: string;
+  qualityLabel: string; // e.g. "Major 7th"
+  shapeCount: number;
+  root: string;
+  shape: ChordShape; // recommended voicing, for the thumbnail
+}
+
+export interface ChordLibraryGroupPublic {
+  root: string;
+  items: ChordLibraryItemPublic[];
+}
+
+// GET /api/me/chords/library
+export interface ChordLibraryListPublic {
+  groups: ChordLibraryGroupPublic[];
+  total: number;
+}
+
+// One fingering in the chord-detail / variation views, with display metadata.
+export interface ChordLibraryVoicingPublic {
+  id: string;
+  label: string;
+  shape: ChordShape;
+  recommended: boolean;
+  position: string; // "Open position" | "3rd fret (barre)"
+  fingersLabel: string; // "1 barre · 2 · 3 · 4"
+  rootString: string; // "5th string (A-shape)"
+  difficulty: ChordDifficulty;
+  notes: string[]; // the chord's spelling
+}
+
+// GET /api/me/chords/library/:chordId
+export interface ChordLibraryDetailPublic {
+  id: string;
+  name: string;
+  fullName: string; // "C major seventh"
+  notes: string[]; // ["C","E","G","B"]
+  voicings: ChordLibraryVoicingPublic[];
+}
+

@@ -18,7 +18,7 @@ import type {
   ChordSessionPublic,
   ChordSettingsPublic,
 } from "@sunbird/shared";
-import { CATALOG, getCatalogChord, levelById, toCard } from "../lib/chordCatalog";
+import { CATALOG, getCatalogChord, levelById, libraryDetail, libraryList, toCard } from "../lib/chordCatalog";
 import { isDue, masteryPct, schedule, statusOf, type ProgressRow } from "../lib/chordSrs";
 
 type ChordsEnv = {
@@ -275,6 +275,38 @@ chords.post("/grade", requireAuth, async (c) => {
       dueAt: next.dueAt.toISOString(),
     },
   });
+});
+
+// ── Chord Library (browse / search reference) ──
+// GET /library?q=&root=&type= — grouped browse/search results.
+chords.get("/library", requireAuth, (c) => {
+  const q = c.req.query("q");
+  const root = c.req.query("root");
+  const type = c.req.query("type");
+  return c.json({ data: libraryList({ q, root, type }) });
+});
+
+// GET /library/:chordId — one chord with every fingering + metadata.
+chords.get("/library/:chordId", requireAuth, (c) => {
+  const detail = libraryDetail(c.req.param("chordId"));
+  if (!detail) return c.json({ error: "Chord not found" }, 404);
+  return c.json({ data: detail });
+});
+
+// POST /library/:chordId/add — hand the chord to the flashcards: schedule it
+// due now so it surfaces in "Due for review".
+chords.post("/library/:chordId/add", requireAuth, async (c) => {
+  const user = c.get("user")!;
+  const chordId = c.req.param("chordId");
+  if (!getCatalogChord(chordId)) return c.json({ error: "Unknown chord" }, 404);
+  const db = getDb();
+  const now = new Date();
+  await db.chordProgress.upsert({
+    where: { userId_chordId: { userId: user.id, chordId } },
+    update: { dueAt: now },
+    create: { userId: user.id, chordId, dueAt: now },
+  });
+  return c.json({ data: { added: true } });
 });
 
 // GET /settings
