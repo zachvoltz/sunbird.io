@@ -48,12 +48,16 @@ function MobileCard({ children }: { children: React.ReactNode }) {
   );
 }
 
-// ── tiny Web-Audio chord synth for the "Hear it" button ──
-const PITCH_CLASS: Record<string, number> = {
-  C: 0, "C#": 1, Db: 1, D: 2, "D#": 3, Eb: 3, E: 4, F: 5, "F#": 6, Gb: 6,
-  G: 7, "G#": 8, Ab: 8, A: 9, "A#": 10, Bb: 10, B: 11,
-};
+// Parse a note name to its pitch class (0–11). Handles any number of sharps
+// or flats, including the double accidentals the library uses (e.g. "Bbb").
+const LETTER_PC: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+function noteToPc(name: string): number {
+  let pc = LETTER_PC[name[0]] ?? 0;
+  for (const ch of name.slice(1)) pc += ch === "#" ? 1 : ch === "b" ? -1 : 0;
+  return ((pc % 12) + 12) % 12;
+}
 
+// ── tiny Web-Audio chord synth for the "Hear it" button ──
 function playChord(notes: string[]) {
   const AudioCtx =
     (window.AudioContext || (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext);
@@ -63,8 +67,7 @@ function playChord(notes: string[]) {
   let prevMidi = 47; // just below C3
   const now = ctx.currentTime;
   notes.forEach((n, i) => {
-    const pc = PITCH_CLASS[n];
-    if (pc === undefined) return;
+    const pc = noteToPc(n);
     let midi = 48 + pc; // C3 octave
     while (midi <= prevMidi) midi += 12;
     prevMidi = midi;
@@ -588,7 +591,7 @@ function CardFront({
 
   // Target pitch classes for this card (stable per card).
   const targets = useMemo(
-    () => card.tones.map((t) => PITCH_CLASS[t.note] ?? 0),
+    () => card.tones.map((t) => noteToPc(t.note)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [card.id],
   );

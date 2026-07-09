@@ -170,7 +170,6 @@ chords.get("/session", requireAuth, async (c) => {
   const user = c.get("user")!;
   const { settings, byId } = await loadContext(user.id);
   const now = new Date();
-  const notation = settings.notation;
 
   const levelParam = c.req.query("level");
   const wantLevel = levelParam ? Number(levelParam) : null;
@@ -199,7 +198,7 @@ chords.get("/session", requireAuth, async (c) => {
     }
     const cards = picks
       .slice(0, SESSION_LIMIT)
-      .map((p) => makeCard(p, byId, notation))
+      .map((p) => makeCard(p, byId))
       .filter((x): x is NonNullable<typeof x> => x !== null);
     const payload: ChordSessionPublic = { source: "level", levelId: level.id, cards };
     return c.json({ data: payload });
@@ -218,7 +217,7 @@ chords.get("/session", requireAuth, async (c) => {
   picks.sort((a, b) => sortByDue(byId, a.chordId, b.chordId));
   const cards = picks
     .slice(0, SESSION_LIMIT)
-    .map((p) => makeCard(p, byId, notation))
+    .map((p) => makeCard(p, byId))
     .filter((x): x is NonNullable<typeof x> => x !== null);
   const payload: ChordSessionPublic = { source: "due", levelId: null, cards };
   return c.json({ data: payload });
@@ -322,14 +321,10 @@ function lockedLevelIds(
   );
 }
 
-function makeCard(
-  pick: { chordId: string; levelId: number },
-  byId: Map<string, ProgressRow>,
-  notation: "sharp" | "flat",
-) {
+function makeCard(pick: { chordId: string; levelId: number }, byId: Map<string, ProgressRow>) {
   const found = getCatalogChord(pick.chordId);
   if (!found) return null;
-  return toCard(found.chord, found.levelId, statusOf(byId.get(pick.chordId)), notation);
+  return toCard(found.chord, found.levelId, statusOf(byId.get(pick.chordId)));
 }
 
 export { chords as chordRoutes };

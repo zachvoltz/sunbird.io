@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/dev.ts",
     "dev:wrangler": "wrangler dev",
+    "build:chords": "node scripts/build-chord-library.mjs",
     "build": "wrangler deploy --dry-run --outdir=dist",
     "build:web": "pnpm --filter @sunbird/web build",
     "sync:public": "find public -mindepth 1 -not -name .gitkeep -delete && cp -R ../web/dist/. public/",
@@ -27,6 +28,8 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20241205.0",
+    "@tombatossals/chords-db": "^0.5.1",
+    "ajv": "^8.20.0",
     "dotenv": "^17.3.1",
     "eslint": "^9.0.0",
     "tsx": "^4.21.0",

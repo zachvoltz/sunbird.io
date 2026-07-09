@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/schemas/chord-library.schema.json",
+  "title": "Guitar Chord Library",
+  "description": "A complete guitar chord library for the Chord Flash Cards feature. Contains a difficulty-tier registry, a chord-quality registry (interval formulas), and the chord records themselves (each with one or more verified voicings). Conventions: all 6-element arrays are ordered from string 6 (low E, index 0) to string 1 (high E, index 5). Interval tokens and note names use ASCII accidentals ('b' = flat, '#' = sharp, 'bb'/'##' = double). The UI may render these as unicode.",
+  "type": "object",
+  "required": ["meta", "tiers", "qualities", "chords"],
+  "additionalProperties": false,
+  "properties": {
+    "meta": {
+      "type": "object",
+      "required": ["schemaVersion", "instrument", "stringCount", "tuning"],
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": { "type": "string", "description": "Semantic version of this library file's structure, e.g. '1.0.0'." },
+        "instrument": { "type": "string", "const": "guitar" },
+        "stringCount": { "type": "integer", "const": 6 },
+        "tuning": {
+          "type": "array",
+          "description": "Scientific-pitch tuning of each string from low (string 6) to high (string 1). Standard tuning shown in the example.",
+          "items": { "type": "string", "pattern": "^[A-G](#|b)?[0-9]$" },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "fretConvention": {
+          "type": "string",
+          "description": "Human-readable reminder of the frets encoding. See the 'frets' property of a voicing for the authoritative definition."
+        }
+      }
+    },
+
+    "tiers": {
+      "type": "array",
+      "description": "Difficulty tiers, ordered easiest-first. See the taxonomy doc for full contents.",
+      "items": { "$ref": "#/$defs/tier" },
+      "minItems": 1
+    },
+
+    "qualities": {
+      "type": "array",
+      "description": "Chord-quality registry. One entry per quality (major, m7, dim7, ...). Holds the canonical interval formula and symbols; chord records reference these by id. Deriving spellings for all 12 roots from these formulas is safe, deterministic theory.",
+      "items": { "$ref": "#/$defs/quality" },
+      "minItems": 1
+    },
+
+    "chords": {
+      "type": "array",
+      "description": "The chord records. Typically one per (root x quality) combination the library covers, each carrying one or more verified voicings.",
+      "items": { "$ref": "#/$defs/chord" },
+      "minItems": 1
+    }
+  },
+
+  "$defs": {
+    "noteName": {
+      "type": "string",
+      "description": "A pitch class with optional accidental, e.g. 'C', 'F#', 'Bb', 'G##'. No octave.",
+      "pattern": "^[A-G](#{1,2}|b{1,2})?$"
+    },
+
+    "intervalToken": {
+      "type": "string",
+      "description": "A chord-tone degree relative to the root's major scale, with optional accidental(s). Examples: '1', '3', 'b3', '5', 'b5', '#5', 'b7', '7', '9', 'b9', '#9', '11', '#11', '13', 'b13', 'bb7'.",
+      "pattern": "^(#{1,2}|b{1,2})?(1|2|3|4|5|6|7|9|10|11|12|13)$"
+    },
+
+    "cagedShape": {
+      "description": "The CAGED parent shape of a movable voicing, or null if not applicable.",
+      "type": ["string", "null"],
+      "enum": ["C", "A", "G", "E", "D", null]
+    },
+
+    "category": {
+      "type": "string",
+      "description": "The shape family a voicing belongs to. Drives difficulty and how the app teaches it.",
+      "enum": ["open", "barre", "power", "triad-set", "caged", "shell", "drop2", "drop3", "rootless", "quartal", "inversion"]
+    },
+
+    "family": {
+      "type": "string",
+      "description": "Broad grouping of a chord quality.",
+      "enum": ["power", "triad", "suspended", "added", "sixth", "seventh", "extended", "altered", "slash"]
+    },
+
+    "tier": {
+      "type": "object",
+      "required": ["order", "name"],
+      "additionalProperties": false,
+      "properties": {
+        "order": { "type": "integer", "minimum": 1, "description": "1-based difficulty rank; lower is easier." },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "prerequisiteTier": {
+          "type": ["integer", "null"],
+          "minimum": 1,
+          "description": "order of the tier that should be mastered first, or null for the first tier."
+        },
+        "qualityIds": {
+          "type": "array",
+          "description": "Ids of the qualities that debut in this tier.",
+          "items": { "type": "string" }
+        }
+      }
+    },
+
+    "quality": {
+      "type": "object",
+      "required": ["id", "symbol", "fullName", "formula", "family", "difficultyTier"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Stable id, e.g. 'maj7', 'm7b5', '7sharp9'. Used by chord.quality." },
+        "symbol": { "type": "string", "description": "Canonical display symbol appended to the root, e.g. 'maj7', 'm7', '5', 'dim7'. Empty string for a plain major triad." },
+        "aliases": {
+          "type": "array",
+          "description": "Alternate display symbols, e.g. ['M7', 'Δ'] for maj7.",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "fullName": { "type": "string", "description": "Spoken/long name, e.g. 'Major seventh'." },
+        "formula": {
+          "type": "array",
+          "description": "Root-relative interval tokens defining the quality, in ascending order.",
+          "items": { "$ref": "#/$defs/intervalToken" },
+          "minItems": 2
+        },
+        "family": { "$ref": "#/$defs/family" },
+        "difficultyTier": { "type": "integer", "minimum": 1, "description": "Tier order where this quality first appears in its easiest voicing." },
+        "description": { "type": "string" },
+        "sourceSuffix": { "type": "string", "description": "Optional: the suffix key in the source voicing dataset (e.g. chords-db) this quality maps to, to ease ingestion." }
+      }
+    },
+
+    "chord": {
+      "type": "object",
+      "required": ["id", "canonicalName", "root", "quality", "formula", "spelling", "difficultyTier", "voicings"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Unique, URL-safe id, e.g. 'c-maj7', 'c-slash-g'." },
+        "canonicalName": { "type": "string", "description": "Primary display name, e.g. 'Cmaj7', 'C/G'." },
+        "displayAliases": {
+          "type": "array",
+          "description": "Alternate display names, e.g. ['CM7', 'CΔ'].",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "root": { "$ref": "#/$defs/noteName" },
+        "quality": { "type": "string", "description": "Id of a quality in the qualities registry." },
+        "formula": {
+          "type": "array",
+          "description": "Resolved interval tokens for this chord (usually identical to the quality's formula; carried here for convenience).",
+          "items": { "$ref": "#/$defs/intervalToken" },
+          "minItems": 2
+        },
+        "spelling": {
+          "type": "array",
+          "description": "The actual note names produced by applying the formula to the root, e.g. ['C','E','G','B'] for Cmaj7. Derivable deterministically from root + formula.",
+          "items": { "$ref": "#/$defs/noteName" },
+          "minItems": 2
+        },
+        "difficultyTier": { "type": "integer", "minimum": 1, "description": "Tier of this chord's easiest voicing." },
+        "tags": {
+          "type": "array",
+          "description": "Optional freeform tags, e.g. ['symmetrical', 'rootless-friendly'].",
+          "items": { "type": "string" },
+          "default": []
+        },
+        "voicings": {
+          "type": "array",
+          "description": "One or more playable shapes for this chord. Exactly one should have recommendedForTier=true per difficulty tier the chord is taught at.",
+          "items": { "$ref": "#/$defs/voicing" },
+          "minItems": 1
+        }
+      }
+    },
+
+    "voicing": {
+      "type": "object",
+      "required": ["id", "frets", "fingers", "baseFret", "category", "difficultyTier"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "description": "Unique within the chord, e.g. 'open', 'a-shape-3fr'." },
+        "label": { "type": "string", "description": "Human label shown in the reveal carousel, e.g. 'A-shape barre, 3rd fret'." },
+        "frets": {
+          "type": "array",
+          "description": "Fret per string, ordered string 6 (low E) -> string 1 (high E). Value -1 = muted, 0 = open, N>=1 = the Nth fret WITHIN the diagram window, where 1 is the baseFret itself. Absolute fret = baseFret + value - 1 (for value >= 1). This matches the chords-db convention, so source data ingests directly.",
+          "items": { "type": "integer", "minimum": -1 },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "fingers": {
+          "type": "array",
+          "description": "Fretting finger per string, same ordering as frets. 0 = open or muted (no finger), 1 = index, 2 = middle, 3 = ring, 4 = pinky.",
+          "items": { "type": "integer", "minimum": 0, "maximum": 4 },
+          "minItems": 6,
+          "maxItems": 6
+        },
+        "baseFret": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Lowest fret shown in the diagram window. 1 means the window includes the nut (open position)."
+        },
+        "barres": {
+          "type": "array",
+          "description": "Barre(s) in this voicing. Empty or omitted if none.",
+          "items": { "$ref": "#/$defs/barre" },
+          "default": []
+        },
+        "capo": {
+          "type": "boolean",
+          "description": "Optional rendering hint: draw the barre as a capo bar. Convenience carried from source datasets.",
+          "default": false
+        },
+        "category": { "$ref": "#/$defs/category" },
+        "cagedShape": { "$ref": "#/$defs/cagedShape" },
+        "inversionBass": {
+          "description": "For inversions / slash chords: the note in the bass, e.g. 'G' for C/G. Null for root-position voicings.",
+          "oneOf": [{ "$ref": "#/$defs/noteName" }, { "type": "null" }]
+        },
+        "midi": {
+          "type": "array",
+          "description": "Optional: sounding MIDI note numbers, low to high, for playback and Phase-2 audio checking. Length equals the number of non-muted strings.",
+          "items": { "type": "integer", "minimum": 0, "maximum": 127 }
+        },
+        "difficultyTier": { "type": "integer", "minimum": 1, "description": "Difficulty of THIS voicing (may exceed the chord's own difficultyTier)." },
+        "recommendedForTier": {
+          "type": "boolean",
+          "description": "True if this is the voicing to show first for a student at this voicing's tier. Prevents overwhelming beginners with advanced grips.",
+          "default": false
+        }
+      }
+    },
+
+    "barre": {
+      "type": "object",
+      "required": ["fret", "fromString", "toString"],
+      "additionalProperties": false,
+      "properties": {
+        "fret": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Fret of the barre, expressed the same window-relative way as the frets array (1 = baseFret)."
+        },
+        "fromString": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Lowest string index covered (0 = low E)."
+        },
+        "toString": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5,
+          "description": "Highest string index covered (5 = high E)."
+        }
+      }
+    }
+  }
+}

@@ -36,12 +36,12 @@ describe("Chord Flash Cards API", () => {
     expect(res.status).toBe(401);
   });
 
-  it("serves the deck overview with six levels", async () => {
+  it("serves the deck overview with seven tiers", async () => {
     const res = await jsonRequest(app, "/api/me/chords/decks", { cookie });
     expect(res.status).toBe(200);
     const { data } = (await res.json()) as { data: ChordDeckOverviewPublic };
-    expect(data.levels).toHaveLength(6);
-    expect(data.levels[0].name).toBe("Open Chords");
+    expect(data.levels).toHaveLength(7);
+    expect(data.levels[0].name).toBe("Open majors & minors");
     // Fresh student: nothing scheduled yet, all cards are new.
     expect(data.dueCount).toBe(0);
     expect(data.levels[0].masteryPct).toBe(0);
@@ -53,8 +53,8 @@ describe("Chord Flash Cards API", () => {
     expect(res.status).toBe(200);
     const { data } = (await res.json()) as { data: ChordLevelDetailPublic };
     const ids = data.chords.map((c) => c.id);
-    expect(ids).toContain("c");
-    expect(ids).toContain("am");
+    expect(ids).toContain("c-major");
+    expect(ids).toContain("a-minor");
     expect(data.chords.every((c) => c.status === "new")).toBe(true);
   });
 
@@ -78,7 +78,7 @@ describe("Chord Flash Cards API", () => {
     const g = await jsonRequest(app, "/api/me/chords/grade", {
       method: "POST",
       cookie,
-      body: { chordId: "c", grade: "easy" },
+      body: { chordId: "c-major", grade: "easy" },
     });
     expect(g.status).toBe(200);
     const { data } = (await g.json()) as { data: { status: string; intervalDays: number; dueAt: string } };
@@ -95,12 +95,12 @@ describe("Chord Flash Cards API", () => {
     await jsonRequest(app, "/api/me/chords/grade", {
       method: "POST",
       cookie,
-      body: { chordId: "am", grade: "again" },
+      body: { chordId: "a-minor", grade: "again" },
     });
     const res = await jsonRequest(app, "/api/me/chords/session?deck=due", { cookie });
     const { data } = (await res.json()) as { data: ChordSessionPublic };
     expect(data.source).toBe("due");
-    expect(data.cards.some((c) => c.id === "am")).toBe(true);
+    expect(data.cards.some((c) => c.id === "a-minor")).toBe(true);
   });
 
   it("rejects an unknown chord id", async () => {
@@ -128,11 +128,24 @@ describe("Chord Flash Cards API", () => {
     expect(s1.handedness).toBe("left");
     expect(s1.newPerDay).toBe(15);
     expect(s1.notation).toBe("flat");
+  });
 
-    // Notation should now flow into tone spelling on served cards.
-    const sess = await jsonRequest(app, "/api/me/chords/session?level=2", { cookie });
-    const { data } = (await sess.json()) as { data: ChordSessionPublic };
-    const bb = data.cards.find((c) => c.id === "bb");
-    if (bb) expect(bb.tones[0].note).toBe("Bb");
+  it("serves theory-correct spellings + projected voicings for a barre chord", async () => {
+    // Grade Bb7 so it's scheduled and reliably shows in the due deck.
+    const g = await jsonRequest(app, "/api/me/chords/grade", {
+      method: "POST",
+      cookie,
+      body: { chordId: "bb-7", grade: "again" },
+    });
+    expect(g.status).toBe(200);
+    const res = await jsonRequest(app, "/api/me/chords/session?deck=due", { cookie });
+    const { data } = (await res.json()) as { data: ChordSessionPublic };
+    const bb7 = data.cards.find((c) => c.id === "bb-7");
+    expect(bb7).toBeDefined();
+    expect(bb7!.name).toBe("Bb7");
+    expect(bb7!.tones.map((t) => t.note)).toEqual(["Bb", "D", "F", "Ab"]);
+    // Window-relative library frets project to absolute positions across 6 strings.
+    expect(bb7!.voicings[0].shape.fingering).toHaveLength(6);
+    expect(bb7!.voicings.some((v) => v.recommended)).toBe(true);
   });
 });
