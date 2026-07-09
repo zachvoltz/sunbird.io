@@ -618,8 +618,13 @@ function SessionShell({
   count: string;
   children: React.ReactNode;
 }) {
+  // A flashcard is a focused, card-like experience, so cap + centre it rather
+  // than stretching across the full-width practice area (the list screens stay
+  // full-width).
   return (
-    <>
+    <div
+      style={{ flex: 1, minHeight: 0, width: "100%", maxWidth: 460, margin: "0 auto", display: "flex", flexDirection: "column" }}
+    >
       <div className="row" style={{ gap: 12, padding: "8px 16px 4px", flex: "none" }}>
         <button className="btn icon" aria-label="Close session" onClick={onExit}>✕</button>
         <div className="progress" style={{ flex: 1 }}>
@@ -630,7 +635,7 @@ function SessionShell({
       <div className="wf-body" style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", padding: 0 }}>
         {children}
       </div>
-    </>
+    </div>
   );
 }
 
