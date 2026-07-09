@@ -954,9 +954,20 @@ function CardBack({
   mirror: boolean;
   onGrade: (g: ChordGrade) => void;
 }) {
-  const primary = card.voicings.find((v) => v.recommended) ?? card.voicings[0];
-  const alternates = card.voicings.filter((v) => v.id !== primary?.id);
-  const [altIndex, setAltIndex] = useState(0);
+  // All voicings for this chord, recommended one first; the big chart is a
+  // swipeable carousel across them.
+  const voicings = useMemo(() => {
+    const vs = card.voicings;
+    const rec = vs.findIndex((v) => v.recommended);
+    return rec > 0 ? [vs[rec], ...vs.filter((_, i) => i !== rec)] : vs;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [card.id]);
+  const count = voicings.length;
+  const [vIndex, setVIndex] = useState(0);
+  const touchX = useRef<number | null>(null);
+  const idx = Math.min(vIndex, count - 1);
+  const current = voicings[idx];
+  const step = (d: number) => setVIndex((i) => Math.max(0, Math.min(count - 1, Math.min(i, count - 1) + d)));
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", padding: 20 }}>
@@ -967,55 +978,108 @@ function CardBack({
         <div style={{ fontWeight: 800, letterSpacing: -0.5, fontSize: 30 }}>{card.name}</div>
       </div>
 
-      {primary && (
-        <div className="box filled" style={{ position: "relative", marginTop: 10, padding: "16px 14px 10px", display: "flex", flexDirection: "column", alignItems: "center" }}>
+      {current && (
+        <div
+          className="box filled"
+          style={{ position: "relative", marginTop: 14, padding: "16px 14px 10px", display: "flex", flexDirection: "column", alignItems: "center" }}
+          onTouchStart={(e) => {
+            touchX.current = e.touches[0].clientX;
+          }}
+          onTouchEnd={(e) => {
+            if (touchX.current == null) return;
+            const dx = e.changedTouches[0].clientX - touchX.current;
+            touchX.current = null;
+            if (Math.abs(dx) > 40) step(dx < 0 ? 1 : -1);
+          }}
+        >
           <span
             className="chip accent"
             style={{ position: "absolute", top: -11, left: "50%", transform: "translateX(-50%)", whiteSpace: "nowrap" }}
           >
-            ★ recommended for your level
+            {current.recommended ? "★ recommended for your level" : `voicing ${idx + 1} of ${count}`}
           </span>
-          <ChordChart shape={primary.shape} size="lg" mirror={mirror} />
-          <HearItButton fingering={primary.shape.fingering} />
+
+          {count > 1 && (
+            <button
+              className="btn icon"
+              aria-label="Previous voicing"
+              onClick={() => step(-1)}
+              disabled={idx === 0}
+              style={{ position: "absolute", left: 4, top: "50%", transform: "translateY(-50%)", width: 32, height: 32, opacity: idx === 0 ? 0.3 : 1 }}
+            >
+              ‹
+            </button>
+          )}
+          <ChordChart shape={current.shape} size="lg" mirror={mirror} />
+          {count > 1 && (
+            <button
+              className="btn icon"
+              aria-label="Next voicing"
+              onClick={() => step(1)}
+              disabled={idx === count - 1}
+              style={{ position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)", width: 32, height: 32, opacity: idx === count - 1 ? 0.3 : 1 }}
+            >
+              ›
+            </button>
+          )}
+
+          {current.label && (
+            <div className="tiny bold" style={{ marginTop: 4, color: "var(--ink-soft)" }}>{current.label}</div>
+          )}
+          <HearItButton key={current.id} fingering={current.shape.fingering} />
+
+          {count > 1 && (
+            <div className="row" style={{ gap: 6, justifyContent: "center", marginTop: 10 }}>
+              {voicings.map((_, i) => (
+                <i
+                  key={i}
+                  onClick={() => setVIndex(i)}
+                  style={{
+                    width: i === idx ? 16 : 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: i === idx ? "var(--accent)" : "var(--ink-faint)",
+                    cursor: "pointer",
+                    transition: "all .2s",
+                  }}
+                />
+              ))}
+            </div>
+          )}
         </div>
       )}
 
-      {alternates.length > 0 && (
+      {count > 1 && (
         <>
           <div className="row between" style={{ margin: "16px 0 8px" }}>
             <span className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 0.6, fontWeight: 700 }}>
-              Alternate voicings
+              All voicings · {count}
             </span>
-            <span className="tiny" style={{ color: "var(--accent)", fontFamily: "var(--scrawl)", fontSize: 14 }}>swipe →</span>
+            <span className="tiny" style={{ color: "var(--accent)", fontFamily: "var(--scrawl)", fontSize: 14 }}>swipe or tap →</span>
           </div>
           <div className="row hide-scroll" style={{ gap: 11, overflowX: "auto", paddingBottom: 4 }}>
-            {alternates.map((v, i) => (
+            {voicings.map((v, i) => (
               <button
                 key={v.id}
-                onClick={() => setAltIndex(i)}
+                onClick={() => setVIndex(i)}
                 className="box"
-                style={{ flex: "none", width: 122, padding: "9px 8px 8px", display: "flex", flexDirection: "column", alignItems: "center", opacity: i === altIndex ? 1 : 0.62, cursor: "pointer" }}
+                style={{
+                  flex: "none",
+                  width: 108,
+                  padding: "9px 8px 8px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  border: i === idx ? "2px solid var(--accent)" : undefined,
+                  opacity: i === idx ? 1 : 0.6,
+                  cursor: "pointer",
+                }}
               >
                 <ChordChart shape={v.shape} size="sm" mirror={mirror} />
-                <span className="tiny" style={{ fontWeight: 700, color: "var(--ink-soft)", textAlign: "center", marginTop: 5, lineHeight: 1.2 }}>
+                <span className="tiny" style={{ fontWeight: 700, color: i === idx ? "var(--accent)" : "var(--ink-soft)", textAlign: "center", marginTop: 5, lineHeight: 1.2 }}>
                   {v.label}
                 </span>
               </button>
-            ))}
-          </div>
-          <div className="row" style={{ gap: 6, justifyContent: "center", marginTop: 9 }}>
-            {alternates.map((_, i) => (
-              <i
-                key={i}
-                style={{
-                  width: i === altIndex ? 16 : 6,
-                  height: 6,
-                  borderRadius: 999,
-                  background: i === altIndex ? "var(--accent)" : "var(--ink-faint)",
-                  display: "inline-block",
-                  transition: "all .2s",
-                }}
-              />
             ))}
           </div>
         </>
