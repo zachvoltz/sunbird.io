@@ -1,4 +1,10 @@
 import type {
+  ChordDeckOverviewPublic,
+  ChordGrade,
+  ChordGradeResultPublic,
+  ChordLevelDetailPublic,
+  ChordSessionPublic,
+  ChordSettingsPublic,
   ConversationMessagePublic,
   ConversationSummary,
   MessageAttachment,
@@ -173,5 +179,49 @@ export const notificationsApi = {
       method: "DELETE",
       body: JSON.stringify({ endpoint }),
     });
+  },
+};
+
+// ─── Chord Flash Cards (spaced-repetition chord trainer) ───
+export const chordsApi = {
+  decks() {
+    return apiFetch<{ data: ChordDeckOverviewPublic }>("/api/me/chords/decks").then(
+      (r) => r.data,
+    );
+  },
+
+  level(levelId: number) {
+    return apiFetch<{ data: ChordLevelDetailPublic }>(
+      `/api/me/chords/levels/${levelId}`,
+    ).then((r) => r.data);
+  },
+
+  // `deck: "due"` pulls the scheduled-review queue; a numeric level pulls that
+  // level's due + new cards.
+  session(source: "due" | number) {
+    const qs = source === "due" ? "deck=due" : `level=${source}`;
+    return apiFetch<{ data: ChordSessionPublic }>(`/api/me/chords/session?${qs}`).then(
+      (r) => r.data,
+    );
+  },
+
+  grade(chordId: string, grade: ChordGrade) {
+    return apiFetch<{ data: ChordGradeResultPublic }>("/api/me/chords/grade", {
+      method: "POST",
+      body: JSON.stringify({ chordId, grade }),
+    }).then((r) => r.data);
+  },
+
+  getSettings() {
+    return apiFetch<{ data: ChordSettingsPublic }>("/api/me/chords/settings").then(
+      (r) => r.data,
+    );
+  },
+
+  updateSettings(patch: Partial<ChordSettingsPublic>) {
+    return apiFetch<{ data: ChordSettingsPublic }>("/api/me/chords/settings", {
+      method: "PUT",
+      body: JSON.stringify(patch),
+    }).then((r) => r.data);
   },
 };

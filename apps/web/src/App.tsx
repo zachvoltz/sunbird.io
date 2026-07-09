@@ -50,6 +50,7 @@ const CalendarPage = lazyRoute(() => import("@/wireframe/pages/Calendar"), "Cale
 const MyBookingsPage = lazyRoute(() => import("@/wireframe/pages/MyBookingsPage"), "MyBookingsPage");
 const MyTakesPage = lazyRoute(() => import("@/wireframe/pages/MyTakes"), "MyTakesPage");
 const PracticePathPage = lazyRoute(() => import("@/wireframe/pages/PracticePath"), "PracticePathPage");
+const ChordFlashCardsPage = lazyRoute(() => import("@/wireframe/pages/ChordFlashCards"), "ChordFlashCardsPage");
 const ExercisePlayerPage = lazyRoute(() => import("@/wireframe/pages/ExercisePlayer"), "ExercisePlayerPage");
 const RecordTakePage = lazyRoute(() => import("@/wireframe/pages/RecordTake"), "RecordTakePage");
 const TodayPage = lazyRoute(() => import("@/wireframe/pages/TodayPage"), "TodayPage");
@@ -165,6 +166,7 @@ export function App() {
         <Route path="/my-profile" element={<Navigate to="/today" replace />} />
         <Route path="/my-calendar" element={<Navigate to="/today" replace />} />
         <Route path="/practice" element={<AuthGate><PracticePathPage /></AuthGate>} />
+        <Route path="/practice/chords" element={<AuthGate><ChordFlashCardsPage /></AuthGate>} />
         <Route path="/practice/exercise/:assignmentId" element={<AuthGate><ExercisePlayerPage /></AuthGate>} />
         <Route path="/practice/record/:assignmentId" element={<AuthGate><RecordTakePage /></AuthGate>} />
       </Routes>

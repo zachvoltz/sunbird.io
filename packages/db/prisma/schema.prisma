@@ -122,6 +122,8 @@ model User {
   noteVoiceMemos        NoteVoiceMemo[]
   lessonSummariesEdited LessonSummary[]     @relation("summaryEditor")
   routineCompletions    RoutineCompletion[]
+  chordProgress         ChordProgress[]
+  chordSettings         ChordSettings?
   studentGoals          Goal[]              @relation("studentGoals")
   coachGoals            Goal[]              @relation("coachGoals")
   sentStudentInvites     StudentInvite[]    @relation("coachInvites")
@@ -1160,4 +1162,47 @@ model Goal {
 
   @@index([studentId, status])
   @@index([coachId, status])
+}
+
+// ─── Chord Flash Cards ───
+// Spaced-repetition chord trainer. The chord/level *catalog* is static
+// reference data on the server (apps/api/src/lib/chordCatalog.ts); only the
+// per-student review state lives here. One row per (student, chordId) holds
+// the SM-2-style scheduler state that decides when a card resurfaces.
+model ChordProgress {
+  id             String    @id @default(cuid())
+  userId         String
+  chordId        String    // references a catalog chord id, e.g. "cmaj7"
+  status         String    @default("learning") // "learning" | "known"
+  reps           Int       @default(0)  // successful reviews in a row
+  lapses         Int       @default(0)  // times graded "again"
+  ease           Float     @default(2.5) // SM-2 ease factor (min 1.3)
+  intervalDays   Int       @default(0)  // current scheduling interval
+  dueAt          DateTime? // when the card is next due for review
+  lastGrade      String?   // "again" | "hard" | "good" | "easy"
+  lastReviewedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chordId])
+  @@index([userId, dueAt])
+}
+
+// Per-student Chord Flash Cards preferences (the Settings screen). One row
+// per student; created lazily on first save with sensible defaults.
+model ChordSettings {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  handedness  String   @default("right")  // "right" | "left"
+  notation    String   @default("sharp")  // "sharp" | "flat"
+  theme       String   @default("light")  // "light" | "dark" | "auto"
+  newPerDay   Int      @default(10)
+  levelGating Boolean  @default(false)
+  micCheck    Boolean  @default(true)
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

@@ -24,6 +24,7 @@ import { paymentsRoutes } from "./routes/payments";
 import { clientErrorsRoutes } from "./routes/client-errors";
 import { conversationRoutes } from "./routes/conversations";
 import { notificationRoutes } from "./routes/notifications";
+import { chordRoutes } from "./routes/chords";
 import { initDb, initDbD1 } from "./lib/db";
 
 type Bindings = {
@@ -119,6 +120,7 @@ app.post("/api/health/email", requireAuth, async (c) => {
 app.route("/api/auth", authRoutes);
 app.route("/api/me", meRoutes);
 app.route("/api/me", notificationRoutes);
+app.route("/api/me/chords", chordRoutes);
 app.route("/api/conversations", conversationRoutes);
 app.route("/api/availability", availabilityRoutes);
 app.route("/api/bookings", bookingRoutes);

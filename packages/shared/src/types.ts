@@ -765,3 +765,101 @@ export interface SubscriptionPublic {
   createdAt: string;
 }
 
+// ─── Chord Flash Cards (spaced-repetition chord trainer) ───
+
+// A single fretboard voicing. `fingering` has one entry per string, ordered
+// low-E → high-E: a fret number, 0 for an open string, or "x" for muted.
+// `fingers` (optional, parallel to `fingering`) is the fretting-hand finger
+// per string. `baseFret` shifts the diagram up the neck; `barre` draws a bar.
+export interface ChordShape {
+  fingering: (number | "x")[];
+  fingers?: (string | null)[];
+  baseFret?: number;
+  barre?: { fret: number; from: number; to: number };
+}
+
+// Per-student learning state of one chord card.
+export type ChordCardStatus = "new" | "learning" | "known";
+// The four self-grades on the reveal screen (Missed / Hard / Got it / Easy).
+export type ChordGrade = "again" | "hard" | "good" | "easy";
+
+// A chord tone shown by the front note-detector: the note name plus its
+// scale degree, e.g. { note: "E", degree: "3rd" }.
+export interface ChordTone {
+  note: string;
+  degree: string;
+}
+
+export interface ChordVoicingPublic {
+  id: string;
+  label: string;
+  shape: ChordShape;
+  recommended: boolean;
+}
+
+// A full card as served to the session player.
+export interface ChordCardPublic {
+  id: string;
+  name: string;
+  levelId: number;
+  tones: ChordTone[];
+  voicings: ChordVoicingPublic[];
+  status: ChordCardStatus;
+}
+
+export interface ChordLevelSummaryPublic {
+  id: number;
+  name: string;
+  desc: string;
+  masteryPct: number; // 0-100, per student
+  dueCount: number;
+  chordCount: number;
+  locked: boolean;
+}
+
+// GET /api/me/chords/decks — the deck-picker screen.
+export interface ChordDeckOverviewPublic {
+  dueCount: number; // total weak + scheduled cards across unlocked levels
+  levels: ChordLevelSummaryPublic[];
+}
+
+export interface ChordLevelChordPublic {
+  id: string;
+  name: string;
+  status: ChordCardStatus;
+}
+
+// GET /api/me/chords/levels/:levelId — the level-detail screen.
+export interface ChordLevelDetailPublic {
+  id: number;
+  name: string;
+  desc: string;
+  masteryPct: number;
+  dueCount: number;
+  chords: ChordLevelChordPublic[];
+}
+
+// GET /api/me/chords/session — the ordered review queue.
+export interface ChordSessionPublic {
+  source: "due" | "level";
+  levelId: number | null;
+  cards: ChordCardPublic[];
+}
+
+// POST /api/me/chords/grade — result of grading one card.
+export interface ChordGradeResultPublic {
+  chordId: string;
+  status: ChordCardStatus;
+  intervalDays: number;
+  dueAt: string | null;
+}
+
+export interface ChordSettingsPublic {
+  handedness: "right" | "left";
+  notation: "sharp" | "flat";
+  theme: "light" | "dark" | "auto";
+  newPerDay: number;
+  levelGating: boolean;
+  micCheck: boolean;
+}
+

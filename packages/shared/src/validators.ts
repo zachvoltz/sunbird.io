@@ -438,3 +438,23 @@ export const updateGoalSchema = z
   .refine((v) => Object.keys(v).length > 0, {
     message: "Nothing to update.",
   });
+
+// ── Chord Flash Cards ──
+
+export const gradeChordSchema = z.object({
+  chordId: z.string().min(1),
+  grade: z.enum(["again", "hard", "good", "easy"]),
+});
+
+export const updateChordSettingsSchema = z
+  .object({
+    handedness: z.enum(["right", "left"]).optional(),
+    notation: z.enum(["sharp", "flat"]).optional(),
+    theme: z.enum(["light", "dark", "auto"]).optional(),
+    newPerDay: z.number().int().min(1).max(50).optional(),
+    levelGating: z.boolean().optional(),
+    micCheck: z.boolean().optional(),
+  })
+  .refine((v) => Object.keys(v).length > 0, {
+    message: "Nothing to update.",
+  });

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
@@ -583,6 +584,28 @@ export function PracticePathPage() {
                 </div>
               </div>
             )}
+
+            <div style={{ padding: "8px 18px 0" }}>
+              <Link
+                to="/practice/chords"
+                className="box wobble"
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "12px 14px",
+                  textDecoration: "none",
+                  color: "var(--ink)",
+                }}
+              >
+                <span style={{ fontSize: 26, lineHeight: 1 }}>🎸</span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span className="bold" style={{ display: "block", lineHeight: 1.15 }}>Chord Flash Cards</span>
+                  <span className="tiny muted">spaced-repetition chord trainer</span>
+                </span>
+                <Icon name="chev" size={16} />
+              </Link>
+            </div>
 
             {items.length > 0 && (
               <StreakRow
