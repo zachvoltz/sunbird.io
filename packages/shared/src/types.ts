@@ -861,7 +861,12 @@ export interface ChordSettingsPublic {
   newPerDay: number;
   levelGating: boolean;
   micCheck: boolean;
+  inDailyRoutine: boolean; // show a Chord Flash Cards stop on the practice path
 }
+
+// The id of the synthetic routine item injected into the student's daily
+// practice path when they add chord flashcards to their routine.
+export const CHORD_ROUTINE_ITEM_ID = "chord-flashcards";
 
 // ─── Chord Library (browse / search reference) ───
 export type ChordDifficulty = "beginner" | "intermediate" | "advanced";

@@ -1,10 +1,10 @@
 import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
-import { parseRoutine } from "../lib/routine";
-import { computeStreak, fullyCompleteDays } from "../lib/streak";
+import { parseRoutine, chordRoutineItem } from "../lib/routine";
+import { computeStreak, streakDays } from "../lib/streak";
 import { serializeGoal } from "../lib/goals";
-import { createGoalSchema, updateGoalSchema, setRoleSchema } from "@sunbird/shared";
+import { CHORD_ROUTINE_ITEM_ID, createGoalSchema, updateGoalSchema, setRoleSchema } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { postActivityCard } from "../lib/conversations";
 
@@ -89,7 +89,7 @@ me.get("/student-data", requireAuth, async (c) => {
   const today = utcMidnight(now);
   const since120 = new Date(today.getTime() - 119 * 86_400_000);
 
-  const [student, bookings, completionRows, assignments, takes, latestSentNote, goals] = await Promise.all([
+  const [student, bookings, completionRows, assignments, takes, latestSentNote, goals, chordSettings] = await Promise.all([
     db.user.findUnique({
       where: { id: user.id },
       select: {
@@ -147,6 +147,9 @@ me.get("/student-data", requireAuth, async (c) => {
       where: { studentId: user.id, status: { not: "ARCHIVED" } },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }).catch(() => []),
+    db.chordSettings
+      .findUnique({ where: { userId: user.id }, select: { inDailyRoutine: true, dailyRoutineSince: true } })
+      .catch(() => null),
   ]);
 
   if (!student) {
@@ -208,23 +211,41 @@ me.get("/student-data", requireAuth, async (c) => {
       .filter((rc) => rc.day.toISOString().slice(0, 10) === todayKey)
       .map((rc) => rc.routineItemId),
   );
-  const enrichedRoutine = {
-    items: parsedRoutine.items.map((it) => {
-      const lib = it.libraryItemId ? libById.get(it.libraryItemId) : null;
-      return {
-        ...it,
-        audioUrl: lib?.audioUrl ?? null,
-        midiUrl: lib?.midiUrl ?? null,
-        pdfUrl: lib?.pdfUrl ?? null,
-        hasMidi: lib?.hasMidi ?? false,
-        completedToday: doneIds.has(it.id),
-      };
-    }),
-    updatedAt: parsedRoutine.updatedAt,
-  };
+  const chordEnabled = chordSettings?.inDailyRoutine === true;
+  const chordSinceKey = chordSettings?.dailyRoutineSince?.toISOString().slice(0, 10) ?? null;
+
+  const enrichedItems = parsedRoutine.items.map((it) => {
+    const lib = it.libraryItemId ? libById.get(it.libraryItemId) : null;
+    return {
+      ...it,
+      audioUrl: lib?.audioUrl ?? null,
+      midiUrl: lib?.midiUrl ?? null,
+      pdfUrl: lib?.pdfUrl ?? null,
+      hasMidi: lib?.hasMidi ?? false,
+      completedToday: doneIds.has(it.id),
+    };
+  });
+  // Student-added Chord Flash Cards stop (links to the trainer; rendered
+  // specially by its id on the practice path).
+  if (chordEnabled) {
+    const chordItem = chordRoutineItem();
+    enrichedItems.push({
+      ...chordItem,
+      audioUrl: null,
+      midiUrl: null,
+      pdfUrl: null,
+      hasMidi: false,
+      completedToday: doneIds.has(chordItem.id),
+    });
+  }
+  const enrichedRoutine = { items: enrichedItems, updatedAt: parsedRoutine.updatedAt };
 
   // Streak counts only days where every current routine exercise was done.
-  const completeKeys = fullyCompleteDays(completionRows, routineItemIds);
+  const completeKeys = streakDays(completionRows, routineItemIds, {
+    enabled: chordEnabled,
+    itemId: CHORD_ROUTINE_ITEM_ID,
+    sinceKey: chordSinceKey,
+  });
   const derivedStreak = computeStreak(completeKeys);
   const since14Key = new Date(today.getTime() - 13 * 86_400_000).toISOString().slice(0, 10);
   const recentPracticeDays = completeKeys.filter((k) => k >= since14Key);
@@ -790,13 +811,18 @@ me.post("/routine/complete", requireAuth, async (c) => {
     return c.json({ error: "routineItemId required" }, 400);
   }
 
-  // Guard: the id must belong to the student's own current routine.
-  const student = await db.user.findUnique({
-    where: { id: user.id },
-    select: { currentRoutine: true },
-  });
+  // Guard: the id must belong to the student's own current routine (coach
+  // items, or the student-added Chord Flash Cards stop when enabled).
+  const [student, chordSettings] = await Promise.all([
+    db.user.findUnique({ where: { id: user.id }, select: { currentRoutine: true } }),
+    db.chordSettings
+      .findUnique({ where: { userId: user.id }, select: { inDailyRoutine: true, dailyRoutineSince: true } })
+      .catch(() => null),
+  ]);
   const routine = parseRoutine(student?.currentRoutine ?? null);
-  if (!routine.items.some((it) => it.id === routineItemId)) {
+  const chordEnabled = chordSettings?.inDailyRoutine === true;
+  const isChordItem = chordEnabled && routineItemId === CHORD_ROUTINE_ITEM_ID;
+  if (!isChordItem && !routine.items.some((it) => it.id === routineItemId)) {
     return c.json({ error: "Routine item not found" }, 404);
   }
 
@@ -822,7 +848,11 @@ me.post("/routine/complete", requireAuth, async (c) => {
     where: { userId: user.id },
     select: { day: true, routineItemId: true },
   });
-  const completeKeys = fullyCompleteDays(completionRows, routine.items.map((it) => it.id));
+  const completeKeys = streakDays(completionRows, routine.items.map((it) => it.id), {
+    enabled: chordEnabled,
+    itemId: CHORD_ROUTINE_ITEM_ID,
+    sinceKey: chordSettings?.dailyRoutineSince?.toISOString().slice(0, 10) ?? null,
+  });
   const derived = computeStreak(completeKeys);
   const lastPracticedAt = derived.lastDay
     ? new Date(derived.lastDay + "T00:00:00.000Z")

@@ -199,4 +199,50 @@ describe("Chord Flash Cards API", () => {
     const res = await jsonRequest(app, "/api/me/chords/library/not-a-chord", { cookie });
     expect(res.status).toBe(404);
   });
+
+  it("adds a Chord Flash Cards stop to the daily practice path", async () => {
+    // Enable via chord settings.
+    const put = await jsonRequest(app, "/api/me/chords/settings", {
+      method: "PUT",
+      cookie,
+      body: { inDailyRoutine: true },
+    });
+    expect(put.status).toBe(200);
+    expect(((await put.json()) as { data: ChordSettingsPublic }).data.inDailyRoutine).toBe(true);
+
+    // It appears on the student's routine (student-data).
+    const sd1 = await jsonRequest(app, "/api/me/student-data", { cookie });
+    const routine1 = ((await sd1.json()) as any).data.routine;
+    const chordStop = routine1.items.find((it: any) => it.id === "chord-flashcards");
+    expect(chordStop).toBeDefined();
+    expect(chordStop.title).toBe("Chord Flash Cards");
+    expect(chordStop.completedToday).toBe(false);
+
+    // Completing it is accepted and reflected.
+    const done = await jsonRequest(app, "/api/me/routine/complete", {
+      method: "POST",
+      cookie,
+      body: { routineItemId: "chord-flashcards", completed: true },
+    });
+    expect(done.status).toBe(200);
+
+    const sd2 = await jsonRequest(app, "/api/me/student-data", { cookie });
+    const routine2 = ((await sd2.json()) as any).data.routine;
+    expect(routine2.items.find((it: any) => it.id === "chord-flashcards").completedToday).toBe(true);
+  });
+
+  it("rejects the chord stop when it is not in the routine", async () => {
+    // Turn it off, then completing it should 404.
+    await jsonRequest(app, "/api/me/chords/settings", {
+      method: "PUT",
+      cookie,
+      body: { inDailyRoutine: false },
+    });
+    const res = await jsonRequest(app, "/api/me/routine/complete", {
+      method: "POST",
+      cookie,
+      body: { routineItemId: "chord-flashcards", completed: true },
+    });
+    expect(res.status).toBe(404);
+  });
 });

@@ -454,6 +454,7 @@ export const updateChordSettingsSchema = z
     newPerDay: z.number().int().min(1).max(50).optional(),
     levelGating: z.boolean().optional(),
     micCheck: z.boolean().optional(),
+    inDailyRoutine: z.boolean().optional(),
   })
   .refine((v) => Object.keys(v).length > 0, {
     message: "Nothing to update.",

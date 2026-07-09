@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import { CHORD_ROUTINE_ITEM_ID } from "@sunbird/shared";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
@@ -148,6 +149,7 @@ function ExerciseDetail({
 }) {
   const done = !!item.completedToday;
   const hasMidi = !!(item.hasMidi && item.midiUrl);
+  const isChord = item.id === CHORD_ROUTINE_ITEM_ID;
   return (
     <div className="wf" style={{ minHeight: 0 }}>
       <div className="row" style={{ alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
@@ -187,29 +189,48 @@ function ExerciseDetail({
         </div>
       )}
 
-      {/* Audio — SoundCloud-style waveform player */}
-      {item.audioUrl ? (
-        <div className="box mb-3">
-          <AudioPlayer key={`audio-${item.id}`} src={item.audioUrl} label="reference audio" />
-        </div>
-      ) : null}
+      {isChord ? (
+        <>
+          <div className="box mb-3" style={{ background: "var(--paper-2)" }}>
+            <div className="wf-scrawl" style={{ fontSize: 17, lineHeight: 1.2 }}>
+              Spaced-repetition chord practice — run today's due cards.
+            </div>
+          </div>
+          <Link
+            to="/practice/chords"
+            className="btn accent big mb-3"
+            style={{ width: "100%", textDecoration: "none" }}
+          >
+            <Icon name="play" size={15} stroke="white" /> Practice chords →
+          </Link>
+        </>
+      ) : (
+        <>
+          {/* Audio — SoundCloud-style waveform player */}
+          {item.audioUrl ? (
+            <div className="box mb-3">
+              <AudioPlayer key={`audio-${item.id}`} src={item.audioUrl} label="reference audio" />
+            </div>
+          ) : null}
 
-      {/* MIDI — same player UI, driven by the Magenta synth */}
-      {hasMidi && (
-        <div className="box mb-3">
-          <MidiPlayer key={`midi-${item.id}`} src={item.midiUrl!} label="play-along (MIDI)" />
-        </div>
-      )}
+          {/* MIDI — same player UI, driven by the Magenta synth */}
+          {hasMidi && (
+            <div className="box mb-3">
+              <MidiPlayer key={`midi-${item.id}`} src={item.midiUrl!} label="play-along (MIDI)" />
+            </div>
+          )}
 
-      {/* PDF / sheet music */}
-      {item.pdfUrl && (
-        <a href={item.pdfUrl} target="_blank" rel="noreferrer" className="btn ghost small mb-3" style={{ textDecoration: "none" }}>
-          open sheet music →
-        </a>
-      )}
+          {/* PDF / sheet music */}
+          {item.pdfUrl && (
+            <a href={item.pdfUrl} target="_blank" rel="noreferrer" className="btn ghost small mb-3" style={{ textDecoration: "none" }}>
+              open sheet music →
+            </a>
+          )}
 
-      {!item.audioUrl && !hasMidi && !item.pdfUrl && (
-        <div className="box dashed small muted mb-3">No audio or MIDI attached to this exercise.</div>
+          {!item.audioUrl && !hasMidi && !item.pdfUrl && (
+            <div className="box dashed small muted mb-3">No audio or MIDI attached to this exercise.</div>
+          )}
+        </>
       )}
 
       <button

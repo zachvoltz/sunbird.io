@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS: ChordSettingsPublic = {
   newPerDay: 10,
   levelGating: false,
   micCheck: true,
+  inDailyRoutine: false,
 };
 
 type SettingsRow = {
@@ -50,6 +51,7 @@ type SettingsRow = {
   newPerDay: number;
   levelGating: boolean;
   micCheck: boolean;
+  inDailyRoutine: boolean;
 } | null;
 
 function toSettings(row: SettingsRow): ChordSettingsPublic {
@@ -61,6 +63,7 @@ function toSettings(row: SettingsRow): ChordSettingsPublic {
     newPerDay: row.newPerDay,
     levelGating: row.levelGating,
     micCheck: row.micCheck,
+    inDailyRoutine: row.inDailyRoutine,
   };
 }
 
@@ -326,10 +329,20 @@ chords.put("/settings", requireAuth, async (c) => {
   }
   const db = getDb();
   const patch = parsed.data;
+  // Stamp when chord flashcards were added to the routine (first enable only),
+  // so the streak requires them from that day forward, never retroactively.
+  const extra: { dailyRoutineSince?: Date } = {};
+  if (patch.inDailyRoutine === true) {
+    const existing = await db.chordSettings.findUnique({
+      where: { userId: user.id },
+      select: { dailyRoutineSince: true },
+    });
+    if (!existing?.dailyRoutineSince) extra.dailyRoutineSince = new Date();
+  }
   const row = await db.chordSettings.upsert({
     where: { userId: user.id },
-    update: patch,
-    create: { userId: user.id, ...DEFAULT_SETTINGS, ...patch },
+    update: { ...patch, ...extra },
+    create: { userId: user.id, ...DEFAULT_SETTINGS, ...patch, ...extra },
   });
   return c.json({ data: toSettings(row as SettingsRow) });
 });

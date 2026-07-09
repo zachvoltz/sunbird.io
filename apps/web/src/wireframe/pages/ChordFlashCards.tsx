@@ -8,7 +8,8 @@ import type {
   ChordSessionPublic,
   ChordSettingsPublic,
 } from "@sunbird/shared";
-import { chordsApi } from "@/lib/api";
+import { CHORD_ROUTINE_ITEM_ID } from "@sunbird/shared";
+import { apiFetch, chordsApi } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
 import { ChordChart, MasteryRing } from "../components/ChordChart";
@@ -83,6 +84,19 @@ export function ChordFlashCardsPage() {
     };
   }, []);
 
+  // Add / remove the Chord Flash Cards stop on the student's daily practice path.
+  const toggleRoutine = useCallback(() => {
+    setSettings((cur) => {
+      if (!cur) return cur;
+      const next = !cur.inDailyRoutine;
+      chordsApi
+        .updateSettings({ inDailyRoutine: next })
+        .then((saved) => setSettings(saved))
+        .catch(() => setSettings(cur)); // revert on failure
+      return { ...cur, inDailyRoutine: next };
+    });
+  }, []);
+
   return (
     <STFrame side="practice">
       {/* Full-bleed: fills the width of the practice content area on desktop and
@@ -99,6 +113,8 @@ export function ChordFlashCardsPage() {
               onStartLevel={(levelId) => setView({ name: "session", source: levelId })}
               onOpenSettings={() => setView({ name: "settings" })}
               onOpenLibrary={() => setView({ name: "library" })}
+              inDailyRoutine={settings?.inDailyRoutine ?? false}
+              onToggleRoutine={toggleRoutine}
             />
           )}
           {view.name === "library" && (
@@ -138,12 +154,16 @@ function DeckPicker({
   onStartLevel,
   onOpenSettings,
   onOpenLibrary,
+  inDailyRoutine,
+  onToggleRoutine,
 }: {
   onOpenLevel: (levelId: number) => void;
   onStartDue: () => void;
   onStartLevel: (levelId: number) => void;
   onOpenSettings: () => void;
   onOpenLibrary: () => void;
+  inDailyRoutine: boolean;
+  onToggleRoutine: () => void;
 }) {
   const [data, setData] = useState<ChordDeckOverviewPublic | null>(null);
   const [loading, setLoading] = useState(true);
@@ -230,6 +250,63 @@ function DeckPicker({
             }}
           >
             <Icon name="play" size={15} />
+          </span>
+        </button>
+
+        {/* Add / remove a Chord Flash Cards stop on the daily practice path */}
+        <button
+          onClick={onToggleRoutine}
+          className="box"
+          style={{
+            width: "100%",
+            display: "flex",
+            alignItems: "center",
+            gap: 12,
+            padding: "11px 14px",
+            marginTop: 10,
+            textAlign: "left",
+            cursor: "pointer",
+            background: inDailyRoutine ? "var(--accent-soft)" : "var(--paper)",
+            borderColor: inDailyRoutine ? "var(--accent)" : undefined,
+          }}
+        >
+          <span style={{ fontSize: 20, lineHeight: 1 }}>🗓️</span>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            <b style={{ display: "block", fontSize: 15, lineHeight: 1.15 }}>
+              {inDailyRoutine ? "In your daily practice" : "Add to daily practice"}
+            </b>
+            <span className="tiny muted">
+              {inDailyRoutine
+                ? "A Chord Flash Cards stop is on your practice path"
+                : "Put a Chord Flash Cards stop on your practice path"}
+            </span>
+          </span>
+          <span
+            aria-hidden
+            style={{
+              flex: "none",
+              width: 48,
+              height: 28,
+              borderRadius: 999,
+              background: inDailyRoutine ? "var(--accent)" : "var(--paper-2)",
+              border: `1.8px solid ${inDailyRoutine ? "var(--accent)" : "var(--ink-faint)"}`,
+              position: "relative",
+              transition: "background .15s",
+            }}
+          >
+            <span
+              style={{
+                position: "absolute",
+                top: 2,
+                left: inDailyRoutine ? 22 : 2,
+                width: 20,
+                height: 20,
+                borderRadius: "50%",
+                background: "#fff",
+                boxShadow: "0 1px 3px rgba(0,0,0,0.25)",
+                transition: "left .15s",
+              }}
+            />
           </span>
         </button>
 
@@ -464,6 +541,17 @@ function Session({
     },
     [card, index, cards.length],
   );
+
+  // Finishing a session checks off the "Chord Flash Cards" stop on the daily
+  // practice path (when the student has added it to their routine).
+  useEffect(() => {
+    if (!done || cards.length === 0 || !settings?.inDailyRoutine) return;
+    apiFetch("/api/me/routine/complete", {
+      method: "POST",
+      body: JSON.stringify({ routineItemId: CHORD_ROUTINE_ITEM_ID, completed: true }),
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [done]);
 
   if (loading) {
     return <SessionShell onExit={onExit} progress={0} count="…"><div className="small muted" style={{ padding: 24, textAlign: "center" }}>Loading cards…</div></SessionShell>;
