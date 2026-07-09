@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   ChordCardPublic,
   ChordCardStatus,
@@ -572,6 +572,22 @@ function CardFront({
   const onCount = reveal.filter(Boolean).length;
   const tappable = !micActive; // don't let taps give the answer away while listening
 
+  // When every tone is hit: celebrate, then auto-flip to the reveal. Guarded by
+  // a ref so it fires exactly once per card; onReveal is read through a ref so a
+  // fresh onReveal identity each render can't cancel the pending timer.
+  const allHit = total > 0 && onCount >= total;
+  const [celebrating, setCelebrating] = useState(false);
+  const firedRef = useRef(false);
+  const revealRef = useRef(onReveal);
+  revealRef.current = onReveal;
+  useEffect(() => {
+    if (!allHit || firedRef.current) return;
+    firedRef.current = true;
+    setCelebrating(true);
+    const t = setTimeout(() => revealRef.current(), 1250);
+    return () => clearTimeout(t);
+  }, [allHit]);
+
   const statusLabel =
     status === "requesting"
       ? "Enabling mic…"
@@ -604,7 +620,8 @@ function CardFront({
   ];
 
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: 20 }}>
+    <div style={{ position: "relative", flex: 1, display: "flex", flexDirection: "column", alignItems: "center", padding: 20 }}>
+      {celebrating && <SuccessBurst name={card.name} />}
       <div className="tiny muted" style={{ textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 700 }}>
         🂠 Front
       </div>
@@ -738,6 +755,67 @@ function EqBars({ level = 0, active = true }: { level?: number; active?: boolean
         />
       ))}
     </span>
+  );
+}
+
+// Shown over the card front the moment every tone is hit, just before the
+// auto-reveal flips the card.
+function SuccessBurst({ name }: { name: string }) {
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 5,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 4,
+        textAlign: "center",
+        background: "color-mix(in srgb, var(--paper) 85%, transparent)",
+        backdropFilter: "blur(2px)",
+        WebkitBackdropFilter: "blur(2px)",
+        animation: "cfc-fade .18s ease-out both",
+      }}
+    >
+      <style>{`
+        @keyframes cfc-fade { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes cfc-pop { 0% { transform: scale(.4); opacity: 0 } 55% { transform: scale(1.15); opacity: 1 } 100% { transform: scale(1) } }
+        @keyframes cfc-ring { 0% { transform: scale(.5); opacity: .55 } 100% { transform: scale(2.1); opacity: 0 } }
+        @keyframes cfc-spark { 0% { transform: translateY(6px) scale(.5); opacity: 0 } 30% { opacity: 1 } 100% { transform: translateY(-40px) scale(1); opacity: 0 } }
+      `}</style>
+      <div style={{ position: "relative", width: 84, height: 84, display: "grid", placeItems: "center" }}>
+        <span style={{ position: "absolute", inset: 6, borderRadius: "50%", border: "2px solid var(--accent)", animation: "cfc-ring .9s ease-out .05s infinite" }} />
+        <span style={{ position: "absolute", inset: 6, borderRadius: "50%", border: "2px solid var(--accent)", animation: "cfc-ring .9s ease-out .35s infinite" }} />
+        {["✨", "🎉", "⭐"].map((s, i) => (
+          <span key={i} style={{ position: "absolute", top: 8, fontSize: 15, left: `${18 + i * 26}%`, animation: `cfc-spark 1s ease-out ${0.1 + i * 0.12}s infinite` }}>
+            {s}
+          </span>
+        ))}
+        <span
+          style={{
+            width: 72,
+            height: 72,
+            borderRadius: "50%",
+            background: "var(--accent)",
+            color: "white",
+            display: "grid",
+            placeItems: "center",
+            fontSize: 38,
+            fontWeight: 800,
+            boxShadow: "0 6px 18px -6px var(--accent)",
+            animation: "cfc-pop .5s cubic-bezier(.2,1.3,.4,1) both",
+          }}
+        >
+          ✓
+        </span>
+      </div>
+      <div className="wf-scrawl bold" style={{ fontSize: 34, lineHeight: 1.05, color: "var(--accent)", marginTop: 6 }}>
+        Nailed it!
+      </div>
+      <div className="small muted">all tones detected · {name}</div>
+    </div>
   );
 }
 
