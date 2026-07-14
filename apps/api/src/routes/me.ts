@@ -10,6 +10,10 @@ import {
   updateGoalSchema,
   setRoleSchema,
   updateCustomRoutineSchema,
+  singingExercise,
+  singingRoutineId,
+  singingRoutineKind,
+  singingTypeFromId,
 } from "@sunbird/shared";
 import type { RoutineItem } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
@@ -257,7 +261,11 @@ me.get("/student-data", requireAuth, async (c) => {
       completedToday: doneIds.has(chordItem.id),
     });
   }
-  const enrichedRoutine = { items: enrichedItems, updatedAt: parsedRoutine.updatedAt };
+  // Dedupe by id — a singing exercise the coach and student both added shares a
+  // stable "sing-<type>" id and should appear once.
+  const seenIds = new Set<string>();
+  const dedupedItems = enrichedItems.filter((it) => (seenIds.has(it.id) ? false : seenIds.add(it.id)));
+  const enrichedRoutine = { items: dedupedItems, updatedAt: parsedRoutine.updatedAt };
 
   // Streak counts only days where every current routine exercise was done.
   const completeKeys = streakDays(completionRows, routineItemIds, {
@@ -914,19 +922,37 @@ me.put("/routine/custom", requireAuth, async (c) => {
     return c.json({ error: parsed.error.issues[0]?.message ?? "Invalid routine" }, 400);
   }
   const db = getDb();
-  // Keep existing ids (so completion history survives reorders); mint one for
-  // new items. The "custom-" prefix keeps them distinct from coach item ids.
-  const items: RoutineItem[] = parsed.data.items.map((it) => ({
-    id: it.id && it.id.startsWith("custom-") ? it.id : `custom-${crypto.randomUUID()}`,
-    libraryItemId: null,
-    kind: "exercise",
-    title: it.title,
-    bars: null,
-    bpmStart: it.bpmStart ?? null,
-    bpmEnd: it.bpmEnd ?? null,
-    durationMin: it.durationMin ?? null,
-    note: it.note ?? null,
-  }));
+  // Built-in singing exercises come through by their "sing-<type>" id — take
+  // their metadata from the catalog (authoritative). Free-form items keep their
+  // "custom-" id (so completion history survives reorders) or get a new one.
+  const items: RoutineItem[] = parsed.data.items.map((it) => {
+    const singType = it.id ? singingTypeFromId(it.id) : null;
+    if (singType) {
+      const ex = singingExercise(singType)!;
+      return {
+        id: singingRoutineId(singType),
+        libraryItemId: null,
+        kind: singingRoutineKind(ex),
+        title: ex.name,
+        bars: null,
+        bpmStart: null,
+        bpmEnd: null,
+        durationMin: ex.durationMin,
+        note: null,
+      };
+    }
+    return {
+      id: it.id && it.id.startsWith("custom-") ? it.id : `custom-${crypto.randomUUID()}`,
+      libraryItemId: null,
+      kind: "exercise",
+      title: it.title,
+      bars: null,
+      bpmStart: it.bpmStart ?? null,
+      bpmEnd: it.bpmEnd ?? null,
+      durationMin: it.durationMin ?? null,
+      note: it.note ?? null,
+    };
+  });
   const stored = serializeRoutine(items);
   await db.user.update({ where: { id: user.id }, data: { studentRoutine: stored } });
   return c.json({ data: parseRoutine(stored) });

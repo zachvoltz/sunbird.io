@@ -1,13 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
 import { apiFetch } from "@/lib/api";
-import type {
-  LibraryItemKind,
-  LibraryItemPublic,
-  RoutineItem,
-  RoutinePublic,
+import {
+  SINGING_EXERCISES,
+  singingRoutineId,
+  singingRoutineKind,
+  type LibraryItemKind,
+  type LibraryItemPublic,
+  type RoutineItem,
+  type RoutinePublic,
+  type SingingExercise,
 } from "@sunbird/shared";
 import { Icon } from "@/wireframe/components/Icon";
 import { Tag } from "@/wireframe/components/Tag";
+
+// Built-in guided singing exercise → a routine item snapshot.
+function itemFromSinging(ex: SingingExercise): RoutineItem {
+  return {
+    id: singingRoutineId(ex.type),
+    libraryItemId: null,
+    kind: singingRoutineKind(ex),
+    title: ex.name,
+    bars: null,
+    bpmStart: null,
+    bpmEnd: null,
+    durationMin: ex.durationMin,
+    note: null,
+  };
+}
 
 const KIND_ICON: Record<LibraryItemKind, "metro" | "note" | "mic"> = {
   warmup: "metro",
@@ -387,8 +406,38 @@ function LibraryPicker({
           marginBottom: 8,
         }}
       />
+      {/* Built-in guided vocal warmups — available to every coach. */}
+      {(() => {
+        const q = query.trim().toLowerCase();
+        const sing = SINGING_EXERCISES.filter((ex) => !q || ex.name.toLowerCase().includes(q) || ex.meta.toLowerCase().includes(q));
+        if (sing.length === 0) return null;
+        const existingIds = new Set(existing.map((e) => e.id));
+        return (
+          <div className="mb-2">
+            <div className="tiny muted mb-1" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+              guided vocal warmups · {sing.length}
+            </div>
+            {sing.map((ex) => {
+              const already = existingIds.has(singingRoutineId(ex.type));
+              return (
+                <button
+                  key={ex.type}
+                  onClick={() => onPick(itemFromSinging(ex))}
+                  className="box small row gap-2"
+                  style={{ width: "100%", textAlign: "left", cursor: "pointer", opacity: already ? 0.55 : 1, marginBottom: 4 }}
+                >
+                  <Icon name={ex.kind === "breath" ? "metro" : "note"} size={14} />
+                  <span className="grow">{ex.name} <span className="tiny muted">· {ex.meta}</span></span>
+                  {already && <Tag>added</Tag>}
+                </button>
+              );
+            })}
+          </div>
+        );
+      })()}
+
       {loading && <div className="small muted">Loading…</div>}
-      {!loading && filtered.length === 0 && (
+      {!loading && filtered.length === 0 && SINGING_EXERCISES.length === 0 && (
         <div className="small muted">No items match.</div>
       )}
       {(["warmup", "exercise", "song"] as LibraryItemKind[]).map((kind) => {

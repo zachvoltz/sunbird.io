@@ -295,4 +295,33 @@ describe("Chord Flash Cards API", () => {
     });
     expect(res.status).toBe(404);
   });
+
+  it("adds a built-in singing exercise (catalog metadata, appears on path, completable)", async () => {
+    // Client may send a bad title — the server takes the catalog's.
+    const add = await jsonRequest(app, "/api/me/routine/custom", {
+      method: "PUT",
+      cookie,
+      body: { items: [{ id: "sing-sustained-hiss", title: "x" }] },
+    });
+    expect(add.status).toBe(200);
+    const items = ((await add.json()) as any).data.items as Array<{ id: string; title: string; durationMin: number; kind: string }>;
+    const hiss = items.find((i) => i.id === "sing-sustained-hiss")!;
+    expect(hiss).toBeDefined();
+    expect(hiss.title.startsWith("Sustained hiss")).toBe(true);
+    expect(hiss.durationMin).toBe(2);
+    expect(hiss.kind).toBe("warmup");
+
+    // On the practice path.
+    const sd = await jsonRequest(app, "/api/me/student-data", { cookie });
+    const onPath = ((await sd.json()) as any).data.routine.items.find((i: any) => i.id === "sing-sustained-hiss");
+    expect(onPath).toBeDefined();
+
+    // Completable like any routine item.
+    const done = await jsonRequest(app, "/api/me/routine/complete", {
+      method: "POST",
+      cookie,
+      body: { routineItemId: "sing-sustained-hiss", completed: true },
+    });
+    expect(done.status).toBe(200);
+  });
 });

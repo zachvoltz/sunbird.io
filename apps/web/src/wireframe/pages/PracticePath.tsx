@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CHORD_ROUTINE_ITEM_ID } from "@sunbird/shared";
+import { CHORD_ROUTINE_ITEM_ID, SINGING_EXERCISES, singingExercise, singingRoutineId, singingTypeFromId } from "@sunbird/shared";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
 import { apiFetch, routineApi } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
@@ -150,6 +150,8 @@ function ExerciseDetail({
   const done = !!item.completedToday;
   const hasMidi = !!(item.hasMidi && item.midiUrl);
   const isChord = item.id === CHORD_ROUTINE_ITEM_ID;
+  const singType = singingTypeFromId(item.id);
+  const singEx = singType ? singingExercise(singType) : undefined;
   return (
     <div className="wf" style={{ minHeight: 0 }}>
       <div className="row" style={{ alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
@@ -202,6 +204,23 @@ function ExerciseDetail({
             style={{ width: "100%", textDecoration: "none" }}
           >
             <Icon name="play" size={15} stroke="white" /> Practice chords →
+          </Link>
+        </>
+      ) : singType ? (
+        <>
+          <div className="box mb-3" style={{ background: "var(--paper-2)" }}>
+            <div className="wf-scrawl" style={{ fontSize: 17, lineHeight: 1.2 }}>
+              {singEx?.kind === "breath"
+                ? "Guided breath drill — follow the pacer."
+                : "Guided vocal drill — sing along, live pitch feedback."}
+            </div>
+          </div>
+          <Link
+            to={`/practice/sing/${singType}`}
+            className="btn accent big mb-3"
+            style={{ width: "100%", textDecoration: "none" }}
+          >
+            <Icon name="play" size={15} stroke="white" /> Start exercise →
           </Link>
         </>
       ) : (
@@ -508,17 +527,17 @@ export function PracticePathPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
 
-  // The student's own exercises (kept distinct from coach items + the chord
-  // stop by their id prefix).
-  const customItems = items.filter((it) => it.id.startsWith("custom-"));
+  // The student's own items — free-form ("custom-") plus any built-in singing
+  // exercises ("sing-") they added — as opposed to coach items and the chord stop.
+  const isStudentOwned = (id: string) => id.startsWith("custom-") || id.startsWith("sing-");
+  const customItems = items.filter((it) => isStudentOwned(it.id));
 
-  // Merge a freshly-saved custom list back into the path: coach items, then the
-  // student's custom items, then the Chord Flash Cards stop — preserving each
-  // item's completedToday.
+  // Merge a freshly-saved student list back into the path: coach items, then the
+  // student's items, then the Chord Flash Cards stop — preserving completedToday.
   function applyCustom(saved: RoutineItem[]) {
     setItems((cur) => {
       const doneById = new Map(cur.map((i) => [i.id, i.completedToday]));
-      const coach = cur.filter((i) => !i.id.startsWith("custom-") && i.id !== CHORD_ROUTINE_ITEM_ID);
+      const coach = cur.filter((i) => !isStudentOwned(i.id) && i.id !== CHORD_ROUTINE_ITEM_ID);
       const chord = cur.filter((i) => i.id === CHORD_ROUTINE_ITEM_ID);
       const custom = saved.map((it) => ({ ...it, completedToday: doneById.get(it.id) ?? false }));
       return [...coach, ...custom, ...chord];
@@ -807,6 +826,14 @@ function CustomRoutineEditor({
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [picking, setPicking] = useState(false);
+
+  function addSinging(type: (typeof SINGING_EXERCISES)[number]["type"]) {
+    const ex = SINGING_EXERCISES.find((e) => e.type === type)!;
+    const id = singingRoutineId(type);
+    setRows((r) => (r.some((row) => row.id === id) ? r : [...r, { id, title: ex.name, durationMin: ex.durationMin }]));
+    setPicking(false);
+  }
 
   function update(i: number, patch: Partial<DraftRow>) {
     setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
@@ -872,52 +899,83 @@ function CustomRoutineEditor({
         </div>
 
         <div className="col" style={{ gap: 8 }}>
-          {rows.map((row, i) => (
-            <div key={i} className="box" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
-              <div className="col" style={{ gap: 2 }}>
-                <button
-                  className="btn icon small"
-                  aria-label="Move up"
-                  onClick={() => move(i, -1)}
-                  disabled={i === 0}
-                  style={{ width: 26, height: 22, opacity: i === 0 ? 0.3 : 1 }}
-                >
-                  ↑
-                </button>
-                <button
-                  className="btn icon small"
-                  aria-label="Move down"
-                  onClick={() => move(i, 1)}
-                  disabled={i === rows.length - 1}
-                  style={{ width: 26, height: 22, opacity: i === rows.length - 1 ? 0.3 : 1 }}
-                >
-                  ↓
-                </button>
+          {rows.map((row, i) => {
+            const singType = row.id ? singingTypeFromId(row.id) : null;
+            return (
+              <div key={i} className="box" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
+                <div className="col" style={{ gap: 2 }}>
+                  <button className="btn icon small" aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ width: 26, height: 22, opacity: i === 0 ? 0.3 : 1 }}>↑</button>
+                  <button className="btn icon small" aria-label="Move down" onClick={() => move(i, 1)} disabled={i === rows.length - 1} style={{ width: 26, height: 22, opacity: i === rows.length - 1 ? 0.3 : 1 }}>↓</button>
+                </div>
+                {singType ? (
+                  <>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="bold small" style={{ lineHeight: 1.15 }}>{row.title}</div>
+                      <div className="tiny muted">guided · {singingExercise(singType)?.meta}</div>
+                    </div>
+                    <span className="chip accent tiny" style={{ flex: "none" }}>guided</span>
+                  </>
+                ) : (
+                  <>
+                    <input
+                      value={row.title}
+                      onChange={(e) => update(i, { title: e.target.value })}
+                      placeholder="Exercise name"
+                      maxLength={120}
+                      style={{ flex: 1, minWidth: 0, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 16, color: "var(--ink)", padding: "4px 2px" }}
+                    />
+                    <input
+                      type="number"
+                      value={row.durationMin ?? ""}
+                      onChange={(e) => update(i, { durationMin: e.target.value ? Math.max(1, Math.min(240, Number(e.target.value))) : null })}
+                      placeholder="min"
+                      min={1}
+                      max={240}
+                      style={{ width: 56, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 15, color: "var(--ink)", textAlign: "center", padding: "4px 2px" }}
+                    />
+                  </>
+                )}
+                <button className="btn icon small" aria-label="Remove" onClick={() => removeRow(i)} style={{ width: 30, height: 30 }}>✕</button>
               </div>
-              <input
-                value={row.title}
-                onChange={(e) => update(i, { title: e.target.value })}
-                placeholder="Exercise name"
-                maxLength={120}
-                style={{ flex: 1, minWidth: 0, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 16, color: "var(--ink)", padding: "4px 2px" }}
-              />
-              <input
-                type="number"
-                value={row.durationMin ?? ""}
-                onChange={(e) => update(i, { durationMin: e.target.value ? Math.max(1, Math.min(240, Number(e.target.value))) : null })}
-                placeholder="min"
-                min={1}
-                max={240}
-                style={{ width: 56, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 15, color: "var(--ink)", textAlign: "center", padding: "4px 2px" }}
-              />
-              <button className="btn icon small" aria-label="Remove" onClick={() => removeRow(i)} style={{ width: 30, height: 30 }}>✕</button>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        <button className="btn ghost small" style={{ width: "100%", marginTop: 10 }} onClick={addRow}>
-          <Icon name="plus" size={14} /> Add another
-        </button>
+        <div className="row gap-2" style={{ marginTop: 10 }}>
+          <button className="btn ghost small grow" onClick={addRow}>
+            <Icon name="plus" size={14} /> Add my own
+          </button>
+          <button className="btn ghost small grow" onClick={() => setPicking((p) => !p)}>
+            <Icon name="mic" size={14} /> Guided exercise
+          </button>
+        </div>
+
+        {picking && (
+          <div className="box" style={{ marginTop: 8, padding: 8 }}>
+            <div className="tiny muted" style={{ fontWeight: 700, letterSpacing: 0.5, padding: "2px 4px 6px" }}>GUIDED VOCAL WARMUPS</div>
+            <div className="col" style={{ gap: 6 }}>
+              {SINGING_EXERCISES.map((ex) => {
+                const added = rows.some((r) => r.id === singingRoutineId(ex.type));
+                return (
+                  <button
+                    key={ex.type}
+                    onClick={() => !added && addSinging(ex.type)}
+                    disabled={added}
+                    className="box"
+                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", textAlign: "left", opacity: added ? 0.5 : 1, cursor: added ? "default" : "pointer" }}
+                  >
+                    <span style={{ fontSize: 16 }}>{ex.kind === "breath" ? "🌬️" : "🎵"}</span>
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span className="bold small" style={{ display: "block", lineHeight: 1.1 }}>{ex.name}</span>
+                      <span className="tiny muted">{ex.meta}</span>
+                    </span>
+                    <span className="tiny" style={{ color: "var(--accent)" }}>{added ? "added ✓" : "add +"}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {error && <div className="tiny" style={{ color: "var(--accent)", marginTop: 8 }}>{error}</div>}
 
