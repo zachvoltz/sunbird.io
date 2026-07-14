@@ -376,6 +376,8 @@ me.get("/student-data", requireAuth, async (c) => {
       })) ?? [],
     latestNoteCoach: latestSentNote?.coach ?? null,
     routine: enrichedRoutine,
+    // The student's own items (their editable segment of the routine).
+    customRoutine: customRoutine.items,
     goals: goals.map(serializeGoal),
     recentPracticeDays,
     // Full ~120-day window of fully-complete days — drives the practice
@@ -937,7 +939,8 @@ me.put("/routine/custom", requireAuth, async (c) => {
         bars: null,
         bpmStart: null,
         bpmEnd: null,
-        durationMin: ex.durationMin,
+        // Name/kind come from the catalog; the student may retime it.
+        durationMin: it.durationMin ?? ex.durationMin,
         note: null,
       };
     }

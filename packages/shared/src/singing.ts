@@ -8,9 +8,13 @@ export type SingingExerciseType =
   | "box-breathing"
   | "sustained-hiss"
   | "quick-catch"
+  | "straw-phonation"
   | "five-tone-scale"
   | "octave-sirens"
-  | "cooldown-hum";
+  | "cooldown-hum"
+  | "major-arpeggio"
+  | "lip-bubbles"
+  | "chromatic-steps";
 
 export type SingingKind = "breath" | "scale";
 
@@ -20,6 +24,7 @@ export interface SingingExercise {
   meta: string; // short subtitle, e.g. "4·4·4·4 · 2 min"
   kind: SingingKind;
   durationMin: number;
+  recommended?: boolean; // "★ suggested" in the library
   // ── type-specific params ──
   box?: { inhale: number; hold: number; exhale: number; cycles: number };
   hiss?: { goalSec: number };
@@ -53,7 +58,16 @@ export const SINGING_EXERCISES: SingingExercise[] = [
     meta: "staggered · 1 min",
     kind: "breath",
     durationMin: 1,
+    recommended: true,
     quickCatch: { reps: 8, bpm: 84 },
+  },
+  {
+    type: "straw-phonation",
+    name: "Straw phonation",
+    meta: "SOVT · 2 min",
+    kind: "breath",
+    durationMin: 2,
+    hiss: { goalSec: 15 },
   },
   {
     type: "five-tone-scale",
@@ -84,6 +98,41 @@ export const SINGING_EXERCISES: SingingExercise[] = [
     durationMin: 1,
     hum: { notes: ["G4", "F4", "E4", "D4", "C4"] },
   },
+  {
+    type: "major-arpeggio",
+    name: "Major arpeggio",
+    meta: "1-3-5-8 · 3 min",
+    kind: "scale",
+    durationMin: 3,
+    scale: { refNote: "C4", solfege: ["1", "3", "5", "8"], notes: ["C4", "E4", "G4", "C5"], tempo: 80 },
+  },
+  {
+    type: "lip-bubbles",
+    name: "Lip bubbles glide",
+    meta: "range · 2 min",
+    kind: "scale",
+    durationMin: 2,
+    recommended: true,
+    siren: { low: "C4", high: "C5" },
+  },
+  {
+    type: "chromatic-steps",
+    name: "Chromatic steps",
+    meta: "ear · 3 min",
+    kind: "scale",
+    durationMin: 3,
+    scale: { refNote: "C4", solfege: ["1", "♯1", "2", "♯2", "3"], notes: ["C4", "C#4", "D4", "D#4", "E4"], tempo: 72 },
+  },
+];
+
+// The library, grouped into sections for the "Add exercises" browser.
+export interface SingingLibrarySection {
+  section: string;
+  items: SingingExercise[];
+}
+export const SINGING_LIBRARY: SingingLibrarySection[] = [
+  { section: "Breath", items: SINGING_EXERCISES.filter((e) => e.kind === "breath") },
+  { section: "Scales & pitch", items: SINGING_EXERCISES.filter((e) => e.kind === "scale") },
 ];
 
 // ── routine-item id helpers ──────────────────────────────

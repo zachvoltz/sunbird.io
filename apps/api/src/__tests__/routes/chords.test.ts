@@ -324,4 +324,22 @@ describe("Chord Flash Cards API", () => {
     });
     expect(done.status).toBe(200);
   });
+
+  it("exposes the student's own items (customRoutine) and honours a retime", async () => {
+    // Retime a guided exercise (override its catalog duration).
+    const put = await jsonRequest(app, "/api/me/routine/custom", {
+      method: "PUT",
+      cookie,
+      body: { items: [{ id: "sing-five-tone-scale", title: "x", durationMin: 5 }, { title: "My scales", durationMin: 4 }] },
+    });
+    const items = ((await put.json()) as any).data.items as Array<{ id: string; durationMin: number }>;
+    expect(items.find((i) => i.id === "sing-five-tone-scale")!.durationMin).toBe(5); // catalog default is 3
+
+    // student-data returns the raw student items so the editor can lock coach items.
+    const sd = await jsonRequest(app, "/api/me/student-data", { cookie });
+    const data = (await sd.json()) as any;
+    expect(Array.isArray(data.data.customRoutine)).toBe(true);
+    expect(data.data.customRoutine.map((i: any) => i.id)).toContain("sing-five-tone-scale");
+    expect(data.data.customRoutine.length).toBe(2);
+  });
 });

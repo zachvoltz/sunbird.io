@@ -685,6 +685,10 @@ export interface StudentDetailPublic {
   latestLessonSummary: LessonSummaryPublic | null;
   latestNoteVoiceMemos: NoteVoiceMemoPublic[];
   routine: RoutinePublic;
+  // The student's OWN routine items (their self-added exercises), separate from
+  // the coach-managed ones merged into `routine`. Lets the routine editor lock
+  // the coach's items and edit only these. Only set by the student endpoint.
+  customRoutine?: RoutineItem[];
   // True when the student has self-added a Chord Flash Cards stop to their
   // daily practice (shown read-only on the coach's view; it isn't part of the
   // coach-managed routine). Optional for back-compat.

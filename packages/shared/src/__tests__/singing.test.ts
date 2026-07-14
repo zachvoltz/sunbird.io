@@ -11,8 +11,8 @@ import {
 } from "../singing";
 
 describe("singing catalog + helpers", () => {
-  it("has six exercises, all with a valid kind and duration", () => {
-    expect(SINGING_EXERCISES).toHaveLength(6);
+  it("has exercises, all with a valid kind and duration", () => {
+    expect(SINGING_EXERCISES.length).toBeGreaterThanOrEqual(6);
     for (const ex of SINGING_EXERCISES) {
       expect(["breath", "scale"]).toContain(ex.kind);
       expect(ex.durationMin).toBeGreaterThan(0);

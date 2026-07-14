@@ -102,18 +102,12 @@ function Header({ title, meta, onExit }: { title: string; meta: string; onExit: 
   );
 }
 
-// dispatch by exercise type
+// dispatch by which params the exercise carries (so new library exercises work)
 function Drill({ exercise, onExit, onFinish }: { exercise: SingingExercise; onExit: () => void; onFinish: () => void }) {
-  switch (exercise.type) {
-    case "box-breathing":
-      return <BoxBreathing ex={exercise} onExit={onExit} onFinish={onFinish} />;
-    case "sustained-hiss":
-      return <SustainedHiss ex={exercise} onExit={onExit} onFinish={onFinish} />;
-    case "quick-catch":
-      return <QuickCatch ex={exercise} onExit={onExit} onFinish={onFinish} />;
-    default:
-      return <ScaleDrill ex={exercise} onExit={onExit} onFinish={onFinish} />;
-  }
+  if (exercise.box) return <BoxBreathing ex={exercise} onExit={onExit} onFinish={onFinish} />;
+  if (exercise.hiss) return <SustainedHiss ex={exercise} onExit={onExit} onFinish={onFinish} />;
+  if (exercise.quickCatch) return <QuickCatch ex={exercise} onExit={onExit} onFinish={onFinish} />;
+  return <ScaleDrill ex={exercise} onExit={onExit} onFinish={onFinish} />;
 }
 
 type DrillProps = { ex: SingingExercise; onExit: () => void; onFinish: () => void };

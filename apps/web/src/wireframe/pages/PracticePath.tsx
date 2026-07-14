@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { CHORD_ROUTINE_ITEM_ID, SINGING_EXERCISES, singingExercise, singingRoutineId, singingTypeFromId } from "@sunbird/shared";
+import { CHORD_ROUTINE_ITEM_ID, singingExercise, singingTypeFromId } from "@sunbird/shared";
 import type { LibraryItemKind, RoutineItem, StudentDetailPublic } from "@sunbird/shared";
-import { apiFetch, routineApi } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { STFrame } from "../components/STFrame";
 import { Icon } from "../components/Icon";
+import { RoutineEditor } from "../components/RoutineEditor";
 import { AudioPlayer, MidiPlayer } from "../components/WaveformPlayer";
 import { useMyStudentDetail } from "../hooks/useCoachData";
 import { useIsMobile } from "../hooks/useIsMobile";
@@ -527,17 +528,20 @@ export function PracticePathPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
 
-  // The student's own items — free-form ("custom-") plus any built-in singing
-  // exercises ("sing-") they added — as opposed to coach items and the chord stop.
-  const isStudentOwned = (id: string) => id.startsWith("custom-") || id.startsWith("sing-");
-  const customItems = items.filter((it) => isStudentOwned(it.id));
+  // The student's own items (authoritative, from the server) — the editable
+  // segment. Everything else on the path is the coach's (locked) plus the chord
+  // stop (managed via chord settings).
+  const [customRoutine, setCustomRoutine] = useState<RoutineItem[]>([]);
+  const customIds = new Set(customRoutine.map((i) => i.id));
+  const lockedCoachItems = items.filter((i) => !customIds.has(i.id) && i.id !== CHORD_ROUTINE_ITEM_ID);
 
   // Merge a freshly-saved student list back into the path: coach items, then the
   // student's items, then the Chord Flash Cards stop — preserving completedToday.
   function applyCustom(saved: RoutineItem[]) {
+    setCustomRoutine(saved);
     setItems((cur) => {
       const doneById = new Map(cur.map((i) => [i.id, i.completedToday]));
-      const coach = cur.filter((i) => !isStudentOwned(i.id) && i.id !== CHORD_ROUTINE_ITEM_ID);
+      const coach = cur.filter((i) => !customIds.has(i.id) && i.id !== CHORD_ROUTINE_ITEM_ID);
       const chord = cur.filter((i) => i.id === CHORD_ROUTINE_ITEM_ID);
       const custom = saved.map((it) => ({ ...it, completedToday: doneById.get(it.id) ?? false }));
       return [...coach, ...custom, ...chord];
@@ -553,6 +557,7 @@ export function PracticePathPage() {
   useEffect(() => {
     if (!detail) return;
     setItems(detail.routine.items);
+    setCustomRoutine(detail.customRoutine ?? []);
     setStreak(detail.streak);
     setRecentDays(detail.recentPracticeDays ?? []);
     setSelectedId((cur) => cur ?? detail.routine.items[0]?.id ?? null);
@@ -693,15 +698,10 @@ export function PracticePathPage() {
               )}
             </div>
 
-            {/* Student-managed exercises */}
+            {/* Edit your routine — reorder, remove, retime, add from the library */}
             <div style={{ padding: "0 12px 24px" }}>
-              <button
-                className="btn ghost small"
-                style={{ width: "100%" }}
-                onClick={() => setEditorOpen(true)}
-              >
-                <Icon name="plus" size={14} />{" "}
-                {customItems.length > 0 ? "Add / edit your exercises" : "Add your own exercise"}
+              <button className="btn small" style={{ width: "100%", borderStyle: "dashed" }} onClick={() => setEditorOpen(true)}>
+                <Icon name="note" size={14} /> Edit my routine
               </button>
             </div>
           </div>
@@ -794,201 +794,17 @@ export function PracticePathPage() {
       )}
 
       {editorOpen && (
-        <CustomRoutineEditor
-          initial={customItems}
+        <RoutineEditor
+          coachItems={lockedCoachItems}
+          initial={customRoutine}
           onClose={() => setEditorOpen(false)}
-          onSaved={(saved) => {
-            applyCustom(saved);
-            setEditorOpen(false);
-          }}
+          onSaved={applyCustom}
         />
       )}
     </STFrame>
   );
 }
 
-// ── student's own exercises: add / reorder / remove ──────
-type DraftRow = { id?: string; title: string; durationMin: number | null };
-
-function CustomRoutineEditor({
-  initial,
-  onClose,
-  onSaved,
-}: {
-  initial: RoutineItem[];
-  onClose: () => void;
-  onSaved: (items: RoutineItem[]) => void;
-}) {
-  const [rows, setRows] = useState<DraftRow[]>(() =>
-    initial.length
-      ? initial.map((it) => ({ id: it.id, title: it.title, durationMin: it.durationMin ?? null }))
-      : [{ title: "", durationMin: null }],
-  );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [picking, setPicking] = useState(false);
-
-  function addSinging(type: (typeof SINGING_EXERCISES)[number]["type"]) {
-    const ex = SINGING_EXERCISES.find((e) => e.type === type)!;
-    const id = singingRoutineId(type);
-    setRows((r) => (r.some((row) => row.id === id) ? r : [...r, { id, title: ex.name, durationMin: ex.durationMin }]));
-    setPicking(false);
-  }
-
-  function update(i: number, patch: Partial<DraftRow>) {
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
-  }
-  function move(i: number, dir: -1 | 1) {
-    setRows((r) => {
-      const j = i + dir;
-      if (j < 0 || j >= r.length) return r;
-      const next = [...r];
-      [next[i], next[j]] = [next[j], next[i]];
-      return next;
-    });
-  }
-  function removeRow(i: number) {
-    setRows((r) => r.filter((_, idx) => idx !== i));
-  }
-  function addRow() {
-    setRows((r) => [...r, { title: "", durationMin: null }]);
-  }
-
-  async function save() {
-    const items = rows
-      .map((r) => ({ ...r, title: r.title.trim() }))
-      .filter((r) => r.title.length > 0)
-      .map((r) => ({ id: r.id, title: r.title, durationMin: r.durationMin || null }));
-    setSaving(true);
-    setError(null);
-    try {
-      const routine = await routineApi.updateCustom(items);
-      onSaved(routine.items);
-    } catch (e: any) {
-      setError(e?.body?.error ?? "Couldn't save your exercises.");
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed",
-        inset: 0,
-        zIndex: 40,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 16,
-        background: "rgba(0,0,0,0.35)",
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="box thick"
-        style={{ width: "100%", maxWidth: 460, maxHeight: "84vh", overflowY: "auto", background: "var(--paper)", padding: 18, boxShadow: "4px 5px 0 var(--ink)" }}
-      >
-        <div className="row between" style={{ marginBottom: 4 }}>
-          <h2 className="wf-title" style={{ fontSize: 22 }}>Your exercises</h2>
-          <button className="btn icon" aria-label="Close" onClick={onClose}>✕</button>
-        </div>
-        <div className="small muted" style={{ marginBottom: 12 }}>
-          Add your own practice items and drag the arrows to reorder. These sit
-          alongside your coach's routine.
-        </div>
-
-        <div className="col" style={{ gap: 8 }}>
-          {rows.map((row, i) => {
-            const singType = row.id ? singingTypeFromId(row.id) : null;
-            return (
-              <div key={i} className="box" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px" }}>
-                <div className="col" style={{ gap: 2 }}>
-                  <button className="btn icon small" aria-label="Move up" onClick={() => move(i, -1)} disabled={i === 0} style={{ width: 26, height: 22, opacity: i === 0 ? 0.3 : 1 }}>↑</button>
-                  <button className="btn icon small" aria-label="Move down" onClick={() => move(i, 1)} disabled={i === rows.length - 1} style={{ width: 26, height: 22, opacity: i === rows.length - 1 ? 0.3 : 1 }}>↓</button>
-                </div>
-                {singType ? (
-                  <>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div className="bold small" style={{ lineHeight: 1.15 }}>{row.title}</div>
-                      <div className="tiny muted">guided · {singingExercise(singType)?.meta}</div>
-                    </div>
-                    <span className="chip accent tiny" style={{ flex: "none" }}>guided</span>
-                  </>
-                ) : (
-                  <>
-                    <input
-                      value={row.title}
-                      onChange={(e) => update(i, { title: e.target.value })}
-                      placeholder="Exercise name"
-                      maxLength={120}
-                      style={{ flex: 1, minWidth: 0, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 16, color: "var(--ink)", padding: "4px 2px" }}
-                    />
-                    <input
-                      type="number"
-                      value={row.durationMin ?? ""}
-                      onChange={(e) => update(i, { durationMin: e.target.value ? Math.max(1, Math.min(240, Number(e.target.value))) : null })}
-                      placeholder="min"
-                      min={1}
-                      max={240}
-                      style={{ width: 56, border: 0, borderBottom: "1.5px solid var(--ink-faint)", background: "transparent", outline: "none", fontFamily: "var(--hand)", fontSize: 15, color: "var(--ink)", textAlign: "center", padding: "4px 2px" }}
-                    />
-                  </>
-                )}
-                <button className="btn icon small" aria-label="Remove" onClick={() => removeRow(i)} style={{ width: 30, height: 30 }}>✕</button>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="row gap-2" style={{ marginTop: 10 }}>
-          <button className="btn ghost small grow" onClick={addRow}>
-            <Icon name="plus" size={14} /> Add my own
-          </button>
-          <button className="btn ghost small grow" onClick={() => setPicking((p) => !p)}>
-            <Icon name="mic" size={14} /> Guided exercise
-          </button>
-        </div>
-
-        {picking && (
-          <div className="box" style={{ marginTop: 8, padding: 8 }}>
-            <div className="tiny muted" style={{ fontWeight: 700, letterSpacing: 0.5, padding: "2px 4px 6px" }}>GUIDED VOCAL WARMUPS</div>
-            <div className="col" style={{ gap: 6 }}>
-              {SINGING_EXERCISES.map((ex) => {
-                const added = rows.some((r) => r.id === singingRoutineId(ex.type));
-                return (
-                  <button
-                    key={ex.type}
-                    onClick={() => !added && addSinging(ex.type)}
-                    disabled={added}
-                    className="box"
-                    style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", textAlign: "left", opacity: added ? 0.5 : 1, cursor: added ? "default" : "pointer" }}
-                  >
-                    <span style={{ fontSize: 16 }}>{ex.kind === "breath" ? "🌬️" : "🎵"}</span>
-                    <span style={{ flex: 1, minWidth: 0 }}>
-                      <span className="bold small" style={{ display: "block", lineHeight: 1.1 }}>{ex.name}</span>
-                      <span className="tiny muted">{ex.meta}</span>
-                    </span>
-                    <span className="tiny" style={{ color: "var(--accent)" }}>{added ? "added ✓" : "add +"}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {error && <div className="tiny" style={{ color: "var(--accent)", marginTop: 8 }}>{error}</div>}
-
-        <div className="row" style={{ gap: 10, marginTop: 16 }}>
-          <button className="btn grow" onClick={onClose} disabled={saving}>Cancel</button>
-          <button className="btn accent grow" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save exercises"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function dayLabelToday(): string {
   return new Date().toLocaleDateString([], { weekday: "long" });
