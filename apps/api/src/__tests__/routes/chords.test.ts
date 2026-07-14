@@ -267,13 +267,15 @@ describe("Chord Flash Cards API", () => {
     const titles = ((await sd.json()) as any).data.routine.items.map((i: any) => i.title);
     expect(titles).toEqual(expect.arrayContaining(["Warm up", "Scales"]));
 
-    // Completing one is accepted (custom ids are valid).
+    // Completing one is accepted (custom ids are valid) and — with no coach
+    // routine — self-practice alone keeps the streak alive.
     const done = await jsonRequest(app, "/api/me/routine/complete", {
       method: "POST",
       cookie,
       body: { routineItemId: r1[0].id, completed: true },
     });
     expect(done.status).toBe(200);
+    expect(((await done.json()) as any).data.streak.currentDays).toBe(1);
 
     // Reorder keeps ids stable so completion history survives.
     const reorder = await jsonRequest(app, "/api/me/routine/custom", {

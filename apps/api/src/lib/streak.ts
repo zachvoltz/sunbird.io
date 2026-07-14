@@ -1,6 +1,6 @@
-// Derive a practice streak from the set of days a student completed at least
-// one exercise. RoutineCompletion is the source of truth, so the streak
-// self-corrects when completions are added or removed — no stale counter.
+// Derive a practice streak from the set of days a student practiced.
+// RoutineCompletion is the source of truth, so the streak self-corrects when
+// completions are added or removed — no stale counter.
 
 const DAY_MS = 86_400_000;
 
@@ -9,37 +9,21 @@ function dayKey(ms: number): string {
 }
 
 /**
- * Days (UTC `YYYY-MM-DD`) on which the student completed EVERY exercise in
- * their current routine — the only days that count toward the streak.
+ * Days (UTC `YYYY-MM-DD`) on which the student practiced — i.e. completed at
+ * least one routine item, whether coach-assigned or self-added. Any practice
+ * keeps the streak alive, so a student's own exercises count just like assigned
+ * work, and a student with no coach routine still builds a streak. This is
+ * non-retroactive by construction: adding a new exercise never un-counts a
+ * past day.
  *
  * @param completions  raw RoutineCompletion rows (day + routineItemId)
- * @param routineItemIds the ids of the student's current routine items
  */
-export function fullyCompleteDays(
+export function practicedDays(
   completions: Array<{ day: Date; routineItemId: string }>,
-  routineItemIds: string[],
 ): string[] {
-  if (routineItemIds.length === 0) return [];
-  const required = new Set(routineItemIds);
-  const byDay = new Map<string, Set<string>>();
-  for (const c of completions) {
-    const key = c.day.toISOString().slice(0, 10);
-    let set = byDay.get(key);
-    if (!set) byDay.set(key, (set = new Set()));
-    set.add(c.routineItemId);
-  }
-  const out: string[] = [];
-  for (const [key, done] of byDay) {
-    let all = true;
-    for (const id of required) {
-      if (!done.has(id)) {
-        all = false;
-        break;
-      }
-    }
-    if (all) out.push(key);
-  }
-  return out.sort();
+  const days = new Set<string>();
+  for (const c of completions) days.add(c.day.toISOString().slice(0, 10));
+  return [...days].sort();
 }
 
 /**

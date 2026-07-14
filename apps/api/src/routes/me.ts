@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { requireAuth } from "../middleware/auth";
 import { getDb } from "../lib/db";
 import { parseRoutine, serializeRoutine } from "../lib/routine";
-import { computeStreak, fullyCompleteDays } from "../lib/streak";
+import { computeStreak, practicedDays } from "../lib/streak";
 import { serializeGoal } from "../lib/goals";
 import {
   CHORD_ROUTINE_ITEM_ID,
@@ -204,7 +204,6 @@ me.get("/student-data", requireAuth, async (c) => {
   // today's completion state, so the Practice path can play audio/MIDI and
   // render which stops are checked off for the day.
   const parsedRoutine = parseRoutine((student as any).currentRoutine);
-  const routineItemIds = parsedRoutine.items.map((it) => it.id);
   const libIds = parsedRoutine.items
     .map((it) => it.libraryItemId)
     .filter((x): x is string => !!x);
@@ -250,9 +249,9 @@ me.get("/student-data", requireAuth, async (c) => {
   const dedupedItems = enrichedItems.filter((it) => (seenIds.has(it.id) ? false : seenIds.add(it.id)));
   const enrichedRoutine = { items: dedupedItems, updatedAt: parsedRoutine.updatedAt };
 
-  // Streak counts only days where every coach-assigned routine exercise was
-  // done. The student's own items (singing, chords, free-form) are bonus.
-  const completeKeys = fullyCompleteDays(completionRows, routineItemIds);
+  // Streak counts any day the student practiced — completing at least one item,
+  // coach-assigned or self-added — so self-practice keeps the streak alive.
+  const completeKeys = practicedDays(completionRows);
   const derivedStreak = computeStreak(completeKeys);
   const since14Key = new Date(today.getTime() - 13 * 86_400_000).toISOString().slice(0, 10);
   const recentPracticeDays = completeKeys.filter((k) => k >= since14Key);
@@ -857,7 +856,7 @@ me.post("/routine/complete", requireAuth, async (c) => {
     where: { userId: user.id },
     select: { day: true, routineItemId: true },
   });
-  const completeKeys = fullyCompleteDays(completionRows, routine.items.map((it) => it.id));
+  const completeKeys = practicedDays(completionRows);
   const derived = computeStreak(completeKeys);
   const lastPracticedAt = derived.lastDay
     ? new Date(derived.lastDay + "T00:00:00.000Z")

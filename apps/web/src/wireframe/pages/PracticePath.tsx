@@ -651,7 +651,9 @@ export function PracticePathPage() {
               <StreakRow
                 completedDays={new Set(recentDays)}
                 streakDays={streak?.currentDays ?? 0}
-                todayDone={allDone}
+                // Any practice today keeps the streak alive, so light today's
+                // cell as soon as one item is done (not only on full completion).
+                todayDone={doneCount > 0}
               />
             )}
 
