@@ -4,6 +4,9 @@ import {
   SINGING_EXERCISES,
   singingRoutineId,
   singingRoutineKind,
+  CHORD_ROUTINE_ITEM_ID,
+  CHORD_ROUTINE_TITLE,
+  CHORD_ROUTINE_DURATION_MIN,
   type LibraryItemKind,
   type LibraryItemPublic,
   type RoutineItem,
@@ -24,6 +27,22 @@ function itemFromSinging(ex: SingingExercise): RoutineItem {
     bpmStart: null,
     bpmEnd: null,
     durationMin: ex.durationMin,
+    note: null,
+  };
+}
+
+// The Chord Flash Cards trainer as a routine item (rendered specially on the
+// student's path — a link into the trainer rather than a library media item).
+function chordRoutineItem(): RoutineItem {
+  return {
+    id: CHORD_ROUTINE_ITEM_ID,
+    libraryItemId: null,
+    kind: "exercise",
+    title: CHORD_ROUTINE_TITLE,
+    bars: null,
+    bpmStart: null,
+    bpmEnd: null,
+    durationMin: CHORD_ROUTINE_DURATION_MIN,
     note: null,
   };
 }
@@ -432,6 +451,29 @@ function LibraryPicker({
                 </button>
               );
             })}
+          </div>
+        );
+      })()}
+
+      {/* Chord Flash Cards trainer — available to every coach. */}
+      {(() => {
+        const q = query.trim().toLowerCase();
+        if (q && !CHORD_ROUTINE_TITLE.toLowerCase().includes(q) && !"chords".includes(q)) return null;
+        const already = existing.some((e) => e.id === CHORD_ROUTINE_ITEM_ID);
+        return (
+          <div className="mb-2">
+            <div className="tiny muted mb-1" style={{ textTransform: "uppercase", letterSpacing: 0.5 }}>
+              practice tools
+            </div>
+            <button
+              onClick={() => onPick(chordRoutineItem())}
+              className="box small row gap-2"
+              style={{ width: "100%", textAlign: "left", cursor: "pointer", opacity: already ? 0.55 : 1, marginBottom: 4 }}
+            >
+              <span style={{ fontSize: 15 }}>🎸</span>
+              <span className="grow">{CHORD_ROUTINE_TITLE} <span className="tiny muted">· chord trainer</span></span>
+              {already && <Tag>added</Tag>}
+            </button>
           </div>
         );
       })()}

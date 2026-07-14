@@ -200,23 +200,27 @@ describe("Chord Flash Cards API", () => {
     expect(res.status).toBe(404);
   });
 
-  it("adds a Chord Flash Cards stop to the daily practice path", async () => {
-    // Enable via chord settings.
-    const put = await jsonRequest(app, "/api/me/chords/settings", {
+  it("adds a Chord Flash Cards stop from the library like any exercise", async () => {
+    // Add it as a routine item (as the library picker does).
+    const put = await jsonRequest(app, "/api/me/routine/custom", {
       method: "PUT",
       cookie,
-      body: { inDailyRoutine: true },
+      body: { items: [{ id: "chord-flashcards", title: "Chord Flash Cards" }] },
     });
     expect(put.status).toBe(200);
-    expect(((await put.json()) as { data: ChordSettingsPublic }).data.inDailyRoutine).toBe(true);
+    const stored = ((await put.json()) as any).data.items[0];
+    expect(stored.id).toBe("chord-flashcards");
+    expect(stored.title).toBe("Chord Flash Cards"); // metadata comes from the catalog
+    expect(stored.durationMin).toBe(5);
 
-    // It appears on the student's routine (student-data).
+    // It appears on the student's routine (student-data) and in customRoutine.
     const sd1 = await jsonRequest(app, "/api/me/student-data", { cookie });
-    const routine1 = ((await sd1.json()) as any).data.routine;
-    const chordStop = routine1.items.find((it: any) => it.id === "chord-flashcards");
+    const data1 = ((await sd1.json()) as any).data;
+    const chordStop = data1.routine.items.find((it: any) => it.id === "chord-flashcards");
     expect(chordStop).toBeDefined();
     expect(chordStop.title).toBe("Chord Flash Cards");
     expect(chordStop.completedToday).toBe(false);
+    expect(data1.customRoutine.some((it: any) => it.id === "chord-flashcards")).toBe(true);
 
     // Completing it is accepted and reflected.
     const done = await jsonRequest(app, "/api/me/routine/complete", {
@@ -232,11 +236,11 @@ describe("Chord Flash Cards API", () => {
   });
 
   it("rejects the chord stop when it is not in the routine", async () => {
-    // Turn it off, then completing it should 404.
-    await jsonRequest(app, "/api/me/chords/settings", {
+    // Remove it from the routine, then completing it should 404.
+    await jsonRequest(app, "/api/me/routine/custom", {
       method: "PUT",
       cookie,
-      body: { inDailyRoutine: false },
+      body: { items: [] },
     });
     const res = await jsonRequest(app, "/api/me/routine/complete", {
       method: "POST",

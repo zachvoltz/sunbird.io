@@ -872,9 +872,12 @@ export interface ChordSettingsPublic {
   inDailyRoutine: boolean; // show a Chord Flash Cards stop on the practice path
 }
 
-// The id of the synthetic routine item injected into the student's daily
-// practice path when they add chord flashcards to their routine.
+// Chord Flash Cards as a routine exercise: a fixed id (so completion history
+// survives), plus display defaults used by the library pickers and the routine
+// path (which renders this id specially — a link into the chord trainer).
 export const CHORD_ROUTINE_ITEM_ID = "chord-flashcards";
+export const CHORD_ROUTINE_TITLE = "Chord Flash Cards";
+export const CHORD_ROUTINE_DURATION_MIN = 5;
 
 // ─── Chord Library (browse / search reference) ───
 export type ChordDifficulty = "beginner" | "intermediate" | "advanced";

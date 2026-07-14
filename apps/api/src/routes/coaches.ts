@@ -4,7 +4,7 @@ import { requireAuth, requireRole } from "../middleware/auth";
 import { parseRoutine, serializeRoutine } from "../lib/routine";
 import { serializeGoal } from "../lib/goals";
 import type { RoutineItem, LibraryItemKind } from "@sunbird/shared";
-import { createTakeReplySchema, createTakeAnnotationSchema, createStudentInviteSchema } from "@sunbird/shared";
+import { createTakeReplySchema, createTakeAnnotationSchema, createStudentInviteSchema, CHORD_ROUTINE_ITEM_ID } from "@sunbird/shared";
 import { createEmailService } from "../services/email.service";
 import { getEnv } from "../lib/env";
 import { postActivityCard } from "../lib/conversations";
@@ -896,12 +896,12 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
 
   const coachFilter = user.role === "COACH" ? { coachId: user.id } : {};
 
-  const [student, bookings, streak, assignments, takes, latestSentNote, goals, chordSettings] = await Promise.all([
+  const [student, bookings, streak, assignments, takes, latestSentNote, goals] = await Promise.all([
     db.user.findUnique({
       where: { id: studentId },
       select: {
         id: true, name: true, email: true, avatarUrl: true, bio: true,
-        age: true, instrument: true, currentRoutine: true,
+        age: true, instrument: true, currentRoutine: true, studentRoutine: true,
       },
     }),
     db.booking.findMany({
@@ -950,9 +950,6 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
       where: { studentId, status: { not: "ARCHIVED" }, ...(user.role === "COACH" ? { coachId: user.id } : {}) },
       orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     }).catch(() => []),
-    db.chordSettings
-      .findUnique({ where: { userId: studentId }, select: { inDailyRoutine: true } })
-      .catch(() => null),
   ]);
 
   if (!student) {
@@ -1055,7 +1052,9 @@ coachRoutes.get("/students/:id", requireAuth, requireRole("COACH", "ADMIN"), asy
     // Coach-managed routine stays exactly as authored; the student-added chord
     // practice is surfaced read-only via chordFlashcardsInRoutine below.
     routine: parseRoutine((student as any).currentRoutine),
-    chordFlashcardsInRoutine: chordSettings?.inDailyRoutine === true,
+    chordFlashcardsInRoutine: parseRoutine((student as any).studentRoutine).items.some(
+      (it) => it.id === CHORD_ROUTINE_ITEM_ID,
+    ),
     goals: goals.map(serializeGoal),
   };
 

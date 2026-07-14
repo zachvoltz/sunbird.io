@@ -4,6 +4,9 @@ import {
   singingExercise,
   singingRoutineId,
   singingTypeFromId,
+  CHORD_ROUTINE_ITEM_ID,
+  CHORD_ROUTINE_TITLE,
+  CHORD_ROUTINE_DURATION_MIN,
   type RoutineItem,
   type SingingExercise,
 } from "@sunbird/shared";
@@ -54,6 +57,12 @@ function toDraft(it: RoutineItem): DraftItem {
   };
 }
 
+// Guided items (singing drills, the chord trainer) have a fixed name + their own
+// player — the student can reorder/remove/retime them but not rename them.
+const isChordRow = (d: DraftItem) => d.id === CHORD_ROUTINE_ITEM_ID;
+const isGuided = (d: DraftItem) => !!d.singType || isChordRow(d);
+const rowSub = (d: DraftItem) => (d.singType ? "guided" : isChordRow(d) ? "chord trainer" : "your exercise");
+
 type Screen = "edit" | "library" | "recap";
 
 export function RoutineEditor({
@@ -93,6 +102,12 @@ export function RoutineEditor({
       r.some((row) => row.id === singingRoutineId(ex.type))
         ? r
         : [...r, { id: singingRoutineId(ex.type), title: ex.name, kind: ex.kind === "breath" ? "warmup" : "exercise", durationMin: ex.durationMin, singType: ex.type }],
+    );
+  const addChord = () =>
+    setRows((r) =>
+      r.some(isChordRow)
+        ? r
+        : [...r, { id: CHORD_ROUTINE_ITEM_ID, title: CHORD_ROUTINE_TITLE, kind: "exercise", durationMin: CHORD_ROUTINE_DURATION_MIN, singType: null }],
     );
   const addCustom = () => {
     setRows((r) => [...r, { title: "", kind: "exercise", durationMin: null, singType: null }]);
@@ -157,7 +172,7 @@ export function RoutineEditor({
           />
         )}
         {screen === "library" && (
-          <LibraryScreen rows={rows} onBack={() => setScreen("edit")} onAddSinging={addSinging} onAddCustom={addCustom} />
+          <LibraryScreen rows={rows} onBack={() => setScreen("edit")} onAddSinging={addSinging} onAddChord={addChord} onAddCustom={addCustom} />
         )}
         {screen === "recap" && recap && <RecapScreen recap={recap} totalMin={totalMin} initialIds={initialIds} onUndo={undo} onClose={onClose} />}
       </div>
@@ -216,14 +231,14 @@ function EditScreen({
             key={row.id ?? `new-${i}`}
             kind={row.kind}
             title={row.title}
-            singing={!!row.singType}
+            singing={isGuided(row)}
             durationMin={row.durationMin}
-            sub={row.singType ? "guided" : "your exercise"}
+            sub={rowSub(row)}
             onUp={i > 0 ? () => move(i, -1) : undefined}
             onDown={i < rows.length - 1 ? () => move(i, 1) : undefined}
             onRemove={() => remove(i)}
             onRetime={() => retime(i)}
-            onTitle={row.singType ? undefined : (t) => setTitle(i, t)}
+            onTitle={isGuided(row) ? undefined : (t) => setTitle(i, t)}
           />
         ))}
 
@@ -324,11 +339,13 @@ function LibraryScreen({
   rows,
   onBack,
   onAddSinging,
+  onAddChord,
   onAddCustom,
 }: {
   rows: DraftItem[];
   onBack: () => void;
   onAddSinging: (ex: SingingExercise) => void;
+  onAddChord: () => void;
   onAddCustom: () => void;
 }) {
   const [query, setQuery] = useState("");
@@ -336,6 +353,8 @@ function LibraryScreen({
   const added = useMemo(() => new Set(rows.map((r) => r.id).filter(Boolean) as string[]), [rows]);
 
   const q = query.trim().toLowerCase();
+  const chordAdded = added.has(CHORD_ROUTINE_ITEM_ID);
+  const showChord = filter === "all" && (!q || CHORD_ROUTINE_TITLE.toLowerCase().includes(q) || "chords".includes(q));
   const sections = SINGING_LIBRARY.map((sec) => ({
     section: sec.section,
     items: sec.items.filter((ex) => {
@@ -403,6 +422,26 @@ function LibraryScreen({
           </div>
         ))}
 
+        {showChord && (
+          <div className="col gap-2">
+            <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Practice tools</div>
+            <div className="box" style={{ display: "flex", alignItems: "center", gap: 9, padding: "9px 11px", borderColor: chordAdded ? "var(--accent)" : undefined, background: chordAdded ? "var(--accent-soft)" : undefined }}>
+              <span style={{ flex: "none", width: 32, height: 32, borderRadius: 9, border: `1.6px solid ${chordAdded ? "var(--accent)" : "var(--ink)"}`, display: "grid", placeItems: "center", background: "var(--paper)", fontSize: 17 }}>🎸</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="bold small" style={{ lineHeight: 1.15 }}>{CHORD_ROUTINE_TITLE}</div>
+                <div className="tiny muted">spaced-repetition chord trainer · ~{CHORD_ROUTINE_DURATION_MIN}m</div>
+              </div>
+              {chordAdded ? (
+                <span className="chip tiny accent" style={{ flex: "none" }}>added ✓</span>
+              ) : (
+                <button className="btn icon" onClick={onAddChord} aria-label="Add Chord Flash Cards" style={{ width: 32, height: 32, flex: "none" }}>
+                  <Icon name="plus" size={15} />
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="col gap-2">
           <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: "0.1em" }}>Your own</div>
           <button className="box dashed row gap-2" style={{ width: "100%", padding: "10px 11px", cursor: "pointer", alignItems: "center", textAlign: "left" }} onClick={onAddCustom}>
@@ -466,16 +505,18 @@ function RecapScreen({
         <div className="small muted" style={{ textTransform: "uppercase", letterSpacing: "0.08em" }}>Your new order</div>
         <div className="col gap-2">
           {recap.order.map((ex, i) => {
-            const isNew = !initialIds.has(ex.id) && (ex.id.startsWith("custom-") || ex.id.startsWith("sing-"));
+            const isChord = ex.id === CHORD_ROUTINE_ITEM_ID;
+            const isNew = !initialIds.has(ex.id) && (isChord || ex.id.startsWith("custom-") || ex.id.startsWith("sing-"));
             const stroke = isNew ? "var(--accent)" : "var(--ink)";
+            const sub = isNew ? "just added" : isChord ? "chords" : ex.kind === "warmup" ? "breath" : "voice · pitch";
             return (
               <div key={ex.id + i} className="box" style={{ display: "flex", alignItems: "center", gap: 9, padding: "8px 11px", borderColor: isNew ? "var(--accent)" : undefined, background: isNew ? "var(--accent-soft)" : undefined }}>
-                <span style={{ flex: "none", width: 30, height: 30, borderRadius: 9, border: `1.6px solid ${stroke}`, display: "grid", placeItems: "center", background: "var(--paper)" }}>
-                  {kindIcon(ex.kind, stroke)}
+                <span style={{ flex: "none", width: 30, height: 30, borderRadius: 9, border: `1.6px solid ${stroke}`, display: "grid", placeItems: "center", background: "var(--paper)", fontSize: isChord ? 15 : undefined }}>
+                  {isChord ? "🎸" : kindIcon(ex.kind, stroke)}
                 </span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div className="bold small" style={{ lineHeight: 1.15 }}>{ex.title}</div>
-                  <div className="tiny muted">{isNew ? <span style={{ color: "var(--accent)" }}>just added</span> : ex.kind === "warmup" ? "breath" : "voice · pitch"}</div>
+                  <div className="tiny muted">{isNew ? <span style={{ color: "var(--accent)" }}>just added</span> : sub}</div>
                 </div>
                 <span className="chip tiny" style={{ flex: "none" }}>{ex.durationMin ?? "–"}m</span>
               </div>

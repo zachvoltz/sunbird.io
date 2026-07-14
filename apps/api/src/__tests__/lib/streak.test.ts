@@ -1,41 +1,28 @@
 import { describe, it, expect } from "vitest";
-import { streakDays } from "../../lib/streak";
+import { fullyCompleteDays, computeStreak } from "../../lib/streak";
 
 const day = (s: string) => new Date(s + "T00:00:00.000Z");
-const CHORD = "chord-flashcards";
 
-describe("streakDays — chord flashcards routine gating", () => {
-  it("uses coach items alone when chords are disabled", () => {
-    const completions = [{ day: day("2026-07-01"), routineItemId: "a" }];
-    const days = streakDays(completions, ["a"], { enabled: false, itemId: CHORD, sinceKey: null });
-    expect(days).toEqual(["2026-07-01"]);
-  });
-
-  it("lets chords gate the streak when there is no coach routine", () => {
-    const completions = [{ day: day("2026-07-01"), routineItemId: CHORD }];
-    const days = streakDays(completions, [], { enabled: true, itemId: CHORD, sinceKey: "2026-07-01" });
-    expect(days).toEqual(["2026-07-01"]);
-  });
-
-  it("does NOT retroactively break days before chords were added", () => {
-    // Coach item 'a' done both days; chords added 07-02 and done only 07-02.
+describe("fullyCompleteDays", () => {
+  it("counts only days where EVERY routine item was completed", () => {
     const completions = [
       { day: day("2026-07-01"), routineItemId: "a" },
-      { day: day("2026-07-02"), routineItemId: "a" },
-      { day: day("2026-07-02"), routineItemId: CHORD },
+      { day: day("2026-07-01"), routineItemId: "b" },
+      { day: day("2026-07-02"), routineItemId: "a" }, // b missing
     ];
-    const days = streakDays(completions, ["a"], { enabled: true, itemId: CHORD, sinceKey: "2026-07-02" });
-    expect(days.sort()).toEqual(["2026-07-01", "2026-07-02"]); // both still count
+    expect(fullyCompleteDays(completions, ["a", "b"])).toEqual(["2026-07-01"]);
   });
 
-  it("requires chords from the day they were added onward", () => {
-    // Coach item done both days; chords added 07-01 but skipped on 07-02.
-    const completions = [
-      { day: day("2026-07-01"), routineItemId: "a" },
-      { day: day("2026-07-01"), routineItemId: CHORD },
-      { day: day("2026-07-02"), routineItemId: "a" },
-    ];
-    const days = streakDays(completions, ["a"], { enabled: true, itemId: CHORD, sinceKey: "2026-07-01" });
-    expect(days).toEqual(["2026-07-01"]); // 07-02 excluded (chord missing)
+  it("returns no days when the routine is empty (student items are bonus)", () => {
+    const completions = [{ day: day("2026-07-01"), routineItemId: "sing-box-breathing" }];
+    expect(fullyCompleteDays(completions, [])).toEqual([]);
+  });
+});
+
+describe("computeStreak", () => {
+  it("counts a run of consecutive days and the longest run", () => {
+    const s = computeStreak(["2026-07-01", "2026-07-02", "2026-07-04"]);
+    expect(s.longestDays).toBe(2);
+    expect(s.lastDay).toBe("2026-07-04");
   });
 });

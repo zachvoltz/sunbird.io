@@ -1,24 +1,6 @@
-import { CHORD_ROUTINE_ITEM_ID } from "@sunbird/shared";
 import type { RoutineItem, RoutinePublic, LibraryItemKind } from "@sunbird/shared";
 
 const KINDS: ReadonlySet<LibraryItemKind> = new Set(["warmup", "exercise", "song"]);
-
-// The synthetic "Chord Flash Cards" routine item a student can add to their
-// daily practice path. It links to the chord trainer rather than a library
-// item; the frontend renders it specially by its id.
-export function chordRoutineItem(): RoutineItem {
-  return {
-    id: CHORD_ROUTINE_ITEM_ID,
-    libraryItemId: null,
-    kind: "exercise",
-    title: "Chord Flash Cards",
-    bars: null,
-    bpmStart: null,
-    bpmEnd: null,
-    durationMin: 5,
-    note: null,
-  };
-}
 
 function isKind(v: unknown): v is LibraryItemKind {
   return typeof v === "string" && KINDS.has(v as LibraryItemKind);

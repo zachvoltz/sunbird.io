@@ -529,22 +529,21 @@ export function PracticePathPage() {
   const [editorOpen, setEditorOpen] = useState(false);
 
   // The student's own items (authoritative, from the server) — the editable
-  // segment. Everything else on the path is the coach's (locked) plus the chord
-  // stop (managed via chord settings).
+  // segment. Everything else on the path is the coach's, which stays locked
+  // (including a Chord Flash Cards stop the coach assigned).
   const [customRoutine, setCustomRoutine] = useState<RoutineItem[]>([]);
   const customIds = new Set(customRoutine.map((i) => i.id));
-  const lockedCoachItems = items.filter((i) => !customIds.has(i.id) && i.id !== CHORD_ROUTINE_ITEM_ID);
+  const lockedCoachItems = items.filter((i) => !customIds.has(i.id));
 
-  // Merge a freshly-saved student list back into the path: coach items, then the
-  // student's items, then the Chord Flash Cards stop — preserving completedToday.
+  // Merge a freshly-saved student list back into the path: coach items first,
+  // then the student's own items — preserving today's completion state.
   function applyCustom(saved: RoutineItem[]) {
     setCustomRoutine(saved);
     setItems((cur) => {
       const doneById = new Map(cur.map((i) => [i.id, i.completedToday]));
-      const coach = cur.filter((i) => !customIds.has(i.id) && i.id !== CHORD_ROUTINE_ITEM_ID);
-      const chord = cur.filter((i) => i.id === CHORD_ROUTINE_ITEM_ID);
+      const coach = cur.filter((i) => !customIds.has(i.id));
       const custom = saved.map((it) => ({ ...it, completedToday: doneById.get(it.id) ?? false }));
-      return [...coach, ...custom, ...chord];
+      return [...coach, ...custom];
     });
   }
 
@@ -647,28 +646,6 @@ export function PracticePathPage() {
                 </div>
               </div>
             )}
-
-            <div style={{ padding: "8px 18px 0" }}>
-              <Link
-                to="/practice/chords"
-                className="box wobble"
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "12px 14px",
-                  textDecoration: "none",
-                  color: "var(--ink)",
-                }}
-              >
-                <span style={{ fontSize: 26, lineHeight: 1 }}>🎸</span>
-                <span style={{ flex: 1, minWidth: 0 }}>
-                  <span className="bold" style={{ display: "block", lineHeight: 1.15 }}>Chord Flash Cards</span>
-                  <span className="tiny muted">spaced-repetition chord trainer</span>
-                </span>
-                <Icon name="chev" size={16} />
-              </Link>
-            </div>
 
             {items.length > 0 && (
               <StreakRow

@@ -43,31 +43,6 @@ export function fullyCompleteDays(
 }
 
 /**
- * Streak-eligible days for a student, accounting for an optional student-added
- * "chord flashcards" routine item. Coach items gate the streak as usual; if the
- * student has NO coach routine, the chord item gates it instead (so self-practice
- * can build a streak). When both exist, the chord item is required only from the
- * day it was added (`chord.sinceKey`), so enabling it never breaks past days.
- */
-export function streakDays(
-  completions: Array<{ day: Date; routineItemId: string }>,
-  coachItemIds: string[],
-  chord: { enabled: boolean; itemId: string; sinceKey: string | null },
-): string[] {
-  const base = coachItemIds.length > 0 ? coachItemIds : chord.enabled ? [chord.itemId] : [];
-  let days = fullyCompleteDays(completions, base);
-  if (chord.enabled && coachItemIds.length > 0) {
-    const chordDays = new Set(
-      completions
-        .filter((c) => c.routineItemId === chord.itemId)
-        .map((c) => c.day.toISOString().slice(0, 10)),
-    );
-    days = days.filter((d) => !chord.sinceKey || d < chord.sinceKey || chordDays.has(d));
-  }
-  return days;
-}
-
-/**
  * @param dayKeys distinct UTC `YYYY-MM-DD` strings (any order)
  */
 export function computeStreak(dayKeys: string[]): {

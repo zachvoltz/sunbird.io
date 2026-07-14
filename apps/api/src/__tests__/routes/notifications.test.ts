@@ -160,11 +160,11 @@ describe("coach sees student's self-added chord practice", () => {
     expect(before.status).toBe(200);
     expect(((await before.json()) as any).data.chordFlashcardsInRoutine).toBe(false);
 
-    // Student enables it.
-    await jsonRequest(app, "/api/me/chords/settings", {
+    // Student adds it to their own routine (from the library).
+    await jsonRequest(app, "/api/me/routine/custom", {
       method: "PUT",
       cookie: studentCookie,
-      body: { inDailyRoutine: true },
+      body: { items: [{ id: "chord-flashcards", title: "Chord Flash Cards" }] },
     });
 
     const after = await jsonRequest(app, `/api/coaches/students/${studentId}`, { cookie: coachCookie });
